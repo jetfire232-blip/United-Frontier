@@ -817,18 +817,35 @@ local function GetResourceProfile(slot)
     };
 end
 
+local function IsResourceCustomStructure(structureType)
+    for _, safe in pairs(RESOURCE_ICON_SAFE_NAMES) do
+        for level = 1, 9 do
+            if structureType == WL.StructureType.Custom("Resource" .. safe .. tostring(level)) then
+                return true;
+            end
+        end
+        if structureType == WL.StructureType.Custom("Resource" .. safe .. "9plus") then
+            return true;
+        end
+    end
+    return false;
+end
+
 local function RefreshStartingResourceIcon(Game, standing, resources, territoryID)
     local terr = standing.Territories[territoryID];
     local nodes = resources.territories[territoryID];
     if terr == nil or nodes == nil then return; end
 
-    local structures = terr.Structures or {};
-    structures[WL.StructureType.ResourceCache] = nil;
-    for _, safe in pairs(RESOURCE_ICON_SAFE_NAMES) do
-        for level = 1, 9 do
-            structures[WL.StructureType.Custom("Resource" .. safe .. tostring(level))] = nil;
+    -- Build a fresh plain Lua structure table instead of assigning nil into
+    -- War.app's typed Int32 structure dictionary.  Assigning nil to that
+    -- dictionary can throw "Int32 cannot be nil" during Server_StartGame.
+    local structures = {};
+    for structureType, count in pairs(terr.Structures or {}) do
+        if structureType ~= WL.StructureType.ResourceCache
+            and not IsResourceCustomStructure(structureType)
+        then
+            structures[structureType] = count;
         end
-        structures[WL.StructureType.Custom("Resource" .. safe .. "9plus")] = nil;
     end
 
     local primary = GetPrimaryResource(nodes);

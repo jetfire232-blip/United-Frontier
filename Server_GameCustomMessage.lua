@@ -11291,6 +11291,17 @@ end
                 )
             );
 
+        local effectDurationTurns = nil;
+        if resolutionType == "sanctions" then
+            local minTurns = math.max(1, MakeInteger(GetSetting("UNSanctionMinTurns", 2)) or 2);
+            local maxTurns = math.max(minTurns, MakeInteger(GetSetting("UNSanctionMaxTurns", 6)) or 6);
+            effectDurationTurns = math.max(minTurns, math.min(maxTurns, MakeInteger(payload.durationTurns) or minTurns));
+        elseif resolutionType == "ceasefire" then
+            local minTurns = math.max(1, MakeInteger(GetSetting("UNCeasefireMinTurns", 2)) or 2);
+            local maxTurns = math.max(minTurns, MakeInteger(GetSetting("UNCeasefireMaxTurns", 6)) or 6);
+            effectDurationTurns = math.max(minTurns, math.min(maxTurns, MakeInteger(payload.durationTurns) or minTurns));
+        end
+
         local id =
             unData.nextResolutionID;
 
@@ -11305,6 +11316,7 @@ end
                 targetPlayerID = targetPlayerID,
                 createdTurn = currentTurn,
                 voteEndsTurn = currentTurn + duration,
+                effectDurationTurns = effectDurationTurns,
                 status = "VOTING",
                 votes = {}
             };
@@ -11656,6 +11668,64 @@ end
     end
 
 
+    if payload.type == "requestResourceTrade" then
+        if resourceData == nil
+            or resourceData.enabled ~= true
+            or GetSetting("ResourceTradingEnabled", true) ~= true
+        then
+            setReturn({success=false, message="Resource trading is disabled."});
+            return;
+        end
+
+        local targetPlayerID = MakeInteger(payload.targetPlayerID);
+        local resourceName = tostring(payload.resource or "");
+        local amount = math.max(1, math.min(10, MakeInteger(payload.amount) or 1));
+        local pricePerUnit = math.max(0, math.min(500, MakeInteger(payload.pricePerUnit) or 25));
+
+        if targetPlayerID == nil or targetPlayerID == playerID or not PlayerAvailable(game, targetPlayerID) then
+            setReturn({success=false, message="Invalid resource request partner."});
+            return;
+        end
+        if UNEmbargoActive(data, playerID) or UNEmbargoActive(data, targetPlayerID) then
+            setReturn({success=false, message="A UN embargo currently blocks new resource trade with one of these nations."});
+            return;
+        end
+        if RESOURCE_TYPES[resourceName] ~= true then
+            setReturn({success=false, message="Invalid resource type."});
+            return;
+        end
+        if IsAdvancedResource(resourceName) and GetSetting("AdvancedResourcesEnabled", true) ~= true then
+            setReturn({success=false, message="Advanced resources are disabled."});
+            return;
+        end
+
+        local targetNation = EnsureNation(data, game, targetPlayerID);
+        EnsureNationResourceFields(targetNation);
+        local production = targetNation.resourceProduction[resourceName] or 0;
+        if production < amount then
+            setReturn({success=false, message=GetPlayerName(game, targetPlayerID) .. " currently produces only " .. tostring(production) .. " " .. resourceName .. " per turn."});
+            return;
+        end
+
+        local id = resourceData.nextOfferID;
+        resourceData.nextOfferID = id + 1;
+        table.insert(resourceData.pendingOffers, {
+            id = id,
+            kind = "request",
+            fromPlayerID = playerID,
+            toPlayerID = targetPlayerID,
+            resource = resourceName,
+            amount = amount,
+            pricePerUnit = pricePerUnit,
+            createdTurn = data.tradeTurn or 0
+        });
+        CompactPublicGameDataForSave(data);
+        Mod.PublicGameData = data;
+        setReturn({success=true, message="Resource request sent."});
+        return;
+    end
+
+
     if payload.type == "acceptResourceTrade" then
         local offerID = MakeInteger(payload.offerID);
         local index, offer = FindResourceOffer(resourceData or {}, offerID);
@@ -11664,16 +11734,30 @@ end
             return;
         end
         table.remove(resourceData.pendingOffers, index);
-        offer.acceptedTurn = data.tradeTurn or 0;
-        table.insert(resourceData.activeTrades, offer);
+        local activeTrade = offer;
+        if offer.kind == "request" then
+            activeTrade = {
+                id = offer.id,
+                kind = "request",
+                fromPlayerID = offer.toPlayerID,
+                toPlayerID = offer.fromPlayerID,
+                requesterPlayerID = offer.fromPlayerID,
+                resource = offer.resource,
+                amount = offer.amount,
+                pricePerUnit = offer.pricePerUnit,
+                createdTurn = offer.createdTurn
+            };
+        end
+        activeTrade.acceptedTurn = data.tradeTurn or 0;
+        table.insert(resourceData.activeTrades, activeTrade);
         table.insert(resourceData.tradeHistory, {
             turn = data.tradeTurn or 0,
-            type = "accepted",
-            fromPlayerID = offer.fromPlayerID,
-            toPlayerID = offer.toPlayerID,
-            resource = offer.resource,
-            amount = offer.amount,
-            pricePerUnit = offer.pricePerUnit
+            type = offer.kind == "request" and "request_accepted" or "accepted",
+            fromPlayerID = activeTrade.fromPlayerID,
+            toPlayerID = activeTrade.toPlayerID,
+            resource = activeTrade.resource,
+            amount = activeTrade.amount,
+            pricePerUnit = activeTrade.pricePerUnit
         });
         TrimArrayKeepNewestForSave(resourceData.tradeHistory, 20);
         CompactPublicGameDataForSave(data);

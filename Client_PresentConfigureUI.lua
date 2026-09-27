@@ -526,6 +526,11 @@ function Client_PresentConfigureUI(rootParent)
             3
         );
 
+    local unSanctionMinTurns = GetNumberSetting(settings, "UNSanctionMinTurns", 2);
+    local unSanctionMaxTurns = GetNumberSetting(settings, "UNSanctionMaxTurns", 6);
+    local unCeasefireMinTurns = GetNumberSetting(settings, "UNCeasefireMinTurns", 2);
+    local unCeasefireMaxTurns = GetNumberSetting(settings, "UNCeasefireMaxTurns", 6);
+
     local aiCanProposeUNResolutions =
         GetBoolSetting(
             settings,
@@ -650,7 +655,7 @@ function Client_PresentConfigureUI(rootParent)
 
 
     -- =====================================================
-    -- UNITED DIPLOMACY MILITARY FOUNDATION
+    -- UNITED FRONTIER MILITARY FOUNDATION
     -- =====================================================
 
     local militaryExpansionEnabled = GetBoolSetting(settings, "MilitaryExpansionEnabled", true);
@@ -1326,6 +1331,11 @@ function Client_PresentConfigureUI(rootParent)
         ""
     );
 
+    AddNumberInput(root, "UNSanctionMinTurns", "Sanctions Minimum Duration (turns)", unSanctionMinTurns, 1, 20, "Players may choose a sanction duration, but not below this value.");
+    AddNumberInput(root, "UNSanctionMaxTurns", "Sanctions Maximum Duration (turns)", unSanctionMaxTurns, 1, 20, "Hard cap so sanctions cannot be made excessive.");
+    AddNumberInput(root, "UNCeasefireMinTurns", "Ceasefire Minimum Duration (turns)", unCeasefireMinTurns, 1, 20, "Passed ceasefires block a new war declaration for at least this many turns.");
+    AddNumberInput(root, "UNCeasefireMaxTurns", "Ceasefire Maximum Duration (turns)", unCeasefireMaxTurns, 1, 20, "Hard cap on proposer-selected UN ceasefires.");
+
     AddCheckBox(
         root,
         "AICanProposeUNResolutions",
@@ -1403,9 +1413,9 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ArmyRecruiterMaxLevel", "Maximum Recruiter Level", armyRecruiterMaxLevel, 1, 5, "Upgrades increase army output and strategic resource maintenance demand.");
 
 
-    AddSection(root, "MILITARY FOUNDATION", "Core host controls for United Diplomacy strategic infrastructure. Detailed weapon balance settings will be added in later phases.");
+    AddSection(root, "MILITARY FOUNDATION", "Core host controls for United Frontier strategic infrastructure. Detailed weapon balance settings will be added in later phases.");
 
-    AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Diplomacy Military Systems", militaryExpansionEnabled);
+    AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
     AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Hide Strategic Military Infrastructure from Enemies", hiddenMilitaryInfrastructureEnabled);
 
     AddCheckBox(root, "HeadquartersEnabled", "Enable Headquarters", headquartersEnabled);
@@ -1571,7 +1581,7 @@ function Client_PresentConfigureUI(rootParent)
         resourceFacilityMaxLevel,
         1,
         5,
-        "Higher facility levels produce more units per turn and display a larger structure count on the territory."
+        "Hard cap for each resource facility. The map icon changes with the facility level instead of adding another icon."
     );
 
     AddNumberInput(

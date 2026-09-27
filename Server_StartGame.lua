@@ -396,7 +396,7 @@ local function CreateDefaultNationState(
 
 
     -- =====================================================
-    -- UNITED DIPLOMACY MILITARY FOUNDATION
+    -- UNITED FRONTIER MILITARY FOUNDATION
     -- =====================================================
 
     nation.military =
@@ -714,11 +714,11 @@ local RESOURCE_ICON_SAFE_NAMES = {
     Lithium = "Lithium"
 };
 
-local function ResourceIconStructure(resourceName, totalLevel)
+local function ResourceIconStructure(resourceName, facilityLevel)
     local safe = RESOURCE_ICON_SAFE_NAMES[resourceName] or "Oil";
-    local level = math.max(1, math.floor(tonumber(totalLevel) or 1));
-    local suffix = level > 9 and "9plus" or tostring(level);
-    return WL.StructureType.Custom("Resource" .. safe .. suffix);
+    local maxLevel = math.max(1, math.min(5, math.floor(tonumber(Mod.Settings.ResourceFacilityMaxLevel) or 3)));
+    local level = math.max(1, math.min(maxLevel, math.floor(tonumber(facilityLevel) or 1)));
+    return WL.StructureType.Custom("Resource" .. safe .. tostring(level));
 end
 
 local function GetPrimaryResource(nodes)
@@ -740,6 +740,29 @@ local function GetTotalResourceLevel(nodes)
         total = total + math.max(0, tonumber((nodes or {})[resourceName]) or 0);
     end
     return total;
+end
+
+local PUBLIC_RESOURCE_ICONS = {Oil=true, Gas=true, Food=true};
+
+local function ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID)
+    local terr = Standing and Standing.Territories and Standing.Territories[territoryID] or nil;
+    local owner = terr and terr.OwnerPlayerID or nil;
+    if owner == nil or owner == WL.PlayerID.Neutral or owner == WL.PlayerID.Fogged then return false; end
+    local details = Game and Game.Map and Game.Map.Territories and Game.Map.Territories[territoryID] or nil;
+    if details == nil then return false; end
+    for connectedID, _ in pairs(details.ConnectedTo or {}) do
+        local neighbor = Standing.Territories[connectedID];
+        local other = neighbor and neighbor.OwnerPlayerID or nil;
+        if other ~= nil and other ~= owner and other ~= WL.PlayerID.Neutral and other ~= WL.PlayerID.Fogged then
+            return true;
+        end
+    end
+    return false;
+end
+
+local function ShouldShowResourceIcon(Game, Standing, territoryID, resourceName)
+    if PUBLIC_RESOURCE_ICONS[resourceName] == true then return true; end
+    return ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID);
 end
 
 -- Slot profiles are deliberately broad 2026 strategic-production strengths,
@@ -794,22 +817,24 @@ local function GetResourceProfile(slot)
     };
 end
 
-local function RefreshStartingResourceIcon(standing, resources, territoryID)
+local function RefreshStartingResourceIcon(Game, standing, resources, territoryID)
     local terr = standing.Territories[territoryID];
     local nodes = resources.territories[territoryID];
     if terr == nil or nodes == nil then return; end
 
     local structures = terr.Structures or {};
-
-    -- Remove legacy ResourceCache icons from earlier V3 resource builds.
     structures[WL.StructureType.ResourceCache] = nil;
+    for _, safe in pairs(RESOURCE_ICON_SAFE_NAMES) do
+        for level = 1, 9 do
+            structures[WL.StructureType.Custom("Resource" .. safe .. tostring(level))] = nil;
+        end
+        structures[WL.StructureType.Custom("Resource" .. safe .. "9plus")] = nil;
+    end
 
-    -- Fresh games do not yet contain our custom structures, so one assignment is
-    -- enough.  The selected image already includes the numeric level badge.
-    local totalLevel = GetTotalResourceLevel(nodes);
-    if totalLevel > 0 then
-        local primary = GetPrimaryResource(nodes);
-        structures[ResourceIconStructure(primary, totalLevel)] = 1;
+    local primary = GetPrimaryResource(nodes);
+    local primaryLevel = math.max(0, tonumber((nodes or {})[primary]) or 0);
+    if primaryLevel > 0 and ShouldShowResourceIcon(Game, standing, territoryID, primary) then
+        structures[ResourceIconStructure(primary, primaryLevel)] = 1;
     end
 
     terr.Structures = structures;
@@ -888,7 +913,7 @@ local function InitializeStrategicResources(Game, Standing, economy)
 
     if economy.resources.mapIconsEnabled ~= false then
         for territoryID, _ in pairs(economy.resources.territories or {}) do
-            RefreshStartingResourceIcon(Standing, economy.resources, territoryID);
+            RefreshStartingResourceIcon(Game, Standing, economy.resources, territoryID);
         end
     end
 end

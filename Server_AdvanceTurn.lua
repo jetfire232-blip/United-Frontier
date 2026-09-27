@@ -14285,11 +14285,11 @@ local RESOURCE_ICON_SAFE_NAMES = {
     Copper = "Copper", Lithium = "Lithium"
 };
 
-local function ResourceIconStructure(resourceName, totalLevel)
+local function ResourceIconStructure(resourceName, facilityLevel)
     local safe = RESOURCE_ICON_SAFE_NAMES[resourceName] or "Oil";
-    local level = math.max(1, math.floor(tonumber(totalLevel) or 1));
-    local suffix = level > 9 and "9plus" or tostring(level);
-    return WL.StructureType.Custom("Resource" .. safe .. suffix);
+    local maxLevel = math.max(1, math.min(5, math.floor(tonumber(GetSetting("ResourceFacilityMaxLevel", 3)) or 3)));
+    local level = math.max(1, math.min(maxLevel, math.floor(tonumber(facilityLevel) or 1)));
+    return WL.StructureType.Custom("Resource" .. safe .. tostring(level));
 end
 
 local function GetPrimaryResource(nodes)
@@ -14313,6 +14313,29 @@ local function GetTotalResourceLevel(nodes)
     return total;
 end
 
+local PUBLIC_RESOURCE_ICONS = {Oil=true, Gas=true, Food=true};
+
+local function ResourceTerritoryBordersAnotherPlayer(game, standing, territoryID)
+    local terr = standing and standing.Territories and standing.Territories[territoryID] or nil;
+    local owner = terr and terr.OwnerPlayerID or nil;
+    if owner == nil or owner == WL.PlayerID.Neutral or owner == WL.PlayerID.Fogged then return false; end
+    local details = game and game.Map and game.Map.Territories and game.Map.Territories[territoryID] or nil;
+    if details == nil then return false; end
+    for connectedID, _ in pairs(details.ConnectedTo or {}) do
+        local neighbor = standing.Territories[connectedID];
+        local other = neighbor and neighbor.OwnerPlayerID or nil;
+        if other ~= nil and other ~= owner and other ~= WL.PlayerID.Neutral and other ~= WL.PlayerID.Fogged then
+            return true;
+        end
+    end
+    return false;
+end
+
+local function ShouldShowResourceIcon(game, standing, territoryID, resourceName)
+    if PUBLIC_RESOURCE_ICONS[resourceName] == true then return true; end
+    return ResourceTerritoryBordersAnotherPlayer(game, standing, territoryID);
+end
+
 local function IsResourceCustomStructure(structureType)
     for _, safe in pairs(RESOURCE_ICON_SAFE_NAMES) do
         for level = 1, 9 do
@@ -14327,7 +14350,7 @@ local function IsResourceCustomStructure(structureType)
     return false;
 end
 
-local function BuildResourceIconStructureTable(existingStructures, nodes)
+local function BuildResourceIconStructureTable(game, standing, territoryID, existingStructures, nodes)
     local structures = {};
     for structureType, count in pairs(existingStructures or {}) do
         if structureType ~= WL.StructureType.ResourceCache
@@ -14337,12 +14360,54 @@ local function BuildResourceIconStructureTable(existingStructures, nodes)
         end
     end
 
-    local totalLevel = GetTotalResourceLevel(nodes);
-    if totalLevel > 0 then
-        local primary = GetPrimaryResource(nodes);
-        structures[ResourceIconStructure(primary, totalLevel)] = 1;
+    local primary = GetPrimaryResource(nodes);
+    local primaryLevel = math.max(0, tonumber((nodes or {})[primary]) or 0);
+    if primaryLevel > 0 and ShouldShowResourceIcon(game, standing, territoryID, primary) then
+        structures[ResourceIconStructure(primary, primaryLevel)] = 1;
     end
     return structures;
+end
+
+local function ResourceStructureMapsDiffer(existing, desired)
+    existing = existing or {}; desired = desired or {};
+    if (existing[WL.StructureType.ResourceCache] or 0) ~= (desired[WL.StructureType.ResourceCache] or 0) then return true; end
+    for _, safe in pairs(RESOURCE_ICON_SAFE_NAMES) do
+        for level = 1, 9 do
+            local st = WL.StructureType.Custom("Resource" .. safe .. tostring(level));
+            if (existing[st] or 0) ~= (desired[st] or 0) then return true; end
+        end
+        local plus = WL.StructureType.Custom("Resource" .. safe .. "9plus");
+        if (existing[plus] or 0) ~= (desired[plus] or 0) then return true; end
+    end
+    return false;
+end
+
+local function RefreshResourceMapVisibility(game, data, addNewOrder)
+    local economy = data.globalEconomy;
+    local resources = economy and economy.resources or nil;
+    if resources == nil or resources.enabled ~= true then return; end
+    local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if standing == nil or standing.Territories == nil then return; end
+    local mods = {};
+    for territoryID, nodes in pairs(resources.territories or {}) do
+        local terr = standing.Territories[territoryID];
+        if terr ~= nil then
+            local desired;
+            if resources.mapIconsEnabled ~= false and GetSetting("ResourceMapIconsEnabled", true) == true then
+                desired = BuildResourceIconStructureTable(game, standing, territoryID, terr.Structures or {}, nodes);
+            else
+                desired = BuildResourceIconStructureTable(game, standing, territoryID, terr.Structures or {}, {});
+            end
+            if ResourceStructureMapsDiffer(terr.Structures or {}, desired) then
+                local mod = WL.TerritoryModification.Create(territoryID);
+                mod.SetStructuresOpt = desired;
+                table.insert(mods, mod);
+            end
+        end
+    end
+    if #mods > 0 then
+        addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral, "Strategic resource map visibility updated", {}, mods, nil, nil));
+    end
 end
 
 local function EnsureStrategicResourceState(data)
@@ -14422,6 +14487,7 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
             then
                 terrMod.SetStructuresOpt =
                     BuildResourceIconStructureTable(
+                        game, standing, build.territoryID,
                         terr.Structures or {},
                         nodes
                     );
@@ -15899,7 +15965,7 @@ local function UNApplyPassedResolution(
 
         local untilTurn =
             currentTurn
-            + 3;
+            + math.max(1, math.floor(tonumber(resolution.effectDurationTurns) or tonumber(GetSetting("UNSanctionMinTurns", 2)) or 2));
 
         un.sanctions[
             targetID
@@ -16018,6 +16084,10 @@ local function UNApplyPassedResolution(
             targetID,
             "un_ceasefire"
         );
+
+        local relationship = GetDiplomacyRelationship(data, resolution.proposerPlayerID, targetID);
+        local ceasefireTurns = math.max(1, math.floor(tonumber(resolution.effectDurationTurns) or tonumber(GetSetting("UNCeasefireMinTurns", 2)) or 2));
+        relationship.peaceCooldownUntil = currentTurn + ceasefireTurns;
 
     end
 end
@@ -16843,6 +16913,8 @@ function Server_AdvanceTurn_Start(
         data,
         resourceChanges
     );
+
+    RefreshResourceMapVisibility(game, data, addNewOrder);
 
     ProcessArmyRecruiterProduction(game, data, addNewOrder);
 

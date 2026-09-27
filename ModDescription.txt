@@ -1,19 +1,6 @@
-United Diplomacy
-A modern economy, diplomacy, intelligence, resources, and strategic-warfare expansion for War.app.
-
-UNITED DIPLOMACY
-
-A modern economy, diplomacy, resource, intelligence, and strategic-warfare expansion for War.app.
+United Frontier
+A modern economy, diplomacy, resources, intelligence, and strategic-warfare expansion for War.app.
 
 Build your nation through Commerce, markets, strategic resources, alliances, intelligence, military infrastructure, and war.
 
-PHASE 1 FOUNDATION
-
-• Reorganized navigation: Overview, Markets, Resources, Military, Diplomacy, United Nations, How It Works, Customize Tabs
-• Investments and AI Manager folded into Markets
-• New Military command center with Headquarters and Recruiting Stations
-• Headquarters framework: Intelligence, Security, Cyber Warfare, Joint Command
-• Cleaner color-coded resource status and resource market/trade UI
-• Existing Global Affairs economy, diplomacy, markets, resources, UN, stockpile, AI, and performance systems retained
-
-Future phases add Airbases, Forward Airstrips, Air Wings, SAM Sites, Missile Silos, Power Grid damage/repair, Special Forces, hidden infrastructure intelligence, and the expanded AI war planner.
+Current development includes cleaner Overview/Global Economy UI, resource offers and requests, color-coded resources, public/border resource visibility rules, capped resource facility icons, configurable UN sanctions/ceasefire durations, and the Phase 2 military foundation.

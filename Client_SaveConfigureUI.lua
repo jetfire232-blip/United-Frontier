@@ -357,6 +357,11 @@ function Client_SaveConfigureUI(
             "UNMaximumActiveResolutions"
         );
 
+    local unSanctionMinTurns = ReadNumber("UNSanctionMinTurns");
+    local unSanctionMaxTurns = ReadNumber("UNSanctionMaxTurns");
+    local unCeasefireMinTurns = ReadNumber("UNCeasefireMinTurns");
+    local unCeasefireMaxTurns = ReadNumber("UNCeasefireMaxTurns");
+
     local aiCanProposeUNResolutions =
         ReadBool(
             "AICanProposeUNResolutions"
@@ -439,7 +444,7 @@ function Client_SaveConfigureUI(
 
 
     -- =====================================================
-    -- UNITED DIPLOMACY MILITARY FOUNDATION
+    -- UNITED FRONTIER MILITARY FOUNDATION
     -- =====================================================
 
     local militaryExpansionEnabled = ReadBool("MilitaryExpansionEnabled");
@@ -921,6 +926,13 @@ function Client_SaveConfigureUI(
         return;
     end
 
+    if not ValidateRange(alert, unSanctionMinTurns, 1, 20, "Sanctions Minimum Duration must be between 1 and 20 turns.") then return; end
+    if not ValidateRange(alert, unSanctionMaxTurns, 1, 20, "Sanctions Maximum Duration must be between 1 and 20 turns.") then return; end
+    if unSanctionMaxTurns < unSanctionMinTurns then alert("Sanctions Maximum Duration cannot be lower than the minimum."); return; end
+    if not ValidateRange(alert, unCeasefireMinTurns, 1, 20, "Ceasefire Minimum Duration must be between 1 and 20 turns.") then return; end
+    if not ValidateRange(alert, unCeasefireMaxTurns, 1, 20, "Ceasefire Maximum Duration must be between 1 and 20 turns.") then return; end
+    if unCeasefireMaxTurns < unCeasefireMinTurns then alert("Ceasefire Maximum Duration cannot be lower than the minimum."); return; end
+
     if not ValidateRange(alert, unPermanentSeatCount, 1, 10, "Permanent UN seats must be between 1 and 10.") then return; end
     if not ValidateRange(alert, unRotatingSeatCount, 0, 50, "Rotating UN seats must be between 0 and 50.") then return; end
     if not ValidateRange(alert, unReplacementMode, 1, 3, "UN replacement mode must be 1, 2, or 3.") then return; end
@@ -1201,6 +1213,11 @@ function Client_SaveConfigureUI(
     Mod.Settings.UNMaximumActiveResolutions =
         unMaximumActiveResolutions;
 
+    Mod.Settings.UNSanctionMinTurns = unSanctionMinTurns;
+    Mod.Settings.UNSanctionMaxTurns = unSanctionMaxTurns;
+    Mod.Settings.UNCeasefireMinTurns = unCeasefireMinTurns;
+    Mod.Settings.UNCeasefireMaxTurns = unCeasefireMaxTurns;
+
     Mod.Settings.AICanProposeUNResolutions =
         aiCanProposeUNResolutions;
 
@@ -1259,7 +1276,7 @@ function Client_SaveConfigureUI(
 
 
     -- =====================================================
-    -- UNITED DIPLOMACY MILITARY FOUNDATION
+    -- UNITED FRONTIER MILITARY FOUNDATION
     -- =====================================================
 
     Mod.Settings.MilitaryExpansionEnabled = militaryExpansionEnabled;

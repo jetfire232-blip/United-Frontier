@@ -1,4 +1,20 @@
-# United Diplomacy
+# United Frontier
+
+## Phase 3 - Resources, Economy UI & UN Controls
+
+This build consolidates the Phase 2 military foundation with a major resource/economy/UN usability pass.
+
+### Added in Phase 3
+- Resource status colors for Oil, Gas, Uranium, Iron, Food, Rare Earths, Coal, Copper, and Lithium.
+- Resource Market supports both **offers** and **requests** between players.
+- Oil, Gas, and Food map icons remain public. Other strategic resource icons appear only when that resource territory borders another player.
+- One resource icon per territory; upgrades replace the icon level instead of stacking icons. Icon level follows the dominant resource facility and respects the host facility-level cap.
+- Overview section headings are color-coded for faster scanning.
+- Global Economy and Investments are combined into a cleaner two-section activity view.
+- UN Sanctions and Ceasefires now use host-configurable minimum/maximum durations, with the proposer choosing a duration inside those limits.
+- Passed UN ceasefires block a new war declaration for the selected ceasefire duration.
+
+---
 
 ## Phase 2 - Military Foundation
 
@@ -16,7 +32,7 @@ This development branch builds on Global Affairs and establishes the persistent 
 ### Important
 Phase 2 is the framework build. New Airbase/SAM/Silo/HQ/Air Wing/Special Forces purchase actions are intentionally not live yet. This lets the configuration and persistent data model be tested before combat logic is layered on top.
 
-# United Diplomacy
+# United Frontier
 
 ## Phase 1 Development Build
 
@@ -46,7 +62,7 @@ This build establishes the new navigation and military foundation while preservi
 ---
 
 
-United Diplomacy builds on the Global Affairs V3 foundation and expands it into a modern strategic economy, diplomacy, intelligence, infrastructure, and warfare system.
+United Frontier builds on the Global Affairs V3 foundation and expands it into a modern strategic economy, diplomacy, intelligence, infrastructure, and warfare system.
 
 ## Core Systems
 

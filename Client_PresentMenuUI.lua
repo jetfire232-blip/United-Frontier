@@ -3700,6 +3700,7 @@ function ShowUnitedNationsMenu(parent, game)
                     resolution.voteEndsTurn
                     or "?"
                 )
+                .. ((resolution.effectDurationTurns ~= nil) and (" | Effect: " .. tostring(resolution.effectDurationTurns) .. " turn(s)") or "")
                 .. "\nYES "
                 .. tostring(yesVotes)
                 .. " | NO "
@@ -3813,25 +3814,33 @@ function ShowUnitedNationsMenu(parent, game)
     local effectLabel =
         UI.CreateLabel(area);
 
-    local function UNResolutionEffectText(
-        resolutionType
-    )
+    local sanctionMinTurns = math.max(1, math.floor(tonumber(GetClientSetting("UNSanctionMinTurns", 2)) or 2));
+    local sanctionMaxTurns = math.max(sanctionMinTurns, math.floor(tonumber(GetClientSetting("UNSanctionMaxTurns", 6)) or 6));
+    local ceasefireMinTurns = math.max(1, math.floor(tonumber(GetClientSetting("UNCeasefireMinTurns", 2)) or 2));
+    local ceasefireMaxTurns = math.max(ceasefireMinTurns, math.floor(tonumber(GetClientSetting("UNCeasefireMaxTurns", 6)) or 6));
+    local selectedEffectDuration = sanctionMinTurns;
+
+    local function UNResolutionEffectText(resolutionType)
         if resolutionType == "sanctions" then
-            return "RESULT IF PASSED: Target loses 10% Commerce each turn for 3 turns.";
+            return "RESULT IF PASSED: Target loses 10% Commerce each turn for " .. tostring(selectedEffectDuration) .. " turn(s).";
         elseif resolutionType == "embargo" then
             return "RESULT IF PASSED: Trade Agreement income and Resource Trade deliveries involving the target are paused for 3 turns.";
         elseif resolutionType == "aid" then
-            return "RESULT IF PASSED: Target immediately receives economic aid equal to 10% of its Commerce income, minimum 50 gold.";
+            return "RESULT IF PASSED: Target immediately receives economic aid equal to 10% of its Commerce income, minimum 50 Commerce.";
         elseif resolutionType == "condemnation" then
             return "RESULT IF PASSED: Target is formally condemned for 3 turns and gains +5 Unrest when the unrest system is active.";
         elseif resolutionType == "ceasefire" then
-            return "RESULT IF PASSED: Forces peace between the proposer and target if they are currently at war.";
+            return "RESULT IF PASSED: Forces peace and prevents a new war declaration for " .. tostring(selectedEffectDuration) .. " turn(s).";
         end
         return "";
     end
 
     local function RefreshProposalLabel()
 
+        local durationText = "";
+        if selectedType == "sanctions" or selectedType == "ceasefire" then
+            durationText = " | Duration: " .. tostring(selectedEffectDuration) .. " turn(s)";
+        end
         proposalLabel.SetText(
             "Type: "
             .. string.upper(
@@ -3846,6 +3855,7 @@ function ShowUnitedNationsMenu(parent, game)
                 )
                 or "None"
             )
+            .. durationText
         );
 
         effectLabel.SetText(
@@ -3901,6 +3911,11 @@ function ShowUnitedNationsMenu(parent, game)
 
                     selectedType =
                         value;
+                    if selectedType == "ceasefire" then
+                        selectedEffectDuration = ceasefireMinTurns;
+                    elseif selectedType == "sanctions" then
+                        selectedEffectDuration = sanctionMinTurns;
+                    end
 
                     RefreshProposalLabel();
 
@@ -3914,6 +3929,23 @@ function ShowUnitedNationsMenu(parent, game)
     AddTypeButton(typeRow1, "AID", "aid");
     AddTypeButton(typeRow2, "CONDEMN", "condemnation");
     AddTypeButton(typeRow2, "CEASEFIRE", "ceasefire");
+
+    UI.CreateLabel(area).SetText("SANCTION / CEASEFIRE DURATION").SetColor("#FFD166");
+    local durationRow = UI.CreateHorizontalLayoutGroup(area);
+    UI.CreateButton(durationRow).SetText("-1 TURN").SetOnClick(function()
+        local minTurns = selectedType == "ceasefire" and ceasefireMinTurns or sanctionMinTurns;
+        selectedEffectDuration = math.max(minTurns, selectedEffectDuration - 1);
+        RefreshProposalLabel();
+    end);
+    UI.CreateButton(durationRow).SetText("+1 TURN").SetOnClick(function()
+        local maxTurns = selectedType == "ceasefire" and ceasefireMaxTurns or sanctionMaxTurns;
+        selectedEffectDuration = math.min(maxTurns, selectedEffectDuration + 1);
+        RefreshProposalLabel();
+    end);
+    UI.CreateLabel(area).SetText(
+        "Host limits | Sanctions: " .. tostring(sanctionMinTurns) .. "-" .. tostring(sanctionMaxTurns)
+        .. " turns | Ceasefire: " .. tostring(ceasefireMinTurns) .. "-" .. tostring(ceasefireMaxTurns) .. " turns"
+    ).SetColor("#B0BEC5");
 
     UI.CreateLabel(area)
         .SetText(
@@ -4090,7 +4122,10 @@ function ShowUnitedNationsMenu(parent, game)
                             selectedType,
 
                         targetPlayerID =
-                            selectedTargetID
+                            selectedTargetID,
+
+                        durationTurns =
+                            selectedEffectDuration
                     },
                     function(result)
 
@@ -4265,7 +4300,7 @@ function ShowCustomizeTabs(
         );
 
         BuildMainTabs(tabsHost, parent, game);
-        UI.Alert("Default United Diplomacy tabs restored.");
+        UI.Alert("Default United Frontier tabs restored.");
     end);
 end
 
@@ -4278,6 +4313,22 @@ local RESOURCE_UI_TYPES = {
     "Oil", "Gas", "Uranium", "Iron", "Food", "Rare Earths",
     "Coal", "Copper", "Lithium"
 };
+
+local RESOURCE_UI_COLORS = {
+    Oil = "#D6A84B",
+    Gas = "#64B5F6",
+    Uranium = "#C792EA",
+    Iron = "#B0BEC5",
+    Food = "#9CCC65",
+    ["Rare Earths"] = "#4DD0E1",
+    Coal = "#8D8D8D",
+    Copper = "#D28B5C",
+    Lithium = "#E573C7"
+};
+
+local function ResourceUIColor(resourceName)
+    return RESOURCE_UI_COLORS[resourceName] or "#FFFFFF";
+end
 
 local function ResourceTypeAvailable(resourceName)
     if resourceName == "Coal" or resourceName == "Copper" or resourceName == "Lithium" then
@@ -4317,6 +4368,7 @@ function ShowResourcesMenu(parent, game)
     end
 
     UI.CreateLabel(area).SetText("NATIONAL RESOURCE STATUS").SetColor("#8FD694");
+    UI.CreateLabel(area).SetText("Public map icons: Oil, Gas, Food | Other resources appear on the map only while that territory borders another player.").SetColor("#B0BEC5");
     UI.CreateLabel(area).SetText("Production / Need / Stockpile / Net").SetColor("#B0BEC5");
 
     for _, resourceName in ipairs(RESOURCE_UI_TYPES) do
@@ -4357,7 +4409,7 @@ function ShowResourcesMenu(parent, game)
                 .. "  |  Stock " .. tostring(stockpile)
                 .. "  |  " .. prefix .. tostring(balance)
                 .. "  " .. status
-            ).SetColor(statusColor);
+            ).SetColor(ResourceUIColor(resourceName));
         end
     end
 
@@ -4439,7 +4491,7 @@ function ShowResourcesMenu(parent, game)
     );
 
     local selectedResource = "Oil";
-    local selectedLabel = UI.CreateLabel(area).SetText("Selected Resource: Oil");
+    local selectedLabel = UI.CreateLabel(area).SetText("Selected Resource: Oil").SetColor(ResourceUIColor("Oil"));
 
     local row = nil;
     local visibleIndex = 0;
@@ -4452,7 +4504,7 @@ function ShowResourcesMenu(parent, game)
                 .SetText(captured)
                 .SetOnClick(function()
                     selectedResource = captured;
-                    selectedLabel.SetText("Selected Resource: " .. captured);
+                    selectedLabel.SetText("Selected Resource: " .. captured); selectedLabel.SetColor(ResourceUIColor(captured));
                 end);
         end
     end
@@ -4492,19 +4544,20 @@ function ShowResourcesMenu(parent, game)
         local tradeAmount = 1;
         local tradePrice = 25;
         local targetPlayerID = nil;
-        local tradeLabel = UI.CreateLabel(area).SetText("Offer: 1 Oil @ 25 gold/unit | Partner: None");
+        local tradeLabel = UI.CreateLabel(area).SetText("Selected: 1 Oil @ 25 Commerce/unit | Partner: None").SetColor(ResourceUIColor("Oil"));
 
         local function RefreshTradeLabel()
             local targetName = targetPlayerID and GetPlayerName(game, targetPlayerID) or "None";
             tradeLabel.SetText(
-                "Offer: " .. tostring(tradeAmount) .. " " .. tradeResource ..
+                "Selected: " .. tostring(tradeAmount) .. " " .. tradeResource ..
                 " @ " .. tostring(tradePrice) .. " Commerce/unit | Partner: " .. targetName
             );
+            tradeLabel.SetColor(ResourceUIColor(tradeResource));
         end
 
         local rrow = nil;
         local resourceButtonIndex = 0;
-        for _, resourceName in ipairs({"Oil","Gas","Iron","Food","Uranium","Rare Earths"}) do
+        for _, resourceName in ipairs({"Oil","Gas","Iron","Food","Uranium","Rare Earths","Coal","Copper","Lithium"}) do
             if ResourceTypeAvailable(resourceName) then
                 resourceButtonIndex = resourceButtonIndex + 1;
                 if (resourceButtonIndex - 1) % 3 == 0 then
@@ -4567,11 +4620,23 @@ function ShowResourcesMenu(parent, game)
         searchInput.SetOnValueChanged(function() RefreshResourcePartnerSearch(); end);
         RefreshResourcePartnerSearch();
 
-        UI.CreateButton(area).SetText("SEND RESOURCE OFFER").SetOnClick(function()
+        local tradeActionRow = UI.CreateHorizontalLayoutGroup(area);
+        UI.CreateButton(tradeActionRow).SetText("SEND OFFER").SetOnClick(function()
             if targetPlayerID == nil then UI.Alert("Select a trade partner first."); return; end
-            SafeSendGameCustomMessage(game, 
+            SafeSendGameCustomMessage(game,
                 "Sending resource trade offer...",
                 {type="proposeResourceTrade", targetPlayerID=targetPlayerID, resource=tradeResource, amount=tradeAmount, pricePerUnit=tradePrice},
+                function(result)
+                    if result ~= nil and result.message ~= nil then UI.Alert(result.message); end
+                    ShowResourcesMenu(parent, game);
+                end
+            );
+        end);
+        UI.CreateButton(tradeActionRow).SetText("REQUEST RESOURCE").SetOnClick(function()
+            if targetPlayerID == nil then UI.Alert("Select a resource partner first."); return; end
+            SafeSendGameCustomMessage(game,
+                "Sending resource request...",
+                {type="requestResourceTrade", targetPlayerID=targetPlayerID, resource=tradeResource, amount=tradeAmount, pricePerUnit=tradePrice},
                 function(result)
                     if result ~= nil and result.message ~= nil then UI.Alert(result.message); end
                     ShowResourcesMenu(parent, game);
@@ -4586,10 +4651,15 @@ function ShowResourcesMenu(parent, game)
                 foundIncoming = true;
                 local offerID = offer.id;
                 local offerRow = UI.CreateHorizontalLayoutGroup(area);
-                UI.CreateLabel(offerRow).SetText(
-                    GetPlayerName(game, offer.fromPlayerID) .. ": " .. tostring(offer.amount) .. " " .. offer.resource ..
-                    " @ " .. tostring(offer.pricePerUnit) .. " Commerce/unit"
-                );
+                local incomingText;
+                if offer.kind == "request" then
+                    incomingText = GetPlayerName(game, offer.fromPlayerID) .. " REQUESTS " .. tostring(offer.amount) .. " " .. offer.resource
+                        .. " @ " .. tostring(offer.pricePerUnit) .. " Commerce/unit";
+                else
+                    incomingText = GetPlayerName(game, offer.fromPlayerID) .. " OFFERS " .. tostring(offer.amount) .. " " .. offer.resource
+                        .. " @ " .. tostring(offer.pricePerUnit) .. " Commerce/unit";
+                end
+                UI.CreateLabel(offerRow).SetText(incomingText).SetColor(ResourceUIColor(offer.resource));
                 UI.CreateButton(offerRow).SetText("ACCEPT").SetOnClick(function()
                     SafeSendGameCustomMessage(game, "Accepting resource trade...", {type="acceptResourceTrade", offerID=offerID}, function(result)
                         if result ~= nil and result.message ~= nil then UI.Alert(result.message); end
@@ -4619,7 +4689,7 @@ function ShowResourcesMenu(parent, game)
                     direction .. " " .. tostring(trade.amount) .. " " .. trade.resource ..
                     " with " .. GetPlayerName(game, otherID) .. " @ " .. tostring(trade.pricePerUnit) ..
                     " | Last delivered: " .. tostring(trade.lastTransferred or 0)
-                );
+                ).SetColor(ResourceUIColor(trade.resource));
                 UI.CreateButton(activeRow).SetText("CANCEL").SetOnClick(function()
                     SafeSendGameCustomMessage(game, "Canceling resource contract...", {type="cancelResourceTrade", tradeIndex=capturedIndex}, function(result)
                         if result ~= nil and result.message ~= nil then UI.Alert(result.message); end
@@ -4634,7 +4704,7 @@ end
 
 
 -- =========================================================
--- MILITARY COMMAND UI (UNITED DIPLOMACY)
+-- MILITARY COMMAND UI (UNITED FRONTIER)
 -- =========================================================
 
 function ShowHeadquartersMenu(parent, game)
@@ -5420,7 +5490,7 @@ function ShowOverview(
         UI.CreateLabel(area)
             .SetText(
                 "NATIONAL SETUP REQUIRED"
-            );
+            ).SetColor("#FFD166");
 
 
         UI.CreateLabel(area)
@@ -5455,7 +5525,7 @@ function ShowOverview(
         UI.CreateLabel(area)
             .SetText(
                 "YOUR NATION"
-            );
+            ).SetColor("#7FB3FF");
 
 
         UI.CreateLabel(area)
@@ -5627,7 +5697,7 @@ function ShowOverview(
     UI.CreateLabel(area)
         .SetText(
             "TRADE & INVESTMENT ECONOMY"
-        );
+        ).SetColor("#64B5F6");
 
 
     UI.CreateLabel(area)
@@ -5639,7 +5709,7 @@ function ShowOverview(
     UI.CreateLabel(area)
         .SetText(
             "YOUR TRADE ECONOMY"
-        );
+        ).SetColor("#81C784");
 
 
     UI.CreateLabel(area)
@@ -5706,7 +5776,7 @@ function ShowOverview(
     UI.CreateLabel(area)
         .SetText(
             "GLOBAL INVESTMENT MARKET"
-        );
+        ).SetColor("#BA68C8");
 
 
     UI.CreateLabel(area)
@@ -5752,7 +5822,7 @@ function ShowOverview(
     UI.CreateLabel(area)
         .SetText(
             "HOST RULES"
-        );
+        ).SetColor("#B0BEC5");
 
 
     UI.CreateLabel(area)
@@ -12098,14 +12168,13 @@ function ShowGlobalEconomy(
 
     UI.CreateLabel(area)
         .SetText(
-            "GLOBAL ECONOMY"
-        );
-
+            "GLOBAL ECONOMY & INVESTMENTS"
+        ).SetColor("#64B5F6");
 
     UI.CreateLabel(area)
         .SetText(
-            "Track major international trade and investment activity."
-        );
+            "Trade agreements, investment funding, project results, and AI economic activity in one feed."
+        ).SetColor("#B0BEC5");
 
 
     UI.CreateLabel(area)
@@ -12114,146 +12183,27 @@ function ShowGlobalEconomy(
         );
 
 
-    local tabs =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
+    UI.CreateLabel(area).SetText("TRADE ACTIVITY").SetColor("#81C784");
+    local tradeTabs = UI.CreateHorizontalLayoutGroup(area);
 
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "All"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "all"
-            );
-
+    local function EconomyFilterButton(row, label, value)
+        UI.CreateButton(row).SetText(label).SetOnClick(function()
+            ShowGlobalEconomy(parent, game, value);
         end);
+    end
 
+    EconomyFilterButton(tradeTabs, "ALL", "all");
+    EconomyFilterButton(tradeTabs, "SIGNED", "signed");
+    EconomyFilterButton(tradeTabs, "PROPOSALS", "proposals");
+    EconomyFilterButton(tradeTabs, "REJECTED", "rejected");
+    EconomyFilterButton(tradeTabs, "CANCELED", "canceled");
 
-    UI.CreateButton(tabs)
-        .SetText(
-            "Signed"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "signed"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "Proposals"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "proposals"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "Rejected"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "rejected"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "Canceled"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "canceled"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "Investments"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "investments"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "Success"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "success"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "Failed"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "failed"
-            );
-
-        end);
-
-
-    UI.CreateButton(tabs)
-        .SetText(
-            "AI"
-        )
-        .SetOnClick(function()
-
-            ShowGlobalEconomy(
-                parent,
-                game,
-                "ai"
-            );
-
-        end);
-
+    UI.CreateLabel(area).SetText("INVESTMENT ACTIVITY").SetColor("#BA68C8");
+    local investmentTabs = UI.CreateHorizontalLayoutGroup(area);
+    EconomyFilterButton(investmentTabs, "ALL INVESTMENTS", "investments");
+    EconomyFilterButton(investmentTabs, "SUCCESSFUL", "success");
+    EconomyFilterButton(investmentTabs, "FAILED", "failed");
+    EconomyFilterButton(investmentTabs, "AI ACTIVITY", "ai");
 
     UI.CreateLabel(area)
         .SetText(
@@ -12479,11 +12429,11 @@ function ShowHowItWorks(parent)
         "UNITED NATIONS / SECURITY COUNCIL",
         "When enabled, the Security Council contains permanent and rotating members. The default is 5 permanent + 10 rotating seats, but the host can change both counts. Permanent members have veto power.\n\n" ..
         "Each player has a host-configurable proposal cooldown, preventing resolution spam. The UN page shows your remaining cooldown live. AI council members vote automatically.\n\n" ..
-        "SANCTIONS: target loses 10% Commerce each turn for 3 turns.\n" ..
+        "SANCTIONS: target loses 10% Commerce each turn for a duration chosen within the host minimum/maximum.\n" ..
         "EMBARGO: pauses Trade Agreement income and Resource Trade deliveries involving the target for 3 turns.\n" ..
         "AID: target receives 10% of its Commerce income immediately, minimum 50 gold.\n" ..
         "CONDEMNATION: formal condemnation for 3 turns and +5 Unrest when unrest is active.\n" ..
-        "CEASEFIRE: forces peace between proposer and target if they are currently at war.\n\n" ..
+        "CEASEFIRE: forces peace and blocks a new declaration for a duration chosen within host limits.\n\n" ..
         "Example: France proposes Sanctions against Nation B. Council members vote. If the configured YES threshold is reached and no permanent member votes NO, Nation B receives the 10% Commerce penalty for 3 turns."
     );
 

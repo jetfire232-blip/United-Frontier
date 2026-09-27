@@ -156,3 +156,14 @@ Gameplay features should be considered confirmed only after they have been teste
 
 - **Reviewer / spectator safety:** player-specific menus now handle cases where War.app opens the UI without a local `game.Us` player, showing a viewer-mode message instead of crashing.
 - **Bounded history:** long-running games automatically trim older reporting/history records while preserving live gameplay state, reducing the chance of exceeding War.app's `PublicGameData` size limit.
+
+
+Phase 4: player-specific strategic resource intelligence, hidden military infrastructure storage, Headquarters construction/upgrades, Airbases, Forward Airstrips, SAM Sites, Missile Silos, public Power Grids, Air Wings, and Special Forces purchasing foundations.
+
+## Headquarters intelligence sharing
+
+- Faction members automatically share strategic intelligence with one another.
+- A normal Alliance does **not** automatically expose private resources or hidden military infrastructure.
+- Allied nations can separately request **Shared Intelligence** and **Joint Strategic Warning** from Diplomacy. Both players must accept.
+- Shared Intelligence controls allied access to private resource and military discoveries. Joint Strategic Warning is stored separately for the strategic-warning/strike system.
+- Border resource visibility remains specific to the viewing player: a nation only gains the border rule for resource territories directly adjacent to its own territory.

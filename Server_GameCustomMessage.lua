@@ -485,6 +485,10 @@ if economy.diplomacy.alliances == nil then
     economy.diplomacy.alliances = {};
 end
 
+if economy.diplomacy.pendingHeadquartersShareRequests == nil then
+    economy.diplomacy.pendingHeadquartersShareRequests = {};
+end
+
 if economy.diplomacy.factions == nil then
     economy.diplomacy.factions = {};
 end
@@ -692,6 +696,9 @@ diplomacy.pendingAllianceOffers =
 
 diplomacy.alliances =
     diplomacy.alliances or {};
+
+diplomacy.pendingHeadquartersShareRequests =
+    diplomacy.pendingHeadquartersShareRequests or {};
 
 diplomacy.factions =
     diplomacy.factions or {};
@@ -3205,6 +3212,56 @@ end
 -- =========================================================
 -- MAIN HOOK
 -- =========================================================
+
+-- =========================================================
+-- UNITED FRONTIER STRATEGIC MILITARY HELPERS
+-- Hidden infrastructure lives in Mod.PrivateGameData.  Only Power Grids are
+-- represented by globally visible standing structures.
+-- =========================================================
+
+local UF_MILITARY_KIND_CONFIG = {
+    Airbase={tableName="airbases", enabled="AirbasesEnabled", baseCost="AirbaseBaseCost", maxLevel="AirbaseMaxLevel", defaultCost=350, defaultMax=3},
+    ForwardAirstrip={tableName="forwardAirstrips", enabled="ForwardAirstripsEnabled", baseCost="ForwardAirstripBaseCost", defaultCost=175, defaultMax=1},
+    SAMSite={tableName="samSites", enabled="SAMSitesEnabled", baseCost="SAMSiteBaseCost", maxLevel="SAMSiteMaxLevel", defaultCost=300, defaultMax=3},
+    MissileSilo={tableName="missileSilos", enabled="MissileSilosEnabled", baseCost="MissileSiloBaseCost", maxLevel="MissileSiloMaxLevel", defaultCost=500, defaultMax=3},
+    PowerGrid={tableName="powerGrids", enabled="PowerGridEnabled", baseCost="PowerGridBaseCost", defaultCost=300, defaultMax=3}
+};
+
+local function UFEnsurePrivateMilitary(playerID)
+    local pd = Mod.PrivateGameData or {};
+    pd.strategicMilitary = pd.strategicMilitary or {byPlayer={}};
+    pd.strategicMilitary.byPlayer = pd.strategicMilitary.byPlayer or {};
+    local state = pd.strategicMilitary.byPlayer[playerID];
+    if state == nil then
+        state = {headquarters=nil, airbases={}, forwardAirstrips={}, samSites={}, missileSilos={}, powerGrids={}, airWings={}, specialForces={}, discoveredResourceTerritories={}, discoveredMilitary={}};
+        pd.strategicMilitary.byPlayer[playerID] = state;
+    end
+    state.airbases=state.airbases or {}; state.forwardAirstrips=state.forwardAirstrips or {};
+    state.samSites=state.samSites or {}; state.missileSilos=state.missileSilos or {}; state.powerGrids=state.powerGrids or {};
+    state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
+    state.discoveredResourceTerritories=state.discoveredResourceTerritories or {}; state.discoveredMilitary=state.discoveredMilitary or {};
+    return pd, state;
+end
+
+local function UFSaveOwnerMilitaryToPlayerData(playerID, privateData, state)
+    Mod.PrivateGameData = privateData;
+    local pgd = Mod.PlayerGameData or {};
+    pgd[playerID] = pgd[playerID] or {};
+    pgd[playerID].ownMilitary = state;
+    pgd[playerID].strategicIntel = pgd[playerID].strategicIntel or {knownResources={}, knownMilitary={}};
+    Mod.PlayerGameData = pgd;
+end
+
+local function UFTerritoryOwnedBy(game, territoryID, playerID)
+    local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+    local terr = standing and standing.Territories and standing.Territories[territoryID] or nil;
+    return terr ~= nil and terr.OwnerPlayerID == playerID;
+end
+
+local function UFMilitaryDisplayName(kind)
+    local names={Airbase="Airbase",ForwardAirstrip="Forward Airstrip",SAMSite="SAM Site",MissileSilo="Missile Silo",PowerGrid="Power Grid"};
+    return names[kind] or kind;
+end
 
 function Server_GameCustomMessage(
     game,
@@ -6569,7 +6626,10 @@ startTurn =
     ),
 
         active =
-            true
+            true,
+
+        sharedIntelligence = false,
+        jointStrategicWarning = false
     };
 
 
@@ -6785,6 +6845,14 @@ if payload.type == "endAlliance" then
     ] =
         nil;
 
+    for i = #(diplomacy.pendingHeadquartersShareRequests or {}), 1, -1 do
+        local request = diplomacy.pendingHeadquartersShareRequests[i];
+        if (request.fromPlayerID == playerID and request.toPlayerID == otherPlayerID)
+            or (request.fromPlayerID == otherPlayerID and request.toPlayerID == playerID) then
+            table.remove(diplomacy.pendingHeadquartersShareRequests, i);
+        end
+    end
+
 
     for i =
         #diplomacy.pendingAllianceOffers,
@@ -6865,6 +6933,84 @@ if payload.type == "endAlliance" then
 
 
     return;
+end
+
+-- =========================================================
+-- HEADQUARTERS SHARING (ALLIANCES)
+-- =========================================================
+
+if payload.type == "requestHeadquartersSharing" then
+    local targetPlayerID = MakeInteger(payload.targetPlayerID);
+    local shareType = tostring(payload.shareType or "");
+    if targetPlayerID == nil or targetPlayerID == playerID then
+        setReturn({success=false, message="Invalid allied nation."}); return;
+    end
+    if shareType ~= "SharedIntelligence" and shareType ~= "JointStrategicWarning" then
+        setReturn({success=false, message="Invalid Headquarters sharing option."}); return;
+    end
+    local diplomacy = GetDiplomacyData(data);
+    local pairKey = PairKey(playerID, targetPlayerID);
+    local alliance = diplomacy.alliances[pairKey];
+    if alliance == nil or alliance.active ~= true then
+        setReturn({success=false, message="Headquarters sharing can only be requested from an active ally."}); return;
+    end
+    if shareType == "SharedIntelligence" and alliance.sharedIntelligence == true then
+        setReturn({success=false, message="Shared Intelligence is already active with this ally."}); return;
+    end
+    if shareType == "JointStrategicWarning" and alliance.jointStrategicWarning == true then
+        setReturn({success=false, message="Joint Strategic Warning is already active with this ally."}); return;
+    end
+    diplomacy.pendingHeadquartersShareRequests = diplomacy.pendingHeadquartersShareRequests or {};
+    for _, request in ipairs(diplomacy.pendingHeadquartersShareRequests) do
+        if request.fromPlayerID == playerID and request.toPlayerID == targetPlayerID and request.shareType == shareType then
+            setReturn({success=false, message="That Headquarters sharing request is already pending."}); return;
+        end
+    end
+    table.insert(diplomacy.pendingHeadquartersShareRequests, {
+        fromPlayerID=playerID,
+        toPlayerID=targetPlayerID,
+        shareType=shareType,
+        createdTurn=GetCurrentEconomyTurn(data)
+    });
+    CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true, message="Headquarters sharing request sent."}); return;
+end
+
+if payload.type == "respondHeadquartersSharing" then
+    local fromPlayerID = MakeInteger(payload.fromPlayerID);
+    local shareType = tostring(payload.shareType or "");
+    local accept = payload.accept == true;
+    if fromPlayerID == nil or fromPlayerID == playerID then
+        setReturn({success=false, message="Invalid Headquarters sharing request."}); return;
+    end
+    local diplomacy = GetDiplomacyData(data);
+    local foundIndex = nil;
+    for i, request in ipairs(diplomacy.pendingHeadquartersShareRequests or {}) do
+        if request.fromPlayerID == fromPlayerID and request.toPlayerID == playerID and request.shareType == shareType then
+            foundIndex=i; break;
+        end
+    end
+    if foundIndex == nil then
+        setReturn({success=false, message="That Headquarters sharing request is no longer pending."}); return;
+    end
+    table.remove(diplomacy.pendingHeadquartersShareRequests, foundIndex);
+    local pairKey = PairKey(playerID, fromPlayerID);
+    local alliance = diplomacy.alliances[pairKey];
+    if accept then
+        if alliance == nil or alliance.active ~= true then
+            CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+            setReturn({success=false, message="The alliance is no longer active."}); return;
+        end
+        if shareType == "SharedIntelligence" then
+            alliance.sharedIntelligence = true;
+        elseif shareType == "JointStrategicWarning" then
+            alliance.jointStrategicWarning = true;
+        else
+            setReturn({success=false, message="Invalid Headquarters sharing option."}); return;
+        end
+    end
+    CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true, message=accept and "Headquarters sharing accepted. Intelligence access refreshes with the strategic-intelligence update." or "Headquarters sharing request declined."}); return;
 end
 
 -- =========================================================
@@ -11472,6 +11618,107 @@ end
         return;
     end
 
+
+    -- =====================================================
+    -- UNITED FRONTIER STRATEGIC MILITARY DEVELOPMENT
+    -- =====================================================
+
+    if payload.type == "buildHeadquarters" then
+        if GetSetting("MilitaryExpansionEnabled", true) ~= true or GetSetting("HeadquartersEnabled", true) ~= true then
+            setReturn({success=false,message="Headquarters are disabled by the host."}); return;
+        end
+        local territoryID = MakeInteger(payload.territoryID);
+        if territoryID == nil or not UFTerritoryOwnedBy(game, territoryID, playerID) then
+            setReturn({success=false,message="Select a territory you currently own."}); return;
+        end
+        local pd,state = UFEnsurePrivateMilitary(playerID);
+        if state.headquarters ~= nil then
+            setReturn({success=false,message="Your nation already has a Headquarters. Future relocation will use a separate command."}); return;
+        end
+        local cost = math.max(50, math.floor(tonumber(GetSetting("HeadquartersBaseCost",500)) or 500));
+        if GetStoredGold(game,playerID) < cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce to construct Headquarters."}); return; end
+        RemoveGold(game,playerID,cost);
+        state.headquarters={territoryID=territoryID,status="Operational",branches={Intelligence=0,Security=0,CyberWarfare=0,JointCommand=0}};
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        setReturn({success=true,message="Headquarters constructed. "..tostring(cost).." Commerce was deducted."}); return;
+    end
+
+    if payload.type == "upgradeHeadquartersBranch" then
+        local branch=tostring(payload.branch or "");
+        local valid={Intelligence=true,Security=true,CyberWarfare=true,JointCommand=true};
+        if valid[branch] ~= true then setReturn({success=false,message="Invalid Headquarters branch."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID);
+        if state.headquarters == nil then setReturn({success=false,message="Construct Headquarters first."}); return; end
+        state.headquarters.branches=state.headquarters.branches or {Intelligence=0,Security=0,CyberWarfare=0,JointCommand=0};
+        local current=tonumber(state.headquarters.branches[branch]) or 0;
+        local maxLevel=math.max(1,math.min(10,math.floor(tonumber(GetSetting("HeadquartersMaxBranchLevel",5)) or 5)));
+        if current>=maxLevel then setReturn({success=false,message=branch.." is already at maximum level."}); return; end
+        local newLevel=current+1;
+        local base=math.max(25,math.floor((tonumber(GetSetting("HeadquartersBaseCost",500)) or 500)*0.35));
+        local cost=base*newLevel;
+        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for "..branch.." level "..tostring(newLevel).."."}); return; end
+        RemoveGold(game,playerID,cost);
+        state.headquarters.branches[branch]=newLevel;
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        setReturn({success=true,message=branch.." upgraded to level "..tostring(newLevel)..". "..tostring(cost).." Commerce deducted."}); return;
+    end
+
+    if payload.type == "buildStrategicMilitary" then
+        if GetSetting("MilitaryExpansionEnabled", true) ~= true then setReturn({success=false,message="Military expansion is disabled by the host."}); return; end
+        local kind=tostring(payload.kind or "");
+        local cfg=UF_MILITARY_KIND_CONFIG[kind];
+        if cfg==nil then setReturn({success=false,message="Invalid military structure type."}); return; end
+        if GetSetting(cfg.enabled,true) ~= true then setReturn({success=false,message=UFMilitaryDisplayName(kind).." is disabled by the host."}); return; end
+        local territoryID=MakeInteger(payload.territoryID);
+        if territoryID==nil or not UFTerritoryOwnedBy(game,territoryID,playerID) then setReturn({success=false,message="Select a territory you currently own."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID);
+        local tbl=state[cfg.tableName];
+        local current=tonumber(tbl[territoryID]) or 0;
+        local maxLevel=cfg.defaultMax or 1;
+        if cfg.maxLevel~=nil then maxLevel=math.max(1,math.floor(tonumber(GetSetting(cfg.maxLevel,maxLevel)) or maxLevel)); end
+        if current>=maxLevel then setReturn({success=false,message=UFMilitaryDisplayName(kind).." is already at maximum level here."}); return; end
+        local newLevel=current+1;
+        local base=math.max(25,math.floor(tonumber(GetSetting(cfg.baseCost,cfg.defaultCost)) or cfg.defaultCost));
+        local cost=base*newLevel;
+        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for "..UFMilitaryDisplayName(kind).." level "..tostring(newLevel).."."}); return; end
+        RemoveGold(game,playerID,cost);
+        tbl[territoryID]=newLevel;
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        setReturn({success=true,message=UFMilitaryDisplayName(kind).." level "..tostring(newLevel).." established. "..tostring(cost).." Commerce deducted."}); return;
+    end
+
+    if payload.type == "purchaseAirWing" then
+        if GetSetting("AirWingsEnabled",true) ~= true then setReturn({success=false,message="Air Wings are disabled by the host."}); return; end
+        local territoryID=MakeInteger(payload.territoryID);
+        if territoryID==nil or not UFTerritoryOwnedBy(game,territoryID,playerID) then setReturn({success=false,message="Select one of your Airbase territories."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID);
+        if (tonumber(state.airbases[territoryID]) or 0)<=0 then setReturn({success=false,message="Air Wings must be stationed at an Airbase."}); return; end
+        local total=0; for _,cnt in pairs(state.airWings) do total=total+(tonumber(cnt) or 0); end
+        local max=math.max(1,math.floor(tonumber(GetSetting("AirWingMaxPerPlayer",10)) or 10));
+        if total>=max then setReturn({success=false,message="You already have the maximum number of Air Wings."}); return; end
+        local capacity=(tonumber(state.airbases[territoryID]) or 1)*2;
+        local here=tonumber(state.airWings[territoryID]) or 0;
+        if here>=capacity then setReturn({success=false,message="This Airbase is at Air Wing capacity. Upgrade the Airbase or use another base."}); return; end
+        local cost=math.max(25,math.floor(tonumber(GetSetting("AirWingBaseCost",200)) or 200));
+        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for an Air Wing."}); return; end
+        RemoveGold(game,playerID,cost); state.airWings[territoryID]=here+1; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        setReturn({success=true,message="Air Wing purchased and stationed. One Wing represents "..tostring(GetSetting("AircraftPerAirWing",25)).." aircraft. "..tostring(cost).." Commerce deducted."}); return;
+    end
+
+    if payload.type == "purchaseSpecialForces" then
+        if GetSetting("SpecialForcesEnabled",true) ~= true then setReturn({success=false,message="Special Forces are disabled by the host."}); return; end
+        local territoryID=MakeInteger(payload.territoryID);
+        if territoryID==nil or not UFTerritoryOwnedBy(game,territoryID,playerID) then setReturn({success=false,message="Select a territory you currently own."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID);
+        if state.headquarters==nil then setReturn({success=false,message="Construct Headquarters before training Special Forces."}); return; end
+        local total=0; for _,cnt in pairs(state.specialForces) do total=total+(tonumber(cnt) or 0); end
+        local max=math.max(1,math.floor(tonumber(GetSetting("SpecialForcesMaxPerPlayer",4)) or 4));
+        if total>=max then setReturn({success=false,message="You already have the maximum number of Special Forces units."}); return; end
+        local cost=math.max(25,math.floor(tonumber(GetSetting("SpecialForcesBaseCost",180)) or 180));
+        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for Special Forces."}); return; end
+        RemoveGold(game,playerID,cost); state.specialForces[territoryID]=(tonumber(state.specialForces[territoryID]) or 0)+1; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        setReturn({success=true,message="Special Forces unit trained. "..tostring(cost).." Commerce deducted."}); return;
+    end
 
     -- =====================================================
     -- ARMY RECRUITER DEVELOPMENT

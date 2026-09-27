@@ -742,7 +742,7 @@ local function GetTotalResourceLevel(nodes)
     return total;
 end
 
-local PUBLIC_RESOURCE_ICONS = {Oil=true, Gas=true, Food=true};
+local PUBLIC_RESOURCE_ICONS = {}; -- Phase 4: resources are player-specific intelligence, never globally exposed as standing structures.
 
 local function ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID)
     local terr = Standing and Standing.Territories and Standing.Territories[territoryID] or nil;
@@ -761,8 +761,10 @@ local function ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID
 end
 
 local function ShouldShowResourceIcon(Game, Standing, territoryID, resourceName)
-    if PUBLIC_RESOURCE_ICONS[resourceName] == true then return true; end
-    return ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID);
+    -- War.app standing structures are shared with every viewer.  Phase 4 keeps
+    -- resource locations private and exposes permitted locations through
+    -- Mod.PlayerGameData + client map highlighting instead of global structures.
+    return false;
 end
 
 -- Slot profiles are deliberately broad 2026 strategic-production strengths,
@@ -1206,6 +1208,35 @@ function Server_StartGame(
     Mod.PublicGameData =
         data;
 
+    -- =====================================================
+    -- UNITED FRONTIER PRIVATE STRATEGIC STATE
+    -- =====================================================
+    local privateData = Mod.PrivateGameData or {};
+    privateData.strategicMilitary = privateData.strategicMilitary or {byPlayer = {}};
+    privateData.strategicMilitary.byPlayer = privateData.strategicMilitary.byPlayer or {};
+
+    local playerData = Mod.PlayerGameData or {};
+    for playerID, _ in pairs(economy.nations or {}) do
+        privateData.strategicMilitary.byPlayer[playerID] =
+            privateData.strategicMilitary.byPlayer[playerID]
+            or {
+                headquarters = nil,
+                airbases = {},
+                forwardAirstrips = {},
+                samSites = {},
+                missileSilos = {},
+                powerGrids = {},
+                airWings = {},
+                specialForces = {},
+                discoveredResourceTerritories = {},
+                discoveredMilitary = {}
+            };
+        playerData[playerID] = playerData[playerID] or {};
+        playerData[playerID].strategicIntel = playerData[playerID].strategicIntel or {knownResources = {}, knownMilitary = {}};
+        playerData[playerID].ownMilitary = privateData.strategicMilitary.byPlayer[playerID];
+    end
+    Mod.PrivateGameData = privateData;
+    Mod.PlayerGameData = playerData;
 
     print(
         "Global Economy initialization complete."

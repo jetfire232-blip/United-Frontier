@@ -713,6 +713,12 @@ if economy.diplomacy.alliances == nil then
         {};
 end
 
+if economy.diplomacy.pendingHeadquartersShareRequests == nil then
+
+    economy.diplomacy.pendingHeadquartersShareRequests =
+        {};
+end
+
     if economy.diplomacy.nonAggressionPacts == nil then
 
         economy.diplomacy.nonAggressionPacts =
@@ -932,6 +938,10 @@ diplomacy.pendingAllianceOffers =
 
 diplomacy.alliances =
     diplomacy.alliances
+    or {};
+
+diplomacy.pendingHeadquartersShareRequests =
+    diplomacy.pendingHeadquartersShareRequests
     or {};
 
     diplomacy.nonAggressionPacts =
@@ -14313,7 +14323,7 @@ local function GetTotalResourceLevel(nodes)
     return total;
 end
 
-local PUBLIC_RESOURCE_ICONS = {Oil=true, Gas=true, Food=true};
+local PUBLIC_RESOURCE_ICONS = {}; -- Resources are private/player-specific intelligence in Phase 4.
 
 local function ResourceTerritoryBordersAnotherPlayer(game, standing, territoryID)
     local terr = standing and standing.Territories and standing.Territories[territoryID] or nil;
@@ -14332,8 +14342,7 @@ local function ResourceTerritoryBordersAnotherPlayer(game, standing, territoryID
 end
 
 local function ShouldShowResourceIcon(game, standing, territoryID, resourceName)
-    if PUBLIC_RESOURCE_ICONS[resourceName] == true then return true; end
-    return ResourceTerritoryBordersAnotherPlayer(game, standing, territoryID);
+    return false;
 end
 
 local function IsResourceCustomStructure(structureType)
@@ -17981,6 +17990,164 @@ local function RefreshStrategicResourceOwnershipSnapshot(
 end
 
 -- =========================================================
+-- UNITED FRONTIER PLAYER-SPECIFIC STRATEGIC INTELLIGENCE
+-- =========================================================
+
+local function UFPlayerOwnsAdjacentTerritory(game, standing, viewerID, territoryID)
+    local details = game and game.Map and game.Map.Territories and game.Map.Territories[territoryID] or nil;
+    if details == nil then return false; end
+    for connectedID, _ in pairs(details.ConnectedTo or {}) do
+        local neighbor = standing.Territories[connectedID];
+        if neighbor ~= nil and neighbor.OwnerPlayerID == viewerID then return true; end
+    end
+    return false;
+end
+
+local function UFPlayersShareIntelligence(data, playerA, playerB)
+    if playerA == playerB then return true; end
+    local diplomacy = data.globalEconomy and data.globalEconomy.diplomacy or {};
+
+    -- Factions automatically share Headquarters intelligence.
+    local pf = diplomacy.playerFaction or {};
+    local fa = pf[playerA];
+    local fb = pf[playerB];
+    if fa ~= nil and fa == fb then return true; end
+
+    -- Normal alliances only share private strategic information when both
+    -- nations have accepted Headquarters Shared Intelligence.
+    local alliance = (diplomacy.alliances or {})[EconomyPairKey(playerA, playerB)];
+    return alliance ~= nil
+        and alliance.active == true
+        and alliance.sharedIntelligence == true;
+end
+
+local function UFBuildKnownResourcesForPlayer(game, data, standing, viewerID, privateState)
+    local known = {};
+    local resources = data.globalEconomy and data.globalEconomy.resources or {};
+    for territoryID, nodes in pairs(resources.territories or {}) do
+        local numericID = tonumber(territoryID) or territoryID;
+        local terr = standing.Territories[numericID];
+        local owner = terr and terr.OwnerPlayerID or nil;
+        local discovered = privateState and privateState.discoveredResourceTerritories
+            and privateState.discoveredResourceTerritories[numericID] == true;
+        local allowed = false;
+        local reason = nil;
+        if owner == viewerID then allowed = true; reason = "Owned";
+        elseif owner ~= nil and owner ~= WL.PlayerID.Neutral and owner ~= WL.PlayerID.Fogged then
+            if UFPlayersShareIntelligence(data, viewerID, owner) then
+                allowed = true; reason = "Shared Intelligence";
+            elseif UFPlayerOwnsAdjacentTerritory(game, standing, viewerID, numericID) then
+                allowed = true; reason = "Border";
+            elseif discovered then
+                allowed = true; reason = "HQ Intelligence";
+            end
+        end
+        if allowed then
+            known[numericID] = {ownerPlayerID = owner, resources = nodes, reason = reason};
+        end
+    end
+    return known;
+end
+
+local function UFBuildKnownMilitaryForPlayer(game, data, standing, viewerID, privateData)
+    local result = {};
+    local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
+    local viewerState = byPlayer[viewerID] or {};
+    local discovered = viewerState.discoveredMilitary or {};
+    local function add(ownerID, kind, territoryID, level, reason, count)
+        local key = tostring(ownerID) .. ":" .. tostring(kind) .. ":" .. tostring(territoryID);
+        result[key] = {ownerPlayerID=ownerID, kind=kind, territoryID=territoryID, level=level or 1, count=count or 1, reason=reason};
+    end
+    for ownerID, state in pairs(byPlayer) do
+        if ownerID ~= viewerID then
+            local shared = UFPlayersShareIntelligence(data, viewerID, ownerID);
+            local function maybe(kind, territoryID, level, count)
+                local border = UFPlayerOwnsAdjacentTerritory(game, standing, viewerID, territoryID);
+                local dk = tostring(ownerID) .. ":" .. tostring(kind) .. ":" .. tostring(territoryID);
+                if shared then add(ownerID, kind, territoryID, level, "Shared Intelligence", count)
+                elseif discovered[dk] == true then add(ownerID, kind, territoryID, level, "HQ Intelligence", count)
+                -- Military infrastructure is NOT automatically exposed merely by border contact.
+                end
+            end
+            if state.headquarters ~= nil then maybe("Headquarters", state.headquarters.territoryID, 1); end
+            for tid,lvl in pairs(state.airbases or {}) do maybe("Airbase", tonumber(tid) or tid, lvl); end
+            for tid,lvl in pairs(state.forwardAirstrips or {}) do maybe("Forward Airstrip", tonumber(tid) or tid, lvl); end
+            for tid,lvl in pairs(state.samSites or {}) do maybe("SAM Site", tonumber(tid) or tid, lvl); end
+            for tid,lvl in pairs(state.missileSilos or {}) do maybe("Missile Silo", tonumber(tid) or tid, lvl); end
+            for tid,lvl in pairs(state.powerGrids or {}) do add(ownerID, "Power Grid", tonumber(tid) or tid, lvl, "Public"); end
+            for tid,cnt in pairs(state.airWings or {}) do maybe("Air Wing", tonumber(tid) or tid, 1, cnt); end
+            for tid,cnt in pairs(state.specialForces or {}) do maybe("Special Forces", tonumber(tid) or tid, 1, cnt); end
+        end
+    end
+    return result;
+end
+
+local function UFRefreshAllPlayerStrategicIntel(game, data)
+    local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if standing == nil or standing.Territories == nil then return; end
+    local privateData = Mod.PrivateGameData or {};
+    privateData.strategicMilitary = privateData.strategicMilitary or {byPlayer={}};
+    privateData.strategicMilitary.byPlayer = privateData.strategicMilitary.byPlayer or {};
+    local playerData = Mod.PlayerGameData or {};
+    for playerID, _ in pairs((data.globalEconomy or {}).nations or {}) do
+        local state = privateData.strategicMilitary.byPlayer[playerID] or {
+            airbases={}, forwardAirstrips={}, samSites={}, missileSilos={}, powerGrids={}, airWings={}, specialForces={},
+            discoveredResourceTerritories={}, discoveredMilitary={}
+        };
+        privateData.strategicMilitary.byPlayer[playerID] = state;
+        playerData[playerID] = playerData[playerID] or {};
+        playerData[playerID].strategicIntel = {
+            knownResources = UFBuildKnownResourcesForPlayer(game, data, standing, playerID, state),
+            knownMilitary = UFBuildKnownMilitaryForPlayer(game, data, standing, playerID, privateData)
+        };
+        playerData[playerID].ownMilitary = state;
+    end
+    Mod.PrivateGameData = privateData;
+    Mod.PlayerGameData = playerData;
+end
+
+local function UFIsPowerGridStructure(st)
+    for level=1,5 do
+        if st == WL.StructureType.Custom("PowerGrid" .. tostring(level)) then return true; end
+    end
+    return false;
+end
+
+local function UFRefreshPublicPowerGridIcons(game, addNewOrder)
+    if GetSetting("PowerGridEnabled", true) ~= true then return; end
+    local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if standing == nil then return; end
+    local privateData = Mod.PrivateGameData or {};
+    local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
+    local wanted = {};
+    for ownerID,state in pairs(byPlayer) do
+        for tid,lvl in pairs(state.powerGrids or {}) do
+            local n = tonumber(tid) or tid;
+            local terr = standing.Territories[n];
+            if terr ~= nil and terr.OwnerPlayerID == ownerID then wanted[n] = math.max(1, math.min(3, tonumber(lvl) or 1)); end
+        end
+    end
+    local mods = {};
+    for tid,terr in pairs(standing.Territories or {}) do
+        local existing = terr.Structures or {};
+        local desired = {};
+        local changed = false;
+        for st,cnt in pairs(existing) do
+            if not UFIsPowerGridStructure(st) then desired[st]=cnt; else changed=true; end
+        end
+        if wanted[tid] ~= nil then desired[WL.StructureType.Custom("PowerGrid" .. tostring(wanted[tid]))] = 1; end
+        if changed or wanted[tid] ~= nil then
+            local mod = WL.TerritoryModification.Create(tid);
+            mod.SetStructuresOpt = desired;
+            table.insert(mods, mod);
+        end
+    end
+    if #mods > 0 then
+        addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral, "Power Grid map display updated", {}, mods, nil, nil));
+    end
+end
+
+-- =========================================================
 -- END-OF-TURN DIPLOMACY
 -- =========================================================
 
@@ -18017,6 +18184,9 @@ function Server_AdvanceTurn_End(
         game,
         data
     );
+
+    UFRefreshAllPlayerStrategicIntel(game, data);
+    UFRefreshPublicPowerGridIcons(game, addNewOrder);
 
     CompactPublicGameData(data);
     Mod.PublicGameData =

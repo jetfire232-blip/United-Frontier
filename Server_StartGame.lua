@@ -87,10 +87,8 @@ local function CreateMilitaryFoundationState()
             version = 1,
             enabled = GetSetting("MilitaryExpansionEnabled", true),
 
-            -- IMPORTANT: hidden infrastructure itself will be stored in
-            -- PrivateGameData / PlayerGameData in the implementation phase.
-            -- This public table intentionally contains only non-secret
-            -- framework/status information.
+            -- Strategic ownership and sensitive military details are stored outside this public framework where appropriate.
+            -- Visible map assets are synchronized from the authoritative military state; private intelligence remains player-specific.
             publicStructures = {},
             pendingPublicEvents = {},
             nextStructureID = 1
@@ -342,6 +340,9 @@ local function CreateDefaultNationState(
         0;
 
     nation.aiManagerInvestmentSpentThisTurn =
+        0;
+
+    nation.aiManagerMilitarySpentThisTurn =
         0;
 
     nation.aiManagerCommerceBefore =
@@ -742,7 +743,7 @@ local function GetTotalResourceLevel(nodes)
     return total;
 end
 
-local PUBLIC_RESOURCE_ICONS = {}; -- Phase 4: resources are player-specific intelligence, never globally exposed as standing structures.
+local PUBLIC_RESOURCE_ICONS = {}; -- Resources are player-specific intelligence and are never globally exposed as standing structures.
 
 local function ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID)
     local terr = Standing and Standing.Territories and Standing.Territories[territoryID] or nil;
@@ -761,7 +762,7 @@ local function ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID
 end
 
 local function ShouldShowResourceIcon(Game, Standing, territoryID, resourceName)
-    -- War.app standing structures are shared with every viewer.  Phase 4 keeps
+    -- War.app standing structures are shared with every viewer.  United Frontier keeps
     -- resource locations private and exposes permitted locations through
     -- Mod.PlayerGameData + client map highlighting instead of global structures.
     return false;
@@ -821,13 +822,10 @@ end
 
 local function IsResourceCustomStructure(structureType)
     for _, safe in pairs(RESOURCE_ICON_SAFE_NAMES) do
-        for level = 1, 9 do
+        for level = 1, 5 do
             if structureType == WL.StructureType.Custom("Resource" .. safe .. tostring(level)) then
                 return true;
             end
-        end
-        if structureType == WL.StructureType.Custom("Resource" .. safe .. "9plus") then
-            return true;
         end
     end
     return false;
@@ -1228,8 +1226,12 @@ function Server_StartGame(
                 powerGrids = {},
                 airWings = {},
                 specialForces = {},
+                pendingAirWings = {},
+                pendingSpecialForces = {},
                 discoveredResourceTerritories = {},
-                discoveredMilitary = {}
+                discoveredMilitary = {},
+                lastResourceIntelScanTurn = nil,
+                lastMilitaryIntelScanTurn = nil
             };
         playerData[playerID] = playerData[playerID] or {};
         playerData[playerID].strategicIntel = playerData[playerID].strategicIntel or {knownResources = {}, knownMilitary = {}};

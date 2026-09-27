@@ -1413,10 +1413,10 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ArmyRecruiterMaxLevel", "Maximum Recruiter Level", armyRecruiterMaxLevel, 1, 5, "Upgrades increase army output and strategic resource maintenance demand.");
 
 
-    AddSection(root, "MILITARY FOUNDATION", "Core host controls for United Frontier strategic infrastructure. Detailed weapon balance settings will be added in later phases.");
+    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, visible map assets, Air Wings, Special Forces, Headquarters intelligence, and strategic readiness.");
 
     AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
-    AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Hide Strategic Military Infrastructure from Enemies", hiddenMilitaryInfrastructureEnabled);
+    AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Protect Military Asset Details Behind Intelligence", hiddenMilitaryInfrastructureEnabled);
 
     AddCheckBox(root, "HeadquartersEnabled", "Enable Headquarters", headquartersEnabled);
     AddNumberInput(root, "HeadquartersBaseCost", "Headquarters Base Cost (Commerce)", headquartersBaseCost, 50, 5000, "One national HQ. Intelligence, Security, Cyber Warfare, and Joint Command live inside it.");
@@ -1431,17 +1431,17 @@ function Client_PresentConfigureUI(rootParent)
 
     AddCheckBox(root, "SAMSitesEnabled", "Enable SAM Sites", samSitesEnabled);
     AddNumberInput(root, "SAMSiteBaseCost", "SAM Site Base Cost (Commerce)", samSiteBaseCost, 25, 5000, "Air and strategic-defense system.");
-    AddNumberInput(root, "SAMSiteMaxLevel", "SAM Site Maximum Level", samSiteMaxLevel, 1, 5, "Interception rules will be added in the warfare phase.");
+    AddNumberInput(root, "SAMSiteMaxLevel", "SAM Site Maximum Level", samSiteMaxLevel, 1, 5, "Higher SAM levels prepare stronger air/strategic defense; detailed interception effects are documented in How It Works.");
 
     AddCheckBox(root, "MissileSilosEnabled", "Enable Missile Silos", missileSilosEnabled);
-    AddNumberInput(root, "MissileSiloBaseCost", "Missile Silo Base Cost (Commerce)", missileSiloBaseCost, 50, 10000, "Silos will use limited missile inventory and reloads.");
+    AddNumberInput(root, "MissileSiloBaseCost", "Missile Silo Base Cost (Commerce)", missileSiloBaseCost, 50, 10000, "Missile Silos are visible strategic assets designed for limited missile inventory, reloads, and strategic strike orders.");
     AddNumberInput(root, "MissileSiloMaxLevel", "Missile Silo Maximum Level", missileSiloMaxLevel, 1, 5, "Recommended default: 3 visual levels.");
 
     AddCheckBox(root, "PowerGridEnabled", "Enable Power Grid", powerGridEnabled);
     AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid structures are intended to remain publicly visible.");
 
     AddCheckBox(root, "AirWingsEnabled", "Enable Air Wings", airWingsEnabled);
-    AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings are special military units and require Airbase capacity in the implementation phase.");
+    AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings are visible custom military units. Purchasing requires capacity at an owned Airbase.");
     AddNumberInput(root, "AircraftPerAirWing", "Aircraft Represented per Air Wing", aircraftPerAirWing, 1, 500, "Display scale only; example: one small Air Wing icon can represent 25 aircraft.");
     AddNumberInput(root, "AirWingMaxPerPlayer", "Maximum Air Wings per Player", airWingMaxPerPlayer, 1, 100, "Host-configurable national limit.");
 
@@ -1604,20 +1604,20 @@ function Client_PresentConfigureUI(rootParent)
     AddCheckBox(
         root,
         "ResourceMapIconsEnabled",
-        "Show Resource Hub icons on the map",
+        "Enable Resource Location Intelligence",
         resourceMapIconsEnabled
     );
 
     UI.CreateLabel(root)
         .SetText(
-            "Resource Hub icons use ONE shared structure icon for every resource type. The number beside the icon is the territory's combined resource-facility level. Turning this off hides Resource Hub structures globally while keeping the resource system active."
+            "Resource deposits are not exposed as global map structures. Players learn locations through ownership, direct borders, faction/shared intelligence, or Headquarters Intelligence. The Resources tab provides private filters and Show-on-Map highlighting."
         );
 
 
     AddSection(
         root,
         "PLAYER AI MANAGER",
-        "Optional automation for human players. It manages stocks and investment projects within a player-set budget, but never controls diplomacy, trade agreements, taxation, ideology, or military orders."
+        "Optional automation for human players. It reserves a player-set Commerce budget each turn and can allocate it across Markets, Investments, Strategic Resources, Recruiters, and military development. Diplomacy, ideology, taxation, and direct combat orders remain player-controlled."
     );
 
     AddCheckBox(

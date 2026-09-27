@@ -1,169 +1,139 @@
 # United Frontier
 
-## Phase 3 - Resources, Economy UI & UN Controls
+United Frontier is a modern economy, diplomacy, resource, intelligence, and strategic-warfare expansion for War.app. It builds on the stable Global Affairs foundation while reorganizing the player experience around a cleaner Overview, private resource intelligence, visible military assets, Headquarters systems, stronger AI planning, and host-configurable strategic development.
 
-This build consolidates the Phase 2 military foundation with a major resource/economy/UN usability pass.
+## Main Tabs
 
-### Added in Phase 3
-- Resource status colors for Oil, Gas, Uranium, Iron, Food, Rare Earths, Coal, Copper, and Lithium.
-- Resource Market supports both **offers** and **requests** between players.
-- Oil, Gas, and Food map icons remain public. Other strategic resource icons appear only when that resource territory borders another player.
-- One resource icon per territory; upgrades replace the icon level instead of stacking icons. Icon level follows the dominant resource facility and respects the host facility-level cap.
-- Overview section headings are color-coded for faster scanning.
-- Global Economy and Investments are combined into a cleaner two-section activity view.
-- UN Sanctions and Ceasefires now use host-configurable minimum/maximum durations, with the proposer choosing a duration inside those limits.
-- Passed UN ceasefires block a new war declaration for the selected ceasefire duration.
+- **Overview** — command dashboard, alerts, Commerce, allies/faction, war status, resource warnings, flagship company movement, military summary, and AI Manager status.
+- **Markets** — stocks, flagship companies, ETF, dividends, investments, War Bonds, Global Economy, and AI Manager.
+- **Resources** — production, requirements, stockpiles, shortages, private resource intelligence, facilities, offers, requests, and active contracts.
+- **Military** — Headquarters, Recruiters, Airbases, Forward Airstrips, SAM Sites, Missile Silos, Power Grid, Air Wings, Special Forces, and strategic asset management.
+- **Diplomacy** — relations, alliances, factions, Current Wars, Join War, peace, NAPs, Headquarters sharing, and diplomatic actions.
+- **United Nations** — Security Council voting, sanctions, embargoes, aid, condemnations, and ceasefires.
+- **How It Works** — detailed rules and examples.
+- **Customize Tabs** — player UI preferences and alerts.
 
----
+## Strategic Resources
 
-## Phase 2 - Military Foundation
+Resources are Oil, Gas, Uranium, Iron, Food, Rare Earths, Coal, Copper, and Lithium.
 
-This development branch builds on Global Affairs and establishes the persistent framework for modern strategic warfare.
+Resource locations are **not globally exposed as standing map icons**. A player learns a resource location through:
 
-### Added in Phase 2
-- Military host configuration for Headquarters, Airbases, Forward Airstrips, SAM Sites, Missile Silos, Power Grid, Air Wings, and Special Forces.
-- Four Headquarters branches: Intelligence, Security, Cyber Warfare, and Joint Command.
-- Persistent national military summary state prepared for future construction, damage, repairs, and AI planning.
-- Air Wing scale is host-configurable (default: 25 aircraft represented per Wing).
-- Uranium strategy settings prepared: zero starting stockpile by default, rarity mode, and higher facility-cost multiplier.
-- Hidden military infrastructure is explicitly designed to use private/player-specific data rather than PublicGameData when activated.
-- Existing Recruiter system remains active under the Military tab.
+1. ownership;
+2. a resource territory directly bordering that specific player's territory;
+3. faction intelligence;
+4. an ally with accepted Shared Intelligence; or
+5. Headquarters Intelligence discovery.
 
-### Important
-Phase 2 is the framework build. New Airbase/SAM/Silo/HQ/Air Wing/Special Forces purchase actions are intentionally not live yet. This lets the configuration and persistent data model be tested before combat logic is layered on top.
+The Resources UI provides filters for **My Resources**, **Neighbors**, **Ally/Faction**, **HQ Intel**, and **All Known**, with Show-on-Map highlighting.
 
-# United Frontier
+Resource stockpiles persist. Surplus production is stored and later deficits consume stockpile before uncovered shortages apply penalties. Resource facilities are capped at visual Level 5. Uranium is intentionally rare, expensive, and not automatically granted based on national Commerce.
 
-## Phase 1 Development Build
+## Resource Market
 
-This build establishes the new navigation and military foundation while preserving the working Global Affairs systems.
+Players may **offer** or **request** resources. Accepted contracts exchange resources for Commerce while active. Resource trades affect effective production before stockpile shortage resolution.
 
-### New navigation
-- Overview
-- Markets (includes Investments, AI Manager, Global Economy)
-- Resources
-- Military
-- Diplomacy
-- United Nations
-- How It Works
-- Customize Tabs
+## Military Assets
 
-### Military foundation
-- Headquarters with four branches: Intelligence, Security, Cyber Warfare, Joint Command
-- Recruiting Stations moved under Military
-- Planned: Airbases, Forward Airstrips, Air Wings, SAM Sites, Missile Silos, Power Grid, repairs, Special Forces
+The current military asset set is:
 
-### Resource UI
-- Color-coded national status
-- Cleaner production/need/stockpile/net display
-- Resource Market & Trade section
-- One resource icon per territory; upgrades will replace the visual level rather than stack multiple icons
+- Headquarters
+- Recruiting Stations
+- Airbases
+- Forward Airstrips
+- SAM Sites
+- Missile Silos
+- Power / Electrical Grid
+- Air Wings
+- Special Forces
 
----
+Military installation locations are visible map assets. Sensitive military details can remain intelligence-dependent. Power Grid is deliberately public.
 
+Headquarters, Airbases, Airstrips, SAMs, Silos, Power Grids, and Recruiters use structure-style map assets. Air Wings and Special Forces use custom special-unit icons.
 
-United Frontier builds on the Global Affairs V3 foundation and expands it into a modern strategic economy, diplomacy, intelligence, infrastructure, and warfare system.
+## Headquarters
 
-## Core Systems
+Headquarters uses four top-level branches:
 
-- Commerce economy with taxation, ideology, Trade Agreements, investments, and national growth.
-- Flagship companies, stock trading, dividends, portfolios, stock splits, ETF trading, and AI investors.
-- War Bonds that allow wartime financing with a defined term and target payout.
-- Strategic Resources including Oil, Gas, Uranium, Iron, Food, Rare Earths, and optional Coal, Copper, and Lithium.
-- Persistent national resource stockpiles: positive net production is stored, and later deficits consume stockpile reserves before uncovered shortages create penalties.
-- Resource facilities with immediate Commerce payment, ownership transfer through territorial capture, and production tied to controlled territory.
-- Military Readiness driven by strategic-resource availability.
-- Army Recruiters that generate armies based on recruiter level and Military Readiness while adding resource maintenance demand.
-- Diplomacy with wars, peace, Non-Aggression Pacts, alliances, factions, player search/overview, relationship history, and coalition Current Wars.
-- Direct Join War controls that let a human nation choose which side of an active conflict to support, subject to diplomacy safety checks.
-- War Events with player choices and automatic balanced resolution when a human does not respond in time.
-- Optional United Nations / Security Council with permanent and rotating members, vetoes, AI voting, sanctions, embargoes, aid, condemnations, and ceasefires.
-- AI Manager for player-authorized market and investment spending with a defined per-turn budget and visible spending breakdown.
-- Smart AI for markets, investments, resources, diplomacy, war targeting, and other economic decisions.
-- Mobile-focused UI, customizable tabs, player search, and an expanded How It Works guide.
+- **Intelligence**
+- **Security**
+- **Cyber Warfare**
+- **Joint Command**
 
-## Markets and ETF
+Headquarters Intelligence supports private resource discovery and military-detail discovery. Target Security reduces intelligence effectiveness.
 
-Eligible nations may establish flagship companies using Growth, Balanced, or Dividend strategies. Players and AI can buy and sell shares, receive dividends, track cost basis and profit/loss, and trade the global ETF.
+Faction members automatically share strategic intelligence. Normal allies do not automatically share private intelligence: allied players can separately request **Shared Intelligence** and **Joint Strategic Warning**.
 
-The Market Overview includes gainers, downtrend stocks, company confidence, owner unrest, and trend information. The ETF rebalances every 5 turns and can provide visible holder distributions in addition to normal ETF dividends.
+## Air Wings and Special Forces
 
-## Strategic Resources and Stockpiles
+Air Wings are visible custom special units and require Airbase capacity. The host controls how many aircraft one Air Wing represents for scenario scale.
 
-Territory ownership determines resource production. Capturing a resource territory transfers its future production to the new owner after the turn resolves.
+Special Forces are visible custom special units intended for reconnaissance, raids, sabotage, infrastructure operations, and intelligence support rather than replacing normal armies.
 
-Each nation also tracks resource requirements and a persistent national stockpile. Positive net production is added to that resource's stockpile each turn. When production falls below requirements, the stockpile is consumed first. Only the uncovered portion of a shortage applies shortage penalties.
+## Territory Selection
 
-Resource shortages can reduce Commerce, lower Military Readiness, and increase unrest. Existing armies are never deleted because of a shortage.
+Build and targeting flows use a consistent pattern:
 
-Each resource territory displays one dominant-resource map icon with a numeric badge for its combined facility/deposit level. The host may disable resource map icons while leaving the resource economy active.
+**Choose action → dialog closes → click territory → fresh confirmation dialog opens → review → confirm.**
 
-## Army Recruiters
+This avoids stale UI callbacks and makes mobile map selection easier. Resource development also shows current resource levels on the selected territory before confirmation.
 
-When enabled by the host, players may build and upgrade Army Recruiters on owned territories.
+## Smart AI
 
-- Recruiters generate armies on their territory each turn.
-- Output scales with Military Readiness.
-- Recruiter levels add strategic-resource maintenance demand.
-- Recruiters transfer with the territory when captured.
-- Build and upgrade costs are deducted immediately when the action succeeds.
-- Failed or unaffordable actions do not charge the player.
+Smart AI is being upgraded around national planning:
 
-## Current Wars and Join War
+- Peace / tension / war / emergency priorities.
+- Light peacetime border screens with second-line reserves.
+- Better Recruiter placement.
+- Resource shortage response.
+- Military infrastructure development.
+- Air Wing / SAM / Silo prioritization during war.
+- Reduced unnecessary Commerce hoarding.
+- War Economy priorities that reduce nonessential market/investment spending.
 
-Current Wars groups coalition conflicts into one conflict entry instead of displaying every bilateral relationship as a separate war. Each conflict keeps its original cause directly under the matchup and tracks start turn, duration, attacks, combat losses, territories captured, and direct wartime decision costs.
+Human players may optionally use AI Manager. AI Manager reserves a defined Commerce budget for the current turn and may allocate it to Markets, Investments, Resources, Recruiters, and military development. Disabling AI Manager restores full manual Commerce control on the following turn, not mid-turn.
 
-A human nation that is not already participating may choose a side through the Join War controls. Diplomacy safety checks prevent joining in a way that would place the player against an active ally or on the same side as a nation they are already fighting. Joining adds the nation to the existing coalition conflict rather than creating a duplicate conflict entry.
+## United Nations
 
-Normal independent AI war declarations require a shared land border. Alliance, faction, and join-war situations can create broader conflicts.
+Security Council actions include Sanctions, Embargo, Aid, Condemnation, and Ceasefire. Host settings control proposal pacing and council rules.
 
-## United Nations / Security Council
+Sanctions and Ceasefires use host-configurable minimum and maximum durations. A passed Ceasefire forces peace and blocks immediate redeclaration for the selected duration.
 
-The UN is optional and host-configurable. Permanent members may veto Security Council resolutions. Human council members vote YES / NO / ABSTAIN; AI council members vote automatically. Proposal cooldowns prevent resolution spam.
+## Performance and Safety
 
-Supported actions include Economic Sanctions, Trade Embargo, Economic Aid, Condemn Nation, and Peace / Ceasefire.
+United Frontier retains the Global Affairs long-game safeguards:
 
-## AI Manager
+- bounded PublicGameData histories;
+- spectator/reviewer-safe menus;
+- guarded custom-message actions;
+- cached economy/resource work;
+- strategic data stored privately when appropriate;
+- custom structure image count kept below War.app's 100-image limit.
 
-When allowed by the host, human players may enable an AI Manager with a defined per-turn budget. The manager handles authorized market and investment activity and reports budget, amount spent, unused amount, Commerce before/after spending, and a spending breakdown.
+## Current Build Notes
 
-It does not take over diplomacy, tax policy, ideology, or military orders.
+This all-in-one development build integrates the new navigation, resource intelligence, Headquarters sharing, visible military structure framework, Air Wing/Special Forces custom units, territory-selection rewrite, Overview command dashboard, AI strategic spending foundation, resource trading/requests, UN duration controls, and existing Global Affairs economy/diplomacy systems.
 
-## Performance
+Advanced strategic combat effects such as full Air Wing mission resolution, SAM interception, missile inventory/reload, EMP/nuclear area effects, cyber damage, and the complete Operational/Damaged/Disabled/Destroyed repair loop are represented in the architecture and How It Works design but should not be treated as fully verified gameplay until implemented and tested in War.app.
 
-Global Affairs V3 includes large-game performance safeguards such as cached economic data, shared AI threat calculations, cached territory lists, reduced repeated game-data writes, and automatic staggering of non-urgent AI work as player counts grow.
+## QA Checklist
 
-Critical maintenance, active agreements, resource processing, incoming diplomacy, UN effects, and required turn-state updates continue every turn.
+Test in a fresh development game:
 
-## Release QA
-
-Before publishing a release build, verify the following in a fresh multiplayer game:
-
-- Commerce, taxation, ideology, Trade Agreements, and investments.
-- Stocks, dividends, ETF, War Bonds, and market displays.
-- Resource production, requirements, stockpile growth, stockpile depletion, facilities, and repeated territorial capture.
-- Military Readiness and Army Recruiter production, maintenance, capture, and immediate payment behavior.
-- Current Wars deduplication, war causes, Join War side selection, coalition membership, peace, and War Events.
-- United Nations voting and resolution effects.
-- AI Manager spending and Smart AI behavior.
-- Mobile UI and How It Works guidance.
-- 30–40 player regression testing and 100+ player Mega Game performance testing.
-
-Gameplay features should be considered confirmed only after they have been tested in War.app.
-
-
-## Release safeguards
-
-- **Reviewer / spectator safety:** player-specific menus now handle cases where War.app opens the UI without a local `game.Us` player, showing a viewer-mode message instead of crashing.
-- **Bounded history:** long-running games automatically trim older reporting/history records while preserving live gameplay state, reducing the chance of exceeding War.app's `PublicGameData` size limit.
-
-
-Phase 4: player-specific strategic resource intelligence, hidden military infrastructure storage, Headquarters construction/upgrades, Airbases, Forward Airstrips, SAM Sites, Missile Silos, public Power Grids, Air Wings, and Special Forces purchasing foundations.
-
-## Headquarters intelligence sharing
-
-- Faction members automatically share strategic intelligence with one another.
-- A normal Alliance does **not** automatically expose private resources or hidden military infrastructure.
-- Allied nations can separately request **Shared Intelligence** and **Joint Strategic Warning** from Diplomacy. Both players must accept.
-- Shared Intelligence controls allied access to private resource and military discoveries. Joint Strategic Warning is stored separately for the strategic-warning/strike system.
-- Border resource visibility remains specific to the viewing player: a nation only gains the border rule for resource territories directly adjacent to its own territory.
+- Mod reloads with no structure-image error.
+- Overview dashboard loads for player and spectator.
+- Resources filters show only permitted intelligence.
+- Resource Offer and Request contracts work.
+- Resource facility territory selector closes/reopens cleanly.
+- Headquarters construction and branch upgrades.
+- Intelligence resource/military scans.
+- Alliance Shared Intelligence and faction automatic sharing.
+- Recruiter construction/upgrades and army generation.
+- Airbase, Airstrip, SAM, Silo, and Grid construction/upgrades.
+- Military structures appear on the map after turn advancement.
+- Air Wing and Special Forces purchases appear as custom units.
+- AI Manager reserved Commerce and spending breakdown.
+- AI military/resource spending in war.
+- UN Sanctions/Ceasefire durations.
+- Current Wars / Join War / diplomacy regression.
+- Spectator/incognito click-through.

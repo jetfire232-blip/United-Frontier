@@ -1,9 +1,7 @@
 United Frontier
-A modern economy, diplomacy, resources, intelligence, and strategic-warfare expansion for War.app.
 
-Build your nation through Commerce, markets, strategic resources, alliances, intelligence, military infrastructure, and war.
+A modern economy, diplomacy, resource, intelligence, and strategic-warfare expansion for War.app.
 
-Current development includes cleaner Overview/Global Economy UI, resource offers and requests, color-coded resources, public/border resource visibility rules, capped resource facility icons, configurable UN sanctions/ceasefire durations, and the Phase 2 military foundation.
+Build national power through Commerce, Markets, private strategic resources, diplomacy, Headquarters intelligence, visible military infrastructure, Air Wings, Special Forces, Smart AI, and the United Nations.
 
-
-Phase 4: player-specific strategic resource intelligence, hidden military infrastructure storage, Headquarters construction/upgrades, Airbases, Forward Airstrips, SAM Sites, Missile Silos, public Power Grids, Air Wings, and Special Forces purchasing foundations.
+Resources are discovered through ownership, direct borders, allies/factions, and intelligence. Military installations appear as map assets while deeper strategic details can remain intelligence-sensitive.

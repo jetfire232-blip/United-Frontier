@@ -16877,6 +16877,7 @@ local function UFEnsureStrategicAIState(playerID)
     state.samSites=state.samSites or {}; state.missileSilos=state.missileSilos or {}; state.powerGrids=state.powerGrids or {};
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
+    state.missileInventory=state.missileInventory or {}; state.pendingStrategicStrikes=state.pendingStrategicStrikes or {};
     Mod.PrivateGameData=pd;
     return pd,state;
 end
@@ -16918,6 +16919,17 @@ local function UFAIAtWar(data, playerID)
     return false;
 end
 
+
+local function UFHasPowerGrid(state)
+    for _,lvl in pairs((state or {}).powerGrids or {}) do if (tonumber(lvl) or 0)>0 then return true; end end
+    return false;
+end
+
+local function UFHQUpgradeCost(level)
+    local base=math.max(25,math.floor((tonumber(GetSetting("HeadquartersBaseCost",500)) or 500)*0.35));
+    return base*math.max(1,math.floor(tonumber(level) or 1));
+end
+
 local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     if GetSetting("MilitaryExpansionEnabled",true)~=true then return; end
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return; end
@@ -16935,12 +16947,29 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     local function canSpend(cost) return cost>0 and spent+cost<=spendable and GetAvailableGold(game,resourceChanges,playerID)>=cost; end
     local function spend(cost) AddResourceChange(resourceChanges,playerID,-cost); spent=spent+cost; end
 
-    -- 1) Headquarters: interior command center first.
-    if state.headquarters==nil and GetSetting("HeadquartersEnabled",true)==true then
+    -- 1) National power first, then Headquarters.  HQ cannot operate without a Grid.
+    if GetSetting("PowerGridEnabled",true)==true and not UFHasPowerGrid(state) then
+        local cost=math.max(25,math.floor(tonumber(GetSetting("PowerGridBaseCost",300)) or 300));
+        local tid=UFPickAITerritory(game,standing,playerID,true,nil);
+        if tid and canSpend(cost) then spend(cost); state.powerGrids[tid]=1; end
+    end
+    if state.headquarters==nil and GetSetting("HeadquartersEnabled",true)==true and UFHasPowerGrid(state) then
         local cost=math.max(50,math.floor(tonumber(GetSetting("HeadquartersBaseCost",500)) or 500));
         local tid=UFPickAITerritory(game,standing,playerID,true,nil);
         if tid and canSpend(cost) then
             spend(cost); state.headquarters={territoryID=tid,status="Operational",branches={Intelligence=0,Security=0,CyberWarfare=0,JointCommand=0}};
+        end
+    end
+    if state.headquarters~=nil and UFHasPowerGrid(state) then
+        state.headquarters.branches=state.headquarters.branches or {Intelligence=0,Security=0,CyberWarfare=0,JointCommand=0};
+        local priorities = atWar and {"Security","JointCommand","CyberWarfare","Intelligence"} or {"Intelligence","JointCommand","Security","CyberWarfare"};
+        for _,branch in ipairs(priorities) do
+            local lvl=tonumber(state.headquarters.branches[branch]) or 0;
+            local desired=atWar and 3 or 2;
+            if lvl<desired and lvl<5 then
+                local cost=UFHQUpgradeCost(lvl+1);
+                if canSpend(cost) then spend(cost); state.headquarters.branches[branch]=lvl+1; break; end
+            end
         end
     end
 
@@ -17015,7 +17044,9 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     end
     if atWar and GetSetting("MissileSilosEnabled",true)==true and next(state.missileSilos)==nil and spendable-spent>=500 then
         local tid=UFPickAITerritory(game,standing,playerID,true,nil); local cost=math.max(25,math.floor(tonumber(GetSetting("MissileSiloBaseCost",500)) or 500));
-        if tid and canSpend(cost) then spend(cost); state.missileSilos[tid]=1; end
+        if tid and canSpend(cost) then
+            spend(cost); state.missileSilos[tid]=1; state.missileInventory=state.missileInventory or {}; state.missileInventory[tid]={Conventional=1,EMP=0,Nuclear=0};
+        end
     end
 
     nation.aiMilitarySpentThisTurn=spent;
@@ -17023,6 +17054,186 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     Mod.PrivateGameData=pd;
     local pgd=Mod.PlayerGameData or {}; pgd[playerID]=pgd[playerID] or {}; pgd[playerID].ownMilitary=state; Mod.PlayerGameData=pgd;
     return spent;
+end
+
+
+local function UFResolveStrategicStrikes(game,data,addNewOrder)
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return; end
+    local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
+    local currentTurn=(data.globalEconomy and data.globalEconomy.currentEconomyTurn) or data.tradeTurn or 1;
+    for attackerID,state in pairs(byPlayer) do
+        local pending=state.pendingStrategicStrikes or {}; state.pendingStrategicStrikes={};
+        for _,strike in ipairs(pending) do
+            local tid=tonumber(strike.targetTerritoryID) or strike.targetTerritoryID; local terr=standing.Territories[tid];
+            if terr~=nil then
+                local weapon=tostring(strike.weapon or "Conventional"); local level=math.max(1,tonumber(strike.siloLevel) or 1);
+                local currentArmies=terr.NumArmies and terr.NumArmies.NumArmies or 0; local damage=0;
+                if weapon=="Conventional" then damage=math.min(currentArmies,5+level*5);
+                elseif weapon=="Nuclear" then damage=math.min(currentArmies,20+level*15); end
+                local mods={};
+                if damage>0 then local mod=WL.TerritoryModification.Create(tid); mod.AddArmies=-damage; table.insert(mods,mod); end
+                local ownerID=terr.OwnerPlayerID; local targetState=byPlayer[ownerID];
+                if targetState~=nil then
+                    targetState.disruptions=targetState.disruptions or {};
+                    if weapon=="EMP" then targetState.disruptions[tid]=currentTurn+2;
+                    elseif weapon=="Conventional" then
+                        for _,tblName in ipairs({"samSites","airbases","forwardAirstrips","powerGrids"}) do local tbl=targetState[tblName] or {}; if (tonumber(tbl[tid]) or 0)>1 then tbl[tid]=(tonumber(tbl[tid]) or 1)-1; break; end end
+                    elseif weapon=="Nuclear" then
+                        for _,tblName in ipairs({"samSites","airbases","forwardAirstrips","missileSilos","powerGrids"}) do if targetState[tblName] then targetState[tblName][tid]=nil; end end
+                        if targetState.headquarters and targetState.headquarters.territoryID==tid then targetState.headquarters=nil; end
+                    end
+                end
+                local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
+                addNewOrder(WL.GameOrderEvent.Create(attackerID,weapon.." missile strike on "..(td and td.Name or tostring(tid)),{},mods,nil,nil));
+            end
+        end
+    end
+    Mod.PrivateGameData=pd;
+end
+
+local function UFIsActiveAlliance(diplomacy,a,b)
+    local sa,sb=tostring(a),tostring(b); local key=sa<sb and (sa.."|"..sb) or (sb.."|"..sa);
+    local al=(diplomacy.alliances or {})[key]; return al~=nil and al.active==true;
+end
+
+local function UFPairKeySimple(a,b) local sa,sb=tostring(a),tostring(b); return sa<sb and (sa.."|"..sb) or (sb.."|"..sa); end
+
+
+local function UFAIConsiderAlliance(game,data,playerID)
+    local diplomacy=GetDiplomacyData(data); diplomacy.pendingAllianceOffers=diplomacy.pendingAllianceOffers or {}; diplomacy.alliances=diplomacy.alliances or {};
+    local existing=0; for _,a in pairs(diplomacy.alliances) do if a and a.active and (a.player1==playerID or a.player2==playerID) then existing=existing+1; end end
+    if existing>=2 then return false; end
+    local bestID=nil; local bestScore=-999999;
+    for otherID,other in pairs(game.Game.Players or {}) do
+        if otherID~=playerID and other~=nil and not other.Surrendered and IsNationEconomyReady(game,data,otherID) and not IsDiplomacyWar(data,playerID,otherID) and not UFIsActiveAlliance(diplomacy,playerID,otherID) then
+            local pending=false; for _,o in ipairs(diplomacy.pendingAllianceOffers) do if (o.fromPlayerID==playerID and o.toPlayerID==otherID) or (o.fromPlayerID==otherID and o.toPlayerID==playerID) then pending=true; break; end end
+            if not pending then
+                local score=0; if HasAgreement(data,playerID,otherID) then score=score+30; end; if GetActiveDiplomacyNAP(data,playerID,otherID)~=nil then score=score+25; end
+                local n1=((data.globalEconomy or {}).nations or {})[playerID] or {}; local n2=((data.globalEconomy or {}).nations or {})[otherID] or {};
+                score=score-math.floor(math.abs((tonumber(n1.militaryReadiness) or 100)-(tonumber(n2.militaryReadiness) or 100))/5);
+                if score>bestScore then bestScore=score; bestID=otherID; end
+            end
+        end
+    end
+    if bestID~=nil and (bestScore>=20 or math.random(1,100)<=20) then
+        table.insert(diplomacy.pendingAllianceOffers,{fromPlayerID=playerID,toPlayerID=bestID,createdTurn=GetCurrentDiplomacyTurn(data)});
+        AddDiplomacyHistory(data,"alliance_proposed",playerID,bestID,GetEconomicPlayerName(game,playerID).." proposed an Alliance with "..GetEconomicPlayerName(game,bestID)..".",{aiActivity=true});
+        return true;
+    end
+    return false;
+end
+
+local function UFAIJoinAlliedWars(game,data,playerID)
+    local diplomacy=data.globalEconomy and data.globalEconomy.diplomacy or {}; diplomacy.relationships=diplomacy.relationships or {}; diplomacy.warStats=diplomacy.warStats or {};
+    local pf=diplomacy.playerFaction or {}; local ownFaction=pf[playerID];
+    for allyID,_ in pairs(game.Game.Players or {}) do
+        local factionMate=ownFaction~=nil and pf[allyID]==ownFaction and allyID~=playerID;
+        if allyID~=playerID and (factionMate or UFIsActiveAlliance(diplomacy,playerID,allyID)) then
+            for _,rel in pairs(diplomacy.relationships or {}) do
+                if rel and rel.status=="war" and (rel.player1==allyID or rel.player2==allyID) then
+                    local enemyID=rel.player1==allyID and rel.player2 or rel.player1;
+                    if enemyID~=playerID and game.Game.Players[enemyID]~=nil and not UFIsActiveAlliance(diplomacy,playerID,enemyID) and not (ownFaction~=nil and pf[enemyID]==ownFaction) then
+                        local key=UFPairKeySimple(playerID,enemyID); local ours=diplomacy.relationships[key];
+                        if ours==nil or ours.status~="war" then
+                            local chance=factionMate and 90 or 70;
+                            if math.random(1,100)<=chance then
+                                ActivateDiplomacyWar(game,data,playerID,enemyID,"Support an Ally",rel.warConflictID);
+                                local conflictID=rel.warConflictID; local conflict=conflictID and (diplomacy.warConflicts or {})[conflictID] or nil;
+                                if conflict~=nil then
+                                    conflict.sideA=conflict.sideA or {}; conflict.sideB=conflict.sideB or {};
+                                    if conflict.sideB[allyID]==true then conflict.sideA[playerID]=nil; conflict.sideB[playerID]=true; conflict.sideA[enemyID]=true; conflict.sideB[enemyID]=nil;
+                                    else conflict.sideA[playerID]=true; conflict.sideB[playerID]=nil; conflict.sideB[enemyID]=true; conflict.sideA[enemyID]=nil; end
+                                end
+                                return true;
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false;
+end
+
+local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil or standing.Territories==nil then return; end
+    local atWar=UFAIAtWar(data,playerID); local bestAttack=nil; local bestScore=-999999; local frontFriendly={};
+    for tid,terr in pairs(standing.Territories) do
+        if terr.OwnerPlayerID==playerID then
+            local details=game.Map.Territories[tid]; local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0; local hostileNeighbors={};
+            for nid,_ in pairs((details and details.ConnectedTo) or {}) do
+                local nt=standing.Territories[nid]; local oid=nt and nt.OwnerPlayerID or nil;
+                if oid~=nil and oid~=playerID and oid~=WL.PlayerID.Neutral and IsDiplomacyWar(data,playerID,oid) then table.insert(hostileNeighbors,nid); end
+            end
+            if #hostileNeighbors>0 then
+                frontFriendly[tid]=true;
+                for _,nid in ipairs(hostileNeighbors) do
+                    local nt=standing.Territories[nid]; local def=nt.NumArmies and nt.NumArmies.NumArmies or 0;
+                    local reserve=math.max(3,math.floor(armies*0.20)); local send=math.max(0,armies-reserve);
+                    local score=(send-def*1.10) + math.max(0,10-def);
+                    if send>=math.max(3,math.ceil(def*1.10)) and score>bestScore then bestScore=score; bestAttack={from=tid,to=nid,num=send}; end
+                end
+            end
+        end
+    end
+    if bestAttack~=nil then
+        addNewOrder(WL.GameOrderAttackTransfer.Create(playerID,bestAttack.from,bestAttack.to,WL.AttackTransferEnum.Attack,false,WL.Armies.Create(bestAttack.num),false));
+    end
+    -- Move one strong interior/recruiter stack one step toward the nearest frontline.
+    if atWar and next(frontFriendly)~=nil then
+        local recruiters=((data.globalEconomy or {}).armyRecruiters or {}).territories or {};
+        local function pathNext(startID)
+            if frontFriendly[startID] then return nil,0; end
+            local queue={startID}; local head=1; local prev={[startID]=false}; local goal=nil;
+            while head<=#queue and #queue<400 do
+                local cur=queue[head]; head=head+1;
+                if frontFriendly[cur] then goal=cur; break; end
+                local d=game.Map.Territories[cur];
+                for nid,_ in pairs((d and d.ConnectedTo) or {}) do
+                    local nt=standing.Territories[nid];
+                    if nt and nt.OwnerPlayerID==playerID and prev[nid]==nil then prev[nid]=cur; table.insert(queue,nid); end
+                end
+            end
+            if goal==nil then return nil,999; end
+            local step=goal; local dist=0;
+            while prev[step] and prev[step]~=startID do step=prev[step]; dist=dist+1; end
+            if prev[step]==startID then return step,dist+1; end
+            return nil,999;
+        end
+        local bestMove=nil; local bestScore=-999999;
+        for tid,terr in pairs(standing.Territories) do
+            if terr.OwnerPlayerID==playerID and not frontFriendly[tid] then
+                local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
+                if armies>6 then
+                    local nextID,dist=pathNext(tid);
+                    if nextID then
+                        local recruiterBonus=(tonumber(recruiters[tid]) or 0)>0 and 20 or 0;
+                        local score=armies+recruiterBonus-dist*2;
+                        if score>bestScore then bestScore=score; bestMove={from=tid,to=nextID,num=math.max(1,armies-3)}; end
+                    end
+                end
+            end
+        end
+        if bestMove then addNewOrder(WL.GameOrderAttackTransfer.Create(playerID,bestMove.from,bestMove.to,WL.AttackTransferEnum.Transfer,false,WL.Armies.Create(bestMove.num),false)); end
+    elseif not atWar then
+        -- Peacetime doctrine: leave about five armies on peaceful international borders and stack excess one step behind them.
+        for tid,terr in pairs(standing.Territories) do
+            if terr.OwnerPlayerID==playerID then
+                local d=game.Map.Territories[tid]; local peacefulBorder=false; local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
+                for nid,_ in pairs((d and d.ConnectedTo) or {}) do local nt=standing.Territories[nid]; local oid=nt and nt.OwnerPlayerID or nil; if oid and oid~=playerID and oid~=WL.PlayerID.Neutral and not IsDiplomacyWar(data,playerID,oid) then peacefulBorder=true; break; end end
+                if peacefulBorder and armies>7 then
+                    local bestInterior=nil; local bestForeign=999;
+                    for nid,_ in pairs((d and d.ConnectedTo) or {}) do
+                        local nt=standing.Territories[nid]; if nt and nt.OwnerPlayerID==playerID then
+                            local nd=game.Map.Territories[nid]; local f=0; for nn,_ in pairs((nd and nd.ConnectedTo) or {}) do local nnt=standing.Territories[nn]; if nnt and nnt.OwnerPlayerID~=playerID and nnt.OwnerPlayerID~=WL.PlayerID.Neutral then f=f+1; end end
+                            if f<bestForeign then bestForeign=f; bestInterior=nid; end
+                        end
+                    end
+                    if bestInterior then addNewOrder(WL.GameOrderAttackTransfer.Create(playerID,tid,bestInterior,WL.AttackTransferEnum.Transfer,false,WL.Armies.Create(armies-5),false)); return; end
+                end
+            end
+        end
+    end
 end
 
 -- MAIN TURN HOOK
@@ -17089,6 +17300,8 @@ function Server_AdvanceTurn_Start(
     RefreshResourceMapVisibility(game, data, addNewOrder);
 
     ProcessArmyRecruiterProduction(game, data, addNewOrder);
+
+    UFResolveStrategicStrikes(game, data, addNewOrder);
 
     ProcessUnitedNations(
         game,
@@ -17277,6 +17490,9 @@ UpdateAIStrategicReserve(
 );
 
 UFRunStrategicAI(game, data, resourceChanges, playerID);
+UFAIJoinAlliedWars(game, data, playerID);
+UFAIConsiderAlliance(game, data, playerID);
+UFGenerateAIMilitaryOrders(game, data, playerID, addNewOrder);
 
 if ShouldRunAIWork(data, playerID, aiCityCadence) then
     AIConsiderCityConstruction(game, data, playerID, addNewOrder);
@@ -17800,7 +18016,7 @@ if order.proxyType == "GameOrderDeploy" then
     end
 
     if hasPeacefulForeignBorder
-        and projectedArmies > 20
+        and projectedArmies > 5
     then
 
         skipThisOrder(
@@ -17813,6 +18029,25 @@ if order.proxyType == "GameOrderDeploy" then
 
     return;
 
+end
+
+-- =====================================================
+-- AIRLIFT CARD -> AIRBASE / AIRSTRIP RESTRICTIONS
+-- =====================================================
+if order.proxyType == "GameOrderPlayCardAirlift" then
+    if GetSetting("AirbasesEnabled",true)==true or GetSetting("ForwardAirstripsEnabled",true)==true then
+        local fromID=order.FromTerritoryID; local toID=order.ToTerritoryID; local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
+        local function hasAirport(tid)
+            local st=game.ServerGame and game.ServerGame.LatestTurnStanding and game.ServerGame.LatestTurnStanding.Territories[tid] or nil;
+            local owner=st and st.OwnerPlayerID or nil; local state=owner and byPlayer[owner] or nil;
+            if state==nil then return false; end
+            return (tonumber((state.airbases or {})[tid]) or 0)>0 or (tonumber((state.forwardAirstrips or {})[tid]) or 0)>0;
+        end
+        if not hasAirport(fromID) or not hasAirport(toID) then
+            skipThisOrder(WL.ModOrderControl.Skip); return;
+        end
+    end
+    return;
 end
 
 -- =====================================================
@@ -18013,7 +18248,7 @@ if IsDiplomacyWar(
             - attackingArmies;
 
 local minimumDefense =
-    5;
+    3;
 
 -- Keep a basic percentage of the source stack.
 if sourceArmies >= 20 then
@@ -18023,7 +18258,7 @@ if sourceArmies >= 20 then
             minimumDefense,
             math.floor(
                 sourceArmies
-                * 0.35
+                * 0.20
             )
         );
 
@@ -18355,6 +18590,8 @@ local function UFReconcileStrategicMilitaryOwnership(game)
             local terr = standing.Territories[tid];
             if terr == nil or terr.OwnerPlayerID ~= ownerID then
                 state.headquarters = nil;
+            else
+                state.headquarters.status = UFHasPowerGrid(state) and "Operational" or "Power Disrupted";
             end
         end
         playerData[ownerID] = playerData[ownerID] or {};

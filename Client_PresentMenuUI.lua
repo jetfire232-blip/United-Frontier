@@ -452,6 +452,9 @@ local playerFaction =
         );
     end
 
+    local economyRow = UI.CreateHorizontalLayoutGroup(area);
+    UI.CreateButton(economyRow).SetText("TRADE AGREEMENTS").SetOnClick(function() ShowTradeAgreementsMenu(parent,game); end);
+
 local ourFactionID =
     playerFaction[
         ourID
@@ -3156,6 +3159,12 @@ UI.CreateButton(area)
     UI.CreateLabel(area).SetText("----------------------------------------");
 
     UI.CreateButton(area)
+        .SetText("TRADE AGREEMENTS")
+        .SetOnClick(function()
+            ShowTradeAgreementsMenu(parent, game);
+        end);
+
+    UI.CreateButton(area)
         .SetText("INVESTMENTS")
         .SetOnClick(function()
             ShowInvestments(parent, game);
@@ -4899,6 +4908,7 @@ local function UFShowTerritorySelector(parent, game, waitText, payloadBase)
             elseif actionType=="buildArmyRecruiter" then title="RECRUITING STATION"; detail="Build / upgrade Recruiting Station";
             elseif actionType=="purchaseAirWing" then title="AIR WING"; detail="Station an Air Wing at this Airbase";
             elseif actionType=="purchaseSpecialForces" then title="SPECIAL FORCES"; detail="Train Special Forces here";
+            elseif actionType=="launchMissile" then title="MISSILE TARGET"; detail="Confirm strategic strike target";
             elseif actionType=="buildStrategicMilitary" then
                 local names={Airbase="AIRBASE",ForwardAirstrip="FORWARD AIRSTRIP",SAMSite="SAM SITE",MissileSilo="MISSILE SILO",PowerGrid="POWER GRID"};
                 title=names[kind] or "MILITARY STRUCTURE"; detail="Build / upgrade "..string.lower(title);
@@ -4918,8 +4928,12 @@ local function UFShowTerritorySelector(parent, game, waitText, payloadBase)
             elseif actionType=="purchaseAirWing" then
                 UI.CreateLabel(box).SetText("Airbase Level: "..tostring(tonumber((state.airbases or {})[territoryID]) or 0).." | Air Wings here: "..tostring(tonumber((state.airWings or {})[territoryID]) or 0));
             end
+            if actionType=="launchMissile" then
+                UI.CreateLabel(box).SetText("Weapon: "..tostring((payloadBase or {}).weapon or "Conventional").." | Target: "..territoryName).SetColor("#FFB366");
+            end
             UI.CreateButton(box).SetText("CONFIRM").SetOnClick(function()
-                local payload={}; for k,v in pairs(payloadBase or {}) do payload[k]=v; end; payload.territoryID=territoryID;
+                local payload={}; for k,v in pairs(payloadBase or {}) do payload[k]=v; end;
+                if actionType=="launchMissile" then payload.targetTerritoryID=territoryID; else payload.territoryID=territoryID; end
                 SafeSendGameCustomMessage(dialogGame,waitText,payload,function(result)
                     if result and result.message then UI.Alert(result.message); end; closeDialog();
                 end);
@@ -4935,8 +4949,10 @@ function ShowHeadquartersMenu(parent, game)
     local state=UFPrivateMilitaryState();
     UI.CreateLabel(area).SetText("HEADQUARTERS").SetColor("#7FB3FF");
     UI.CreateLabel(area).SetText("Four command branches. Detailed mechanics are in How It Works.").SetColor("#BBBBBB");
+    local hasPowerGrid = UFCountTableEntries(state.powerGrids or {}) > 0;
     if state.headquarters == nil then
         UI.CreateLabel(area).SetText("Status: NOT CONSTRUCTED").SetColor("#FFB366");
+        UI.CreateLabel(area).SetText("Requirement: At least 1 operational Power Grid").SetColor(hasPowerGrid and "#79D279" or "#FF7B7B");
         UI.CreateLabel(area).SetText("Cost: "..tostring(GetClientSetting("HeadquartersBaseCost",500)).." Commerce");
         UI.CreateButton(area).SetText("SELECT TERRITORY & BUILD HQ").SetOnClick(function()
             UFShowTerritorySelector(parent,game,"Constructing Headquarters...",{type="buildHeadquarters"});
@@ -4944,23 +4960,34 @@ function ShowHeadquartersMenu(parent, game)
     else
         local tid=state.headquarters.territoryID;
         local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
-        UI.CreateLabel(area).SetText("Status: "..tostring(state.headquarters.status or "Operational").." | "..(td and td.Name or tostring(tid))).SetColor("#79D279");
+        local hqStatus = hasPowerGrid and tostring(state.headquarters.status or "Operational") or "Power Disrupted";
+        UI.CreateLabel(area).SetText("Status: "..hqStatus.." | "..(td and td.Name or tostring(tid))).SetColor(hasPowerGrid and "#79D279" or "#FF7B7B");
+        if not hasPowerGrid then UI.CreateLabel(area).SetText("Headquarters systems are offline until your nation controls an operational Power Grid.").SetColor("#FFB366"); end
         UI.CreateButton(area).SetText("SHOW HQ ON MAP").SetOnClick(function() game.HighlightTerritories({tid}); end);
         local branches=state.headquarters.branches or {};
         local defs={
-            {"Intelligence","INTELLIGENCE","#62B6FF","Reconnaissance, resource/infrastructure discovery and shared intelligence."},
-            {"Security","SECURITY","#79D279","Counterintelligence, cyber defense and strategic warning."},
-            {"CyberWarfare","CYBER WARFARE","#D995FF","Offensive cyber operations and strategic disruption."},
-            {"JointCommand","JOINT COMMAND","#FFD166","Alliance/faction coordination, Headquarters sharing, shared warnings and military access."}
+            {"Intelligence","INTELLIGENCE","#62B6FF",{
+                "Resource reconnaissance", "Improved resource discovery", "Exact military-asset scans", "Reveal asset level/status", "Advanced multi-location intelligence"}},
+            {"Security","SECURITY","#79D279",{
+                "Basic counterintelligence", "Improved spy resistance", "Strategic strike warning", "Cyber/EMP hardening", "Maximum warning and counterintel"}},
+            {"CyberWarfare","CYBER WARFARE","#D995FF",{
+                "Basic cyber disruption", "Resource/communications disruption", "Infrastructure targeting", "Stronger multi-turn disruption", "Advanced strategic cyber operations"}},
+            {"JointCommand","JOINT COMMAND","#FFD166",{
+                "Basic allied coordination", "Shared Intelligence support", "Allied military-access benefits", "Faction/airbase coordination", "Advanced joint command and warnings"}}
         };
         for _,d in ipairs(defs) do
             local lvl=tonumber(branches[d[1]]) or 0;
             local row=UI.CreateVerticalLayoutGroup(area);
             UI.CreateLabel(row).SetText(d[2].." | L"..tostring(lvl)).SetColor(d[3]);
-            UI.CreateLabel(row).SetText(d[4]);
-            if lvl < tonumber(GetClientSetting("HeadquartersMaxBranchLevel",5)) then
+            local currentEffect = lvl > 0 and d[4][math.min(lvl,#d[4])] or "Not yet upgraded";
+            UI.CreateLabel(row).SetText("Current: "..currentEffect).SetColor("#BBBBBB");
+            if lvl < math.min(5,tonumber(GetClientSetting("HeadquartersMaxBranchLevel",5)) or 5) then
                 local branchKey=d[1];
-                UI.CreateButton(row).SetText("UPGRADE").SetOnClick(function()
+                local nextLevel=lvl+1;
+                local base=math.max(25,math.floor((tonumber(GetClientSetting("HeadquartersBaseCost",500)) or 500)*0.35));
+                local nextCost=base*nextLevel;
+                UI.CreateLabel(row).SetText("Next L"..tostring(nextLevel)..": "..tostring(d[4][math.min(nextLevel,#d[4])]).." | Cost: "..tostring(nextCost).." Commerce").SetColor("#FFD166");
+                UI.CreateButton(row).SetText("UPGRADE TO L"..tostring(nextLevel).." — "..tostring(nextCost).." COMMERCE").SetOnClick(function()
                     SafeSendGameCustomMessage(game,"Upgrading HQ...",{type="upgradeHeadquartersBranch",branch=branchKey},function(result)
                         if result and result.message then UI.Alert(result.message); end; ShowHeadquartersMenu(parent,game);
                     end);
@@ -5046,6 +5073,53 @@ local function UFAddStructureAction(area,parent,game,label,kind,cost,maxText,col
     end);
 end
 
+
+function ShowMissileCommandMenu(parent, game)
+    local area=CreateContentArea(parent);
+    local state=UFPrivateMilitaryState();
+    local silos=state.missileSilos or {};
+    local stock=state.missileInventory or {};
+    UI.CreateLabel(area).SetText("MISSILE COMMAND").SetColor("#FF7B7B");
+    UI.CreateLabel(area).SetText("Select a silo, resupply missiles, then choose a weapon and target. Strikes resolve on turn advancement.").SetColor("#BBBBBB");
+    local selectedSilo=nil;
+    local selectedLabel=UI.CreateLabel(area).SetText("Selected Silo: None").SetColor("#FFD166");
+    local found=false;
+    for tid,lvl in pairs(silos) do
+        found=true;
+        local ntid=tonumber(tid) or tid;
+        local td=game.Map and game.Map.Territories and game.Map.Territories[ntid] or nil;
+        local inv=stock[ntid] or stock[tostring(ntid)] or {Conventional=0,EMP=0,Nuclear=0};
+        local row=UI.CreateHorizontalLayoutGroup(area);
+        UI.CreateButton(row).SetText((td and td.Name or tostring(ntid)).." | Lv."..tostring(lvl)).SetOnClick(function()
+            selectedSilo=ntid; selectedLabel.SetText("Selected Silo: "..(td and td.Name or tostring(ntid)).." | Lv."..tostring(lvl));
+        end);
+        UI.CreateLabel(row).SetText("C:"..tostring(inv.Conventional or 0).."  EMP:"..tostring(inv.EMP or 0).."  N:"..tostring(inv.Nuclear or 0));
+    end
+    if not found then UI.CreateLabel(area).SetText("You do not control a Missile Silo yet.").SetColor("#888888"); end
+    UI.CreateLabel(area).SetText("RESUPPLY").SetColor("#FFD166");
+    local rr=UI.CreateHorizontalLayoutGroup(area);
+    for _,weapon in ipairs({"Conventional","EMP","Nuclear"}) do
+        local w=weapon;
+        UI.CreateButton(rr).SetText("BUY "..string.upper(w)).SetOnClick(function()
+            if selectedSilo==nil then UI.Alert("Select a Missile Silo first."); return; end
+            SafeSendGameCustomMessage(game,"Resupplying missile...",{type="resupplyMissile",siloTerritoryID=selectedSilo,weapon=w},function(result)
+                if result and result.message then UI.Alert(result.message); end; ShowMissileCommandMenu(parent,game);
+            end);
+        end);
+    end
+    UI.CreateLabel(area).SetText("LAUNCH STRIKE").SetColor("#FF7B7B");
+    local lr=UI.CreateHorizontalLayoutGroup(area);
+    for _,weapon in ipairs({"Conventional","EMP","Nuclear"}) do
+        local w=weapon;
+        UI.CreateButton(lr).SetText(string.upper(w)).SetOnClick(function()
+            if selectedSilo==nil then UI.Alert("Select a Missile Silo first."); return; end
+            UFShowTerritorySelector(parent,game,"Scheduling "..w.." missile strike...",{type="launchMissile",siloTerritoryID=selectedSilo,weapon=w});
+        end);
+    end
+    UI.CreateLabel(area).SetText("Conventional: army/infrastructure damage | EMP: temporary systems disruption | Nuclear: severe army and infrastructure damage. Nuclear resupply requires Uranium stockpile.").SetColor("#AAAAAA");
+    UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
+end
+
 function ShowMilitaryMenu(parent, game)
     local area=CreateContentArea(parent);
     local state=UFPrivateMilitaryState();
@@ -5117,6 +5191,8 @@ function ShowMilitaryMenu(parent, game)
     UI.CreateLabel(area).SetText("Power Grid is public. HQ, Recruiters, Airbases, Airstrips, SAMs and Silos also appear as map assets; intelligence controls deeper details.").SetColor("#FFE066");
     UI.CreateLabel(area).SetText("STRATEGIC STRIKE").SetColor("#FF7B7B");
     UFAddStructureAction(area,parent,game,"MISSILE SILO","MissileSilo",GetClientSetting("MissileSiloBaseCost",500)," | max L"..tostring(GetClientSetting("MissileSiloMaxLevel",3)),"#FF7B7B");
+    UI.CreateButton(area).SetText("MISSILE COMMAND / TARGETING").SetOnClick(function() ShowMissileCommandMenu(parent,game); end);
+    UI.CreateLabel(area).SetText("AIRLIFT RULE: when the host enables Airlift Cards, troop airlifts must originate and land on an Airbase or Forward Airstrip. Ordinary territories are rejected by United Frontier.").SetColor("#82CFFF");
     UI.CreateLabel(area).SetText("SPECIAL OPERATIONS").SetColor("#D995FF");
     UI.CreateButton(area).SetText("TRAIN SPECIAL FORCES").SetOnClick(function() UFShowTerritorySelector(parent,game,"Training Special Forces...",{type="purchaseSpecialForces"}); end);
     UI.CreateLabel(area).SetText("Air Wings and Special Forces are visible custom units. Advanced air missions, SAM interception, EMP/nuclear effects and special operations use the strategic warfare rules described in How It Works.").SetColor("#AAAAAA");
@@ -12735,7 +12811,7 @@ function ShowHowItWorks(parent)
         "SECURITY: counterintelligence, cyber defense, and strategic warning.\n" ..
         "CYBER WARFARE: offensive cyber capability and disruption systems.\n" ..
         "JOINT COMMAND: allied/faction military coordination and shared-command benefits.\n\n" ..
-        "The Headquarters screen shows level, key effect, status, cost, and upgrade controls. Detailed mechanics stay here in How It Works.",
+        "Each branch has five meaningful levels. The Headquarters screen shows the current effect, next-level effect, and exact Commerce cost before you upgrade.",
         "#7FB3FF");
 
     Section("HEADQUARTERS INTELLIGENCE",
@@ -12757,7 +12833,7 @@ function ShowHowItWorks(parent)
     Section("AIRBASES, AIRSTRIPS & AIR WINGS",
         "Airbases are the main air infrastructure and may be upgraded. Forward Airstrips are cheaper, more limited forward facilities.\n\n" ..
         "Air Wings are custom special units stationed through Airbases. The host chooses how many real aircraft one Air Wing represents for scenario scale. Airbase capacity limits how many Air Wings may be stationed there.\n\n" ..
-        "Air Wings are intended for air superiority, ground support, reconnaissance, strategic strikes and airlift-support mechanics as those warfare actions are enabled.",
+        "When the host enables War.app Airlift Cards, United Frontier restricts troop airlifts so the origin and destination must contain an Airbase or Forward Airstrip. The mod does not create Airlift Cards itself; the host must enable them in normal game settings. Air Wings are intended for air superiority, ground support, reconnaissance and future air-strike missions.",
         "#62B6FF");
 
     Section("SAM SITES",
@@ -12796,7 +12872,7 @@ function ShowHowItWorks(parent)
 
     Section("DIPLOMACY & CURRENT WARS",
         "Diplomacy contains relations, alliances, factions, Current Wars, Join War, peace, NAPs, Headquarters-sharing requests and other diplomatic actions. Wars remain inside Diplomacy rather than using a separate top-level Wars tab.\n\n" ..
-        "Current Wars groups coalition conflicts into one entry and preserves the original cause. Join War lets an eligible human choose a side subject to diplomacy safety checks.",
+        "Current Wars groups coalition conflicts into one entry and preserves the original cause. Join War lets an eligible human choose a side subject to diplomacy safety checks. AI allies and faction partners may also enter an ally's conflict, while AI nations can proactively seek Alliances when trade/NAP relationships and strategic conditions make cooperation useful. Trade Agreements are available to human players from both Markets and Diplomacy.",
         "#FFB74D");
 
     Section("UNITED NATIONS",

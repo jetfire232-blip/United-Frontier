@@ -5,3 +5,5 @@ A modern economy, diplomacy, resource, intelligence, and strategic-warfare expan
 Build national power through Commerce, Markets, private strategic resources, diplomacy, Headquarters intelligence, visible military infrastructure, Air Wings, Special Forces, Smart AI, and the United Nations.
 
 Resources are discovered through ownership, direct borders, allies/factions, and intelligence. Military installations appear as map assets while deeper strategic details can remain intelligence-sensitive.
+
+Operational Warfare: powered Headquarters, Airbase-gated airlifts, missile targeting, and enhanced Smart AI frontline behavior.

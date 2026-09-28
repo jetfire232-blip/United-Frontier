@@ -137,3 +137,17 @@ Test in a fresh development game:
 - UN Sanctions/Ceasefire durations.
 - Current Wars / Join War / diplomacy regression.
 - Spectator/incognito click-through.
+
+
+## Special Unit Image Hotfix
+Air Wing and Special Forces icons are 60x60 PNG files, matching War.app special-unit image limits and the reference mods.
+
+
+## Phase 6 - Operational Warfare Pass
+
+- Headquarters now requires an operational Power Grid before construction and command-system use.
+- HQ branches are capped at five meaningful levels and show current/next effects and Commerce cost.
+- Missile Command adds Silo resupply, conventional/EMP/nuclear targeting, and turn-advance strike resolution.
+- Airlift Card orders are restricted to Airbase / Forward Airstrip endpoints.
+- Smart AI receives supplemental frontline attacks, rear-to-front transfers, Power Grid-before-HQ planning, HQ branch development, and stronger allied-war support.
+- Human Trade Agreements are directly accessible from Markets.

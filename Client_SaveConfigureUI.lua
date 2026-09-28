@@ -1283,7 +1283,7 @@ function Client_SaveConfigureUI(
     Mod.Settings.HiddenMilitaryInfrastructureEnabled = hiddenMilitaryInfrastructureEnabled;
     Mod.Settings.HeadquartersEnabled = headquartersEnabled;
     Mod.Settings.HeadquartersBaseCost = math.max(50, math.min(5000, headquartersBaseCost or 500));
-    Mod.Settings.HeadquartersMaxBranchLevel = math.max(1, math.min(10, headquartersMaxBranchLevel or 5));
+    Mod.Settings.HeadquartersMaxBranchLevel = math.max(1, math.min(5, headquartersMaxBranchLevel or 5));
     Mod.Settings.AirbasesEnabled = airbasesEnabled;
     Mod.Settings.AirbaseBaseCost = math.max(25, math.min(5000, airbaseBaseCost or 350));
     Mod.Settings.AirbaseMaxLevel = math.max(1, math.min(5, airbaseMaxLevel or 3));

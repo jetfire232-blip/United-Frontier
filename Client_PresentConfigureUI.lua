@@ -1420,7 +1420,7 @@ function Client_PresentConfigureUI(rootParent)
 
     AddCheckBox(root, "HeadquartersEnabled", "Enable Headquarters", headquartersEnabled);
     AddNumberInput(root, "HeadquartersBaseCost", "Headquarters Base Cost (Commerce)", headquartersBaseCost, 50, 5000, "One national HQ. Intelligence, Security, Cyber Warfare, and Joint Command live inside it.");
-    AddNumberInput(root, "HeadquartersMaxBranchLevel", "Maximum HQ Branch Level", headquartersMaxBranchLevel, 1, 10, "Applies to the four Headquarters branches.");
+    AddNumberInput(root, "HeadquartersMaxBranchLevel", "Maximum HQ Branch Level", math.min(5, headquartersMaxBranchLevel), 1, 5, "Applies to Intelligence, Security, Cyber Warfare, and Joint Command. United Frontier currently supports five meaningful levels per branch.");
 
     AddCheckBox(root, "AirbasesEnabled", "Enable Airbases", airbasesEnabled);
     AddNumberInput(root, "AirbaseBaseCost", "Airbase Base Cost (Commerce)", airbaseBaseCost, 25, 5000, "One icon per territory. Upgrading changes the same structure rather than adding another icon.");

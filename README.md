@@ -194,3 +194,13 @@ This pass focuses on usability, Headquarters depth, market visibility, controlle
 - EMP strategic disruption and nuclear Low/Medium/High yield targeting.
 - Nuclear strikes affect armies, city/territory damage records, resource facilities, and strategic assets; medium/high yields can spread to adjacent territories.
 - Stock Market wording now explicitly exposes buying other players’ publicly traded flagship shares.
+
+
+## Phase 10 - Market & Navigation Polish
+
+- World Trends now stores a fresh Strongest Militaries and Largest Commerce Reserves ranking every turn.
+- Resource Demand ranking was removed.
+- SHOW map actions now leave a visible Back button that returns to the exact Resources/HQ/Military area.
+- Flagship owners can turn acquisition offers on/off and accept/reject offers.
+- Other players can submit acquisition offers when enabled.
+- Successful acquisitions pay target shareholders, boost the buyer flagship price/confidence, and allow the acquired nation to rebuild a new flagship after a host-configurable cooldown.

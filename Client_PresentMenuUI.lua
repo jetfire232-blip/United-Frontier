@@ -3114,43 +3114,74 @@ function ShowMarketsMenu(
         UI.CreateLabel(area).SetText(tostring(i)..". "..c.name.." | "..sign..string.format("%.1f",c.change).."%").SetColor(c.change>=0 and "#79D279" or "#FF7B7B");
     end
 
-    local marketResourceTypes={"Oil","Gas","Uranium","Iron","Food","Rare Earths","Coal","Copper","Lithium"};
-    local demand={};
-    for _,rn in ipairs(marketResourceTypes) do demand[rn]=0; end
-    for _,n in pairs(trendEconomy.nations or {}) do
-        for rn,v in pairs(n.resourceRequirements or {}) do demand[rn]=(demand[rn] or 0)+(tonumber(v) or 0); end
-        for rn,v in pairs(n.resourceShortages or {}) do demand[rn]=(demand[rn] or 0)+(tonumber(v) or 0)*2; end
-    end
-    local demandList={}; for rn,v in pairs(demand) do table.insert(demandList,{name=rn,value=v}); end
-    table.sort(demandList,function(a,b) if a.value==b.value then return a.name<b.name end return a.value>b.value end);
-    local resourceColors={Oil="#E0A050",Gas="#67D5FF",Uranium="#C792EA",Iron="#C0C0C0",Food="#8FD694",["Rare Earths"]="#8AA7FF",Coal="#999999",Copper="#D99058",Lithium="#FF9DE2"};
-    UI.CreateLabel(area).SetText("RESOURCE DEMAND").SetColor("#FFD166");
-    for i=1,math.min(10,#demandList) do local r=demandList[i]; UI.CreateLabel(area).SetText(tostring(i)..". "..r.name).SetColor(resourceColors[r.name] or "#FFFFFF"); end
-
-    local militaryTotals={};
-    if game and game.LatestStanding and game.LatestStanding.Territories then
-        for tid,terr in pairs(game.LatestStanding.Territories) do
-            local oid=terr and terr.OwnerPlayerID or nil;
-            if oid and oid>=0 and game.Game.Players[oid]~=nil then
-                local a=terr.NumArmies and terr.NumArmies.NumArmies or 0;
-                militaryTotals[oid]=(militaryTotals[oid] or 0)+(tonumber(a) or 0);
+    local milList={};
+    local storedRanks = trendMarket.rankings or {};
+    if storedRanks.strongestMilitaries and #storedRanks.strongestMilitaries>0 then
+        for _,pid in ipairs(storedRanks.strongestMilitaries) do table.insert(milList,{id=pid,value=0}); end
+    else
+        local militaryTotals={};
+        if game and game.LatestStanding and game.LatestStanding.Territories then
+            for tid,terr in pairs(game.LatestStanding.Territories) do
+                local oid=terr and terr.OwnerPlayerID or nil;
+                if oid and oid>=0 and game.Game.Players[oid]~=nil then
+                    local a=terr.NumArmies and terr.NumArmies.NumArmies or 0;
+                    militaryTotals[oid]=(militaryTotals[oid] or 0)+(tonumber(a) or 0);
+                end
             end
         end
+        for pid,v in pairs(militaryTotals) do table.insert(milList,{id=pid,value=v}); end
+        table.sort(milList,function(a,b) return a.value>b.value; end);
     end
-    local milList={}; for pid,v in pairs(militaryTotals) do table.insert(milList,{id=pid,value=v}); end
-    table.sort(milList,function(a,b) return a.value>b.value; end);
+    local rankTurn = trendEconomy.currentEconomyTurn or trendData.tradeTurn or 0;
+    UI.CreateLabel(area).SetText("LIVE RANKINGS — recalculated each turn | Turn "..tostring(rankTurn)).SetColor("#67D5FF");
     UI.CreateLabel(area).SetText("STRONGEST MILITARIES — exact troop totals hidden").SetColor("#FF9C66");
     for i=1,math.min(10,#milList) do local x=milList[i]; UI.CreateLabel(area).SetText(tostring(i)..". "..GetPlayerName(game,x.id)).SetColor(GetPlayerUIColor(game,x.id,"#FFFFFF")); end
 
     local cashList={};
-    for pid,pl in pairs(game.Game.Players or {}) do
-        if pl and not pl.Surrendered then table.insert(cashList,{id=pid,value=GetPlayerGold(game,pid) or 0}); end
+    if storedRanks.commerceReserves and #storedRanks.commerceReserves>0 then
+        for _,pid in ipairs(storedRanks.commerceReserves) do table.insert(cashList,{id=pid,value=0}); end
+    else
+        for pid,pl in pairs(game.Game.Players or {}) do
+            if pl and not pl.Surrendered then table.insert(cashList,{id=pid,value=GetPlayerGold(game,pid) or 0}); end
+        end
+        table.sort(cashList,function(a,b) return a.value>b.value; end);
     end
-    table.sort(cashList,function(a,b) return a.value>b.value; end);
     UI.CreateLabel(area).SetText("LARGEST COMMERCE RESERVES — exact balances hidden").SetColor("#79D279");
     for i=1,math.min(10,#cashList) do local x=cashList[i]; UI.CreateLabel(area).SetText(tostring(i)..". "..GetPlayerName(game,x.id)).SetColor(GetPlayerUIColor(game,x.id,"#FFFFFF")); end
 
     UI.CreateLabel(area).SetText("----------------------------------------");
+
+    local ourNationForMarket = GetOurNationState(game) or {};
+    local marketTurn = trendEconomy.currentEconomyTurn or trendData.tradeTurn or 1;
+    if ourNationForMarket.setupComplete==true and (ourNationForMarket.flagshipCompanyID==nil or ourNationForMarket.flagshipCompanyCreated~=true) then
+        local readyTurn=tonumber(ourNationForMarket.flagshipRebuildAvailableTurn) or 0;
+        if marketTurn>=readyTurn then
+            UI.CreateLabel(area).SetText("YOUR NATION DOES NOT CURRENTLY CONTROL A FLAGSHIP COMPANY").SetColor("#FFB366");
+            UI.CreateButton(area).SetText("ESTABLISH NEW FLAGSHIP").SetOnClick(function()
+                game.CreateDialog(function(root,setMaxSize,setScrollable,dialogGame,closeDialog)
+                    setMaxSize(520,430); setScrollable(true);
+                    UI.CreateLabel(root).SetText("ESTABLISH REPLACEMENT FLAGSHIP").SetColor("#D4AF37");
+                    UI.CreateLabel(root).SetText("Choose a new company name and strategy. Your ideology, taxes and national economic policy stay unchanged.").SetColor("#BBBBBB");
+                    local nameInput=UI.CreateTextInputField(root).SetPreferredWidth(260);
+                    nameInput.SetPlaceholderText("New flagship name...");
+                    local selectedStrategy="Balanced";
+                    local stratLabel=UI.CreateLabel(root).SetText("Strategy: Balanced");
+                    local sr=UI.CreateHorizontalLayoutGroup(root);
+                    for _,st in ipairs({"Growth","Balanced","Dividend"}) do local strategy=st; UI.CreateButton(sr).SetText(st).SetOnClick(function() selectedStrategy=strategy; stratLabel.SetText("Strategy: "..strategy); end); end
+                    UI.CreateButton(root).SetText("CREATE FLAGSHIP").SetOnClick(function()
+                        local nm=tostring(nameInput.GetText() or "");
+                        SafeSendGameCustomMessage(dialogGame,"Creating replacement flagship...",{type="rebuildFlagship",companyName=nm,companyStrategy=selectedStrategy},function(result)
+                            if result and result.message then UI.Alert(result.message); end
+                            closeDialog();
+                        end);
+                    end);
+                end);
+            end);
+        else
+            UI.CreateLabel(area).SetText("Replacement flagship available on Turn "..tostring(readyTurn)..".").SetColor("#FFB366");
+        end
+        UI.CreateLabel(area).SetText("----------------------------------------");
+    end
 
     UI.CreateButton(area)
         .SetText(
@@ -4578,7 +4609,7 @@ function ShowResourcesMenu(parent, game)
                     game.HighlightTerritories({capturedID});
                     -- Keep only a tiny return control over the map instead of the full mod menu.
                     game.CreateDialog(function(backRoot, setMaxSize, setScrollable, dialogGame, closeDialog)
-                        setMaxSize(260, 95); setScrollable(false);
+                        setMaxSize(340, 165); setScrollable(false);
                         UI.CreateLabel(backRoot).SetText(details and details.Name or ("Territory "..tostring(capturedID))).SetColor("#67D5FF");
                         UI.CreateButton(backRoot).SetText("← BACK TO RESOURCES").SetOnClick(function()
                             closeDialog();
@@ -5107,7 +5138,8 @@ function ShowHeadquartersMenu(parent, game)
             if UFMenuClose ~= nil then UFMenuClose(); end
             game.HighlightTerritories({tid});
             game.CreateDialog(function(backRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
-                setMaxSize(250,90); setScrollable(false);
+                setMaxSize(340,160); setScrollable(false);
+                UI.CreateLabel(backRoot).SetText("HQ location highlighted on the map.").SetColor("#7FB3FF");
                 UI.CreateButton(backRoot).SetText("← BACK TO HQ").SetOnClick(function()
                     closeDialog();
                     dialogGame.CreateDialog(function(hqRoot,sm,ss,hqGame,closeHQ)
@@ -5463,7 +5495,8 @@ function ShowMilitaryMenu(parent, game)
             if UFMenuClose ~= nil then UFMenuClose(); end
             game.HighlightTerritories({captured});
             game.CreateDialog(function(backRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
-                setMaxSize(270,90); setScrollable(false);
+                setMaxSize(340,160); setScrollable(false);
+                UI.CreateLabel(backRoot).SetText("Asset location highlighted on the map.").SetColor("#8FD694");
                 UI.CreateButton(backRoot).SetText("← BACK TO MILITARY").SetOnClick(function()
                     closeDialog();
                     dialogGame.CreateDialog(function(milRoot,sm,ss,milGame,closeMil)
@@ -8077,6 +8110,64 @@ UI.CreateButton(area)
             )
         )
         .SetFlexibleWidth(1);
+
+-- ============================================
+-- FLAGSHIP ACQUISITIONS
+-- ============================================
+
+local localPlayerID = GetLocalPlayerID(game);
+local ownerNation = (economy.nations or {})[company.ownerPlayerID] or {};
+local currentTurn = economy.currentEconomyTurn or data.tradeTurn or 1;
+local acquisitionPremium = tonumber(GetClientSetting("AcquisitionPremiumPercent",150)) or 150;
+local estimatedAcquisitionPrice = math.max(1, math.floor(((tonumber(company.marketCap) or ((tonumber(company.currentPrice) or 1)*(tonumber(company.totalShares) or 100))) * acquisitionPremium / 100) + 0.5));
+market.acquisitionOffers = market.acquisitionOffers or {};
+local companyOffers = market.acquisitionOffers[companyID] or {};
+
+UI.CreateLabel(area).SetText("----------------------------------------");
+UI.CreateLabel(area).SetText("FLAGSHIP ACQUISITION").SetColor("#FFB366");
+
+if company.ownerPlayerID == localPlayerID then
+    local acceptOn = company.allowAcquisitionOffers == true;
+    UI.CreateLabel(area).SetText("Acquisition Offers: "..(acceptOn and "ON" or "OFF")).SetColor(acceptOn and "#79D279" or "#FF7B7B");
+    UI.CreateButton(area).SetText(acceptOn and "TURN ACQUISITION OFFERS OFF" or "TURN ACQUISITION OFFERS ON").SetInteractable(not viewerMode).SetOnClick(function()
+        SafeSendGameCustomMessage(game,"Updating acquisition preference...",{type="toggleAcquisitionOffers",companyID=companyID},function(result)
+            if result and result.message then UI.Alert(result.message); end
+            ShowCompanyDetails(parent,game,companyID);
+        end);
+    end);
+    local offerCount=0;
+    for buyerID,offer in pairs(companyOffers) do
+        if offer and offer.status=="pending" then
+            offerCount=offerCount+1;
+            local row=UI.CreateHorizontalLayoutGroup(area);
+            UI.CreateLabel(row).SetText(GetPlayerName(game,buyerID).." | Offer: "..tostring(offer.price or 0).." Commerce").SetColor(GetPlayerUIColor(game,buyerID,"#FFFFFF"));
+            UI.CreateButton(row).SetText("ACCEPT").SetOnClick(function()
+                SafeSendGameCustomMessage(game,"Accepting acquisition...",{type="acceptAcquisitionOffer",companyID=companyID,buyerID=buyerID},function(result)
+                    if result and result.message then UI.Alert(result.message); end
+                    ShowMarketsMenu(parent,game);
+                end);
+            end);
+            UI.CreateButton(row).SetText("REJECT").SetOnClick(function()
+                SafeSendGameCustomMessage(game,"Rejecting acquisition...",{type="rejectAcquisitionOffer",companyID=companyID,buyerID=buyerID},function(result)
+                    if result and result.message then UI.Alert(result.message); end
+                    ShowCompanyDetails(parent,game,companyID);
+                end);
+            end);
+        end
+    end
+    if offerCount==0 then UI.CreateLabel(area).SetText("No pending acquisition offers.").SetColor("#888888"); end
+elseif company.allowAcquisitionOffers == true then
+    UI.CreateLabel(area).SetText("Estimated acquisition offer: "..tostring(estimatedAcquisitionPrice).." Commerce").SetColor("#FFD166");
+    UI.CreateLabel(area).SetText("If accepted, existing shareholders receive a buyout payout and the buyer's flagship receives a stock-price/confidence boost.").SetColor("#BBBBBB");
+    UI.CreateButton(area).SetText("MAKE ACQUISITION OFFER").SetInteractable(not viewerMode).SetOnClick(function()
+        SafeSendGameCustomMessage(game,"Sending acquisition offer...",{type="makeAcquisitionOffer",companyID=companyID},function(result)
+            if result and result.message then UI.Alert(result.message); end
+            ShowCompanyDetails(parent,game,companyID);
+        end);
+    end);
+else
+    UI.CreateLabel(area).SetText("This flagship is not accepting acquisition offers.").SetColor("#888888");
+end
 
 -- ============================================
 -- TRADE SHARES
@@ -13060,7 +13151,7 @@ function ShowHowItWorks(parent)
 
     Section("COMMERCE & MARKETS",
         "Commerce is the mod's usable national economic power. It pays for investments, market activity, resource facilities, military infrastructure, Air Wings, Special Forces, Recruiters, and other strategic development.\n\n" ..
-        "Flagship companies may follow Growth, Balanced, or Dividend strategies. Stocks, ETF holdings, dividends, and Investment Projects are managed under Markets. The Overview only shows the most important headline movement and activity so the player does not have to open every market page each turn.",
+        "Flagship companies may follow Growth, Balanced, or Dividend strategies. Stocks, ETF holdings, dividends, Investment Projects, and optional flagship acquisitions are managed under Markets. Owners can turn acquisition offers on or off. If an acquisition is accepted, target shareholders receive a buyout payout, the buyer's flagship receives a market boost, and the acquired nation may establish a replacement flagship after the host-defined cooldown.",
         "#72C7FF");
 
     Section("AI MANAGER",

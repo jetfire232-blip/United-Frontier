@@ -267,6 +267,10 @@ function Client_SaveConfigureUI(
             "DividendPayoutScalePercent"
         );
 
+    local acquisitionPremiumPercent = ReadNumber("AcquisitionPremiumPercent");
+    local acquisitionBuyerStockBoostPercent = ReadNumber("AcquisitionBuyerStockBoostPercent");
+    local acquisitionRebuildCooldownTurns = ReadNumber("AcquisitionRebuildCooldownTurns");
+
 
     -- =====================================================
     -- ETF
@@ -1155,6 +1159,10 @@ function Client_SaveConfigureUI(
 
     Mod.Settings.DividendPayoutScalePercent =
         dividendPayoutScalePercent;
+
+    Mod.Settings.AcquisitionPremiumPercent = acquisitionPremiumPercent;
+    Mod.Settings.AcquisitionBuyerStockBoostPercent = acquisitionBuyerStockBoostPercent;
+    Mod.Settings.AcquisitionRebuildCooldownTurns = acquisitionRebuildCooldownTurns;
 
 
     -- =====================================================

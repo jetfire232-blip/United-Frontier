@@ -408,6 +408,10 @@ function Client_PresentConfigureUI(rootParent)
             10
         );
 
+    local acquisitionPremiumPercent = GetNumberSetting(settings,"AcquisitionPremiumPercent",150);
+    local acquisitionBuyerStockBoostPercent = GetNumberSetting(settings,"AcquisitionBuyerStockBoostPercent",15);
+    local acquisitionRebuildCooldownTurns = GetNumberSetting(settings,"AcquisitionRebuildCooldownTurns",3);
+
 
     -- =====================================================
     -- ETF SETTINGS
@@ -1163,6 +1167,10 @@ function Client_PresentConfigureUI(rootParent)
         300,
         "Scales stock dividends to match the Commerce scale of the scenario. 100% is the default."
     );
+
+    AddNumberInput(root,"AcquisitionPremiumPercent","Flagship Acquisition Premium (%)",acquisitionPremiumPercent,110,300,"Accepted acquisition offers are based on market value multiplied by this premium.");
+    AddNumberInput(root,"AcquisitionBuyerStockBoostPercent","Buyer Flagship Stock Boost (%)",acquisitionBuyerStockBoostPercent,0,50,"Immediate price boost to the buyer's own flagship after a successful acquisition. Existing buyer shareholders benefit from the price increase.");
+    AddNumberInput(root,"AcquisitionRebuildCooldownTurns","Replacement Flagship Cooldown (turns)",acquisitionRebuildCooldownTurns,0,10,"Turns an acquired nation must wait before creating a new flagship company.");
 
 
     -- =====================================================

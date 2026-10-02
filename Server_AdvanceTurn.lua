@@ -19022,6 +19022,33 @@ UFPropagateSharedDiscoveries = function(data, privateData)
     end
 end
 
+local function UFUpdatePublicMarketRankings(game, data)
+    local economy = EnsureGlobalEconomyData(data);
+    economy.market = economy.market or {};
+    local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if standing==nil or standing.Territories==nil then return; end
+    local military={};
+    for _,terr in pairs(standing.Territories) do
+        local pid=terr and terr.OwnerPlayerID or nil;
+        if pid and pid>=0 then
+            local armies=(terr.NumArmies and terr.NumArmies.NumArmies) or 0;
+            military[pid]=(military[pid] or 0)+(tonumber(armies) or 0);
+        end
+    end
+    local ml={}; for pid,val in pairs(military) do table.insert(ml,{id=pid,value=val}); end
+    table.sort(ml,function(a,b) if a.value==b.value then return a.id<b.id end return a.value>b.value end);
+    local cl={};
+    for pid,pl in pairs(game.Game.Players or {}) do
+        if pl and not pl.Surrendered then table.insert(cl,{id=pid,value=GetStoredGold(game,pid) or 0}); end
+    end
+    table.sort(cl,function(a,b) if a.value==b.value then return a.id<b.id end return a.value>b.value end);
+    local mIDs={}; local cIDs={};
+    for i=1,math.min(10,#ml) do table.insert(mIDs,ml[i].id); end
+    for i=1,math.min(10,#cl) do table.insert(cIDs,cl[i].id); end
+    economy.market.rankings={turn=economy.currentEconomyTurn or data.tradeTurn or 1,strongestMilitaries=mIDs,commerceReserves=cIDs};
+    data.globalEconomy=economy;
+end
+
 -- =========================================================
 -- END-OF-TURN DIPLOMACY
 -- =========================================================
@@ -19064,6 +19091,7 @@ function Server_AdvanceTurn_End(
     UFRefreshVisibleSpecialUnits(game, addNewOrder);
     UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder);
     UFRefreshAllPlayerStrategicIntel(game, data);
+    UFUpdatePublicMarketRankings(game, data);
 
     CompactPublicGameData(data);
     Mod.PublicGameData =

@@ -9443,6 +9443,123 @@ then
     return;
 end
 
+-- =========================================================
+-- FLAGSHIP ACQUISITIONS
+-- =========================================================
+if payload.type == "toggleAcquisitionOffers" then
+    local companyID=MakeInteger(payload.companyID);
+    local economy=data.globalEconomy or {};
+    local market=economy.market or {};
+    local company=(market.companies or {})[companyID];
+    if company==nil or company.ownerPlayerID~=playerID then setReturn({success=false,message="Only the flagship owner can change acquisition availability."}); return; end
+    company.allowAcquisitionOffers = company.allowAcquisitionOffers ~= true;
+    market.acquisitionOffers=market.acquisitionOffers or {};
+    economy.market=market; data.globalEconomy=economy; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true,message="Acquisition offers are now "..(company.allowAcquisitionOffers and "ON." or "OFF.")}); return;
+end
+
+if payload.type == "makeAcquisitionOffer" then
+    local companyID=MakeInteger(payload.companyID);
+    local economy=data.globalEconomy or {};
+    local market=economy.market or {};
+    local company=(market.companies or {})[companyID];
+    if company==nil or company.active~=true or company.delisted==true then setReturn({success=false,message="This company is not available."}); return; end
+    if company.ownerPlayerID==playerID then setReturn({success=false,message="You already own this flagship."}); return; end
+    if company.allowAcquisitionOffers~=true then setReturn({success=false,message="This flagship is not accepting acquisition offers."}); return; end
+    local premium=tonumber(GetSetting("AcquisitionPremiumPercent",150)) or 150;
+    local baseValue=tonumber(company.marketCap) or ((tonumber(company.currentPrice) or 1)*(tonumber(company.totalShares) or 100));
+    local price=math.max(1,math.floor(baseValue*premium/100+0.5));
+    if GetStoredGold(game,playerID)<price then setReturn({success=false,message="You need at least "..tostring(price).." Commerce available to make this acquisition offer."}); return; end
+    market.acquisitionOffers=market.acquisitionOffers or {}; market.acquisitionOffers[companyID]=market.acquisitionOffers[companyID] or {};
+    market.acquisitionOffers[companyID][playerID]={buyerID=playerID,price=price,turn=economy.currentEconomyTurn or data.tradeTurn or 1,status="pending"};
+    economy.market=market; data.globalEconomy=economy; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true,message="Acquisition offer sent for "..tostring(price).." Commerce."}); return;
+end
+
+if payload.type == "rejectAcquisitionOffer" then
+    local companyID=MakeInteger(payload.companyID); local buyerID=MakeInteger(payload.buyerID);
+    local economy=data.globalEconomy or {}; local market=economy.market or {}; local company=(market.companies or {})[companyID];
+    if company==nil or company.ownerPlayerID~=playerID then setReturn({success=false,message="Only the flagship owner can reject this offer."}); return; end
+    market.acquisitionOffers=market.acquisitionOffers or {}; market.acquisitionOffers[companyID]=market.acquisitionOffers[companyID] or {};
+    market.acquisitionOffers[companyID][buyerID]=nil;
+    economy.market=market; data.globalEconomy=economy; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true,message="Acquisition offer rejected."}); return;
+end
+
+if payload.type == "acceptAcquisitionOffer" then
+    local companyID=MakeInteger(payload.companyID); local buyerID=MakeInteger(payload.buyerID);
+    local economy=data.globalEconomy or {}; local market=economy.market or {}; local company=(market.companies or {})[companyID];
+    if company==nil or company.ownerPlayerID~=playerID then setReturn({success=false,message="Only the flagship owner can accept this offer."}); return; end
+    market.acquisitionOffers=market.acquisitionOffers or {}; market.acquisitionOffers[companyID]=market.acquisitionOffers[companyID] or {};
+    local offer=market.acquisitionOffers[companyID][buyerID];
+    if offer==nil or offer.status~="pending" then setReturn({success=false,message="That acquisition offer is no longer available."}); return; end
+    local price=math.max(1,math.floor(tonumber(offer.price) or 0));
+    if GetStoredGold(game,buyerID)<price then market.acquisitionOffers[companyID][buyerID]=nil; setReturn({success=false,message="The buyer no longer has enough Commerce to complete the acquisition."}); return; end
+    if not RemoveGold(game,buyerID,price) then setReturn({success=false,message="Could not process the buyer's Commerce."}); return; end
+
+    local totalShares=math.max(1,tonumber(company.totalShares) or 100);
+    local paid=0;
+    for holderID,nation in pairs(economy.nations or {}) do
+        nation.stockHoldings=nation.stockHoldings or {};
+        nation.stockCostBasis=nation.stockCostBasis or {};
+        local shares=math.max(0,tonumber(nation.stockHoldings[companyID]) or 0);
+        if shares>0 then
+            local payout=math.floor(price*(shares/totalShares)+0.5);
+            if payout>0 then AddGold(game,holderID,payout); paid=paid+payout; end
+            nation.stockHoldings[companyID]=nil; nation.stockCostBasis[companyID]=nil;
+        end
+    end
+    if paid<price then AddGold(game,playerID,price-paid); end
+
+    company.active=false; company.delisted=true; company.status="acquired"; company.acquiredByPlayerID=buyerID; company.acquiredTurn=economy.currentEconomyTurn or data.tradeTurn or 1;
+    local sellerNation=EnsureNation(data,game,playerID);
+    sellerNation.flagshipCompanyCreated=false; sellerNation.flagshipCompanyID=nil; sellerNation.flagshipCompanyName=nil;
+    sellerNation.flagshipRebuildAvailableTurn=(economy.currentEconomyTurn or data.tradeTurn or 1)+math.max(0,math.floor(tonumber(GetSetting("AcquisitionRebuildCooldownTurns",3)) or 3));
+
+    local buyerNation=EnsureNation(data,game,buyerID);
+    local buyerCompanyID=buyerNation.flagshipCompanyID;
+    local buyerCompany=buyerCompanyID and (market.companies or {})[buyerCompanyID] or nil;
+    if buyerCompany and buyerCompany.active==true and buyerCompany.delisted~=true then
+        local boost=math.max(0,tonumber(GetSetting("AcquisitionBuyerStockBoostPercent",15)) or 15);
+        local old=tonumber(buyerCompany.currentPrice or buyerCompany.startingPrice) or 1;
+        buyerCompany.previousPrice=old;
+        buyerCompany.currentPrice=math.max(1,math.floor(old*(1+boost/100)+0.5));
+        buyerCompany.marketCap=(tonumber(buyerCompany.totalShares) or 100)*buyerCompany.currentPrice;
+        buyerCompany.confidence=math.min(100,(tonumber(buyerCompany.confidence) or 50)+8);
+    end
+    buyerNation.acquiredFlagships=(tonumber(buyerNation.acquiredFlagships) or 0)+1;
+
+    market.acquisitionOffers[companyID]={};
+    market.news=market.news or {};
+    table.insert(market.news,{turn=economy.currentEconomyTurn or data.tradeTurn or 1,type="acquisition",companyID=companyID,message=GetPlayerName(game,buyerID).." acquired "..tostring(company.name or "a flagship company")..". Target shareholders received the acquisition payout."});
+    economy.market=market; data.globalEconomy=economy; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true,message="Acquisition completed. Shareholders were paid and the buyer's flagship received a market boost."}); return;
+end
+
+if payload.type == "rebuildFlagship" then
+    local economy=data.globalEconomy or {}; economy.market=economy.market or {}; economy.market.companies=economy.market.companies or {};
+    local nation=EnsureNation(data,game,playerID);
+    if nation.flagshipCompanyCreated==true and nation.flagshipCompanyID~=nil then setReturn({success=false,message="Your nation already controls a flagship company."}); return; end
+    local currentTurn=economy.currentEconomyTurn or data.tradeTurn or 1;
+    if currentTurn < (tonumber(nation.flagshipRebuildAvailableTurn) or 0) then setReturn({success=false,message="Your replacement flagship is not available until Turn "..tostring(nation.flagshipRebuildAvailableTurn).."."}); return; end
+    local companyName=tostring(payload.companyName or "");
+    companyName=string.gsub(companyName,"^%s+",""); companyName=string.gsub(companyName,"%s+$","");
+    if string.len(companyName)<2 or string.len(companyName)>40 or string.find(companyName,"[\r\n\t]") then setReturn({success=false,message="Enter a company name between 2 and 40 characters."}); return; end
+    for _,c in pairs(economy.market.companies) do if c and string.lower(tostring(c.name or ""))==string.lower(companyName) and c.delisted~=true then setReturn({success=false,message="Another active company already uses that name."}); return; end end
+    local strategy=tostring(payload.companyStrategy or "Balanced"); if strategy~="Growth" and strategy~="Balanced" and strategy~="Dividend" then strategy="Balanced"; end
+    local companyID=economy.market.nextCompanyID or 1; economy.market.nextCompanyID=companyID+1;
+    local totalShares=100; local founderPercent=math.max(0,math.min(100,tonumber(GetSetting("FounderSharePercent",20)) or 20)); local founderShares=math.floor(totalShares*founderPercent/100+0.5); local publicShares=totalShares-founderShares;
+    local startingPrice=CalculateStartingStockPrice(game,playerID);
+    local company={id=companyID,name=companyName,ownerPlayerID=playerID,founderPlayerID=playerID,strategy=strategy,ideology=nation.ideology,nationStrategy=nation.economicStrategy,createdTurn=currentTurn,status="trading",publicShares=publicShares,sharesAvailable=publicShares,primarySharesRemaining=publicShares,startingPrice=startingPrice,currentPrice=startingPrice,previousPrice=startingPrice,marketCap=totalShares*startingPrice,totalShares=totalShares,founderShares=founderShares,dividendPerShare=0,totalDividendsPaid=0,priceHistory={{turn=currentTurn,price=startingPrice}},etfMember=false,etfMemberTurns=0,confidence=50,volatility=GetSetting("StockVolatilityPercent",10),active=true,delisted=false,allowAcquisitionOffers=false};
+    economy.market.companies[companyID]=company;
+    nation.companies=nation.companies or {}; table.insert(nation.companies,companyID);
+    nation.stockHoldings=nation.stockHoldings or {}; nation.stockCostBasis=nation.stockCostBasis or {};
+    nation.stockHoldings[companyID]=founderShares; nation.stockCostBasis[companyID]=0;
+    nation.flagshipCompanyCreated=true; nation.flagshipCompanyID=companyID; nation.flagshipCompanyName=companyName; nation.companyStrategy=strategy; nation.flagshipRebuildAvailableTurn=nil;
+    data.globalEconomy=economy; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+    setReturn({success=true,message=companyName.." has been established as your new flagship company."}); return;
+end
+
 if payload.type == "buyStock" then
 
     local companyID =

@@ -1,4 +1,4 @@
-# United Frontier
+# United Frontier — Phase 9 Complete Warfare
 
 United Frontier is a modern economy, diplomacy, resource, intelligence, and strategic-warfare expansion for War.app. It builds on the stable Global Affairs foundation while reorganizing the player experience around a cleaner Overview, private resource intelligence, visible military assets, Headquarters systems, stronger AI planning, and host-configurable strategic development.
 
@@ -143,7 +143,7 @@ Test in a fresh development game:
 Air Wing and Special Forces icons are 60x60 PNG files, matching War.app special-unit image limits and the reference mods.
 
 
-## Phase 6 - Operational Warfare Pass
+## Phase 7 - Operational Warfare Pass
 
 - Headquarters now requires an operational Power Grid before construction and command-system use.
 - HQ branches are capped at five meaningful levels and show current/next effects and Commerce cost.
@@ -151,3 +151,46 @@ Air Wing and Special Forces icons are 60x60 PNG files, matching War.app special-
 - Airlift Card orders are restricted to Airbase / Forward Airstrip endpoints.
 - Smart AI receives supplemental frontline attacks, rear-to-front transfers, Power Grid-before-HQ planning, HQ branch development, and stronger allied-war support.
 - Human Trade Agreements are directly accessible from Markets.
+
+
+## Phase 7 integrated operations
+- HQ operational actions now appear below branch upgrades.
+- Cyber Warfare Level 1 can launch a basic disruption operation.
+- Security shows passive counterintelligence / warning status.
+- Joint Command links directly to alliance and faction controls.
+- HQ and missile results use simple SUCCESS / FAILED / NO DAMAGE / DAMAGED / DISABLED / DESTROYED feedback.
+- SHOW buttons close the mod menu before highlighting the map.
+- AI nations can use real Airlift Cards between Airbases / Forward Airstrips during war to reinforce front airports.
+- Current Wars now uses player colors and colored status/stat lines for readability.
+
+## Phase 8 - Finalization Pass
+
+This pass focuses on usability, Headquarters depth, market visibility, controlled AI diplomacy, Special Forces operations, and strategic AI targeting.
+
+### Added / changed
+- Resource intelligence rows now support SHOW with a compact map-return control and direct UPGRADE for owned deposits; MAX replaces upgrade when capped.
+- Headquarters now displays Lv.0-Lv.5 progress bars, unlocked effects, next-upgrade Commerce cost, Security report access, and retained operation reports.
+- AI Alliance proposals are restricted to established Trade Agreement partners or nations in the same broad ideology bloc; AI no longer randomly allies across the entire game.
+- UN Ceasefire target discovery is limited to nations the proposing player is actually at war with.
+- War Bonds were removed from the player Markets UI.
+- Markets now includes public trend panels for flagship-stock momentum, global resource demand, strongest militaries (rank only), and largest Commerce reserves (rank only).
+- Stock dividends continue to scale with the issuing nation's Commerce income and now include a host Dividend Payout Scale setting.
+- Special Forces now have operational missions launched from their own territory: Recon, Sabotage, SAM Suppression, Silo Raid, Grid Sabotage, HQ Raid, and Resource Sabotage. Results use simple SUCCESS / FAILED / NO DAMAGE / DAMAGED / DISABLED / DESTROYED language and are stored as recent reports.
+- Strategic AI attack scoring now prioritizes Headquarters, Recruiting Stations, Power Grids, Missile Silos, Airbases, SAMs, and valuable resource territories. AI Airlifts also prioritize threatened strategic areas.
+- SHOW HQ / SHOW military asset now clears the main menu and leaves a compact Back control over the map.
+
+### Still intentionally separate / next test focus
+- Full Air Wing mission resolution (air superiority, ground support, recon, bombing).
+- Complete SAM interception resolution against Air Wings and strategic missiles.
+- Full persistent damaged/disabled/repair state system and advanced EMP effects.
+- Expanded nuclear yield/AoE balancing.
+
+
+## Phase 9 complete warfare pass
+
+- Air Wing missions: Recon, Air Superiority, Ground Support, and Bombing.
+- SAM interception against Air Wing missions and missile strikes, with stronger local/adjacent coverage at higher levels.
+- Persistent asset condition data for damage/disable states plus a player Repair screen.
+- EMP strategic disruption and nuclear Low/Medium/High yield targeting.
+- Nuclear strikes affect armies, city/territory damage records, resource facilities, and strategic assets; medium/high yields can spread to adjacent territories.
+- Stock Market wording now explicitly exposes buying other players’ publicly traded flagship shares.

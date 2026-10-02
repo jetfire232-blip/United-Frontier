@@ -262,6 +262,11 @@ function Client_SaveConfigureUI(
             "DividendFrequencyTurns"
         );
 
+    local dividendPayoutScalePercent =
+        ReadNumber(
+            "DividendPayoutScalePercent"
+        );
+
 
     -- =====================================================
     -- ETF
@@ -1147,6 +1152,9 @@ function Client_SaveConfigureUI(
 
     Mod.Settings.DividendFrequencyTurns =
         dividendFrequencyTurns;
+
+    Mod.Settings.DividendPayoutScalePercent =
+        dividendPayoutScalePercent;
 
 
     -- =====================================================

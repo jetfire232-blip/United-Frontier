@@ -3243,6 +3243,8 @@ local function UFEnsurePrivateMilitary(playerID)
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
     state.missileInventory=state.missileInventory or {}; state.pendingStrategicStrikes=state.pendingStrategicStrikes or {};
+    state.pendingAirMissions=state.pendingAirMissions or {}; state.airMissionUsedTurn=state.airMissionUsedTurn or {};
+    state.assetCondition=state.assetCondition or {}; state.cityDamage=state.cityDamage or {};
     state.discoveredResourceTerritories=state.discoveredResourceTerritories or {}; state.discoveredMilitary=state.discoveredMilitary or {};
     return pd, state;
 end
@@ -3344,6 +3346,34 @@ local function UFShuffleList(list)
         local j=math.random(i);
         list[i],list[j]=list[j],list[i];
     end
+end
+
+
+local function UFAssetConditionKey(kind, territoryID)
+    return tostring(kind) .. ":" .. tostring(territoryID);
+end
+
+local function UFGetAssetCondition(state, kind, territoryID)
+    state.assetCondition = state.assetCondition or {};
+    local key = UFAssetConditionKey(kind, territoryID);
+    state.assetCondition[key] = state.assetCondition[key] or {damage=0, disabledUntil=0};
+    return state.assetCondition[key];
+end
+
+local function UFStructureTableAndLevel(state, kind, territoryID)
+    local map={Airbase="airbases",ForwardAirstrip="forwardAirstrips",SAMSite="samSites",MissileSilo="missileSilos",PowerGrid="powerGrids"};
+    if kind=="Headquarters" then
+        if state.headquarters and state.headquarters.territoryID==territoryID then return nil,1; end
+        return nil,0;
+    end
+    local tbl=state[map[kind] or ""] or {};
+    return tbl, tonumber(tbl[territoryID] or tbl[tostring(territoryID)]) or 0;
+end
+
+local function UFRepairBaseCost(kind)
+    local map={Headquarters={"HeadquartersBaseCost",500},Airbase={"AirbaseBaseCost",350},ForwardAirstrip={"ForwardAirstripBaseCost",175},SAMSite={"SAMSiteBaseCost",300},MissileSilo={"MissileSiloBaseCost",500},PowerGrid={"PowerGridBaseCost",300}};
+    local d=map[kind] or {nil,250};
+    return math.max(25, math.floor(tonumber(d[1] and GetSetting(d[1],d[2]) or d[2]) or d[2]));
 end
 
 function Server_GameCustomMessage(
@@ -11706,6 +11736,17 @@ end
     -- UNITED FRONTIER STRATEGIC MILITARY DEVELOPMENT
     -- =====================================================
 
+    local function UFAppendHQResult(state, action, result, detail)
+        state.hqRecentResults = state.hqRecentResults or {};
+        table.insert(state.hqRecentResults, {
+            turn = GetCurrentEconomyTurn(data),
+            action = tostring(action or "HQ"),
+            result = tostring(result or "RESULT"),
+            detail = tostring(detail or "")
+        });
+        while #state.hqRecentResults > 8 do table.remove(state.hqRecentResults,1); end
+    end
+
 
     if payload.type == "hqResourceScan" then
         local targetPlayerID = MakeInteger(payload.targetPlayerID);
@@ -11736,6 +11777,7 @@ end
         if #candidates == 0 then
             state.lastResourceIntelScanTurn = currentTurn;
             UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+            UFAppendHQResult(state,"Resource Scan","NO DAMAGE","No new resource locations discovered");
             setReturn({success=true,message="Resource scan completed, but no new resource locations were found."}); return;
         end
         UFShuffleList(candidates);
@@ -11751,6 +11793,8 @@ end
         end
         state.lastResourceIntelScanTurn=currentTurn;
         Mod.PrivateGameData=pd; Mod.PlayerGameData=playerData;
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        UFAppendHQResult(state,"Resource Scan","SUCCESS",tostring(reveal).." location(s) discovered");
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
         setReturn({success=true,message="Resource intelligence discovered "..tostring(reveal).." location(s): "..table.concat(names,", ")..". Results were automatically shared with eligible faction members and allies using Shared Intelligence."}); return;
     end
@@ -11788,6 +11832,8 @@ end
         for tid,cnt in pairs(targetState.specialForces or {}) do add("Special Forces",tid,1,cnt); end
         if #candidates == 0 then
             state.lastMilitaryIntelScanTurn=currentTurn; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+            UFAppendHQResult(state,"Military Scan","NO DAMAGE","No new military details uncovered");
+            UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
             setReturn({success=true,message="Military intelligence scan completed, but no new military details were uncovered."}); return;
         end
         UFShuffleList(candidates);
@@ -11801,7 +11847,49 @@ end
         end
         state.lastMilitaryIntelScanTurn=currentTurn;
         Mod.PrivateGameData=pd; Mod.PlayerGameData=playerData; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        UFAppendHQResult(state,"Military Scan","SUCCESS",tostring(reveal).." asset detail(s) uncovered");
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
         setReturn({success=true,message="Military intelligence uncovered "..tostring(reveal).." asset detail(s): "..table.concat(names,", ")..". Eligible intelligence-sharing partners also receive the discoveries."}); return;
+    end
+
+    if payload.type == "hqCyberDisrupt" then
+        local territoryID = MakeInteger(payload.territoryID);
+        local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+        local targetTerr = territoryID and standing and standing.Territories and standing.Territories[territoryID] or nil;
+        if targetTerr == nil or targetTerr.OwnerPlayerID == playerID or targetTerr.OwnerPlayerID == WL.PlayerID.Neutral or targetTerr.OwnerPlayerID == WL.PlayerID.Fogged then
+            setReturn({success=false,message="Select an enemy-controlled territory for the cyber operation."}); return;
+        end
+        local relation = GetRelationship(data,playerID,targetTerr.OwnerPlayerID);
+        if relation == nil or relation.status ~= "war" then
+            setReturn({success=false,message="Cyber disruption currently requires an active war with the target nation."}); return;
+        end
+        local pd,state = UFEnsurePrivateMilitary(playerID);
+        if state.headquarters == nil or not UFHasOperationalPowerGrid(state) then
+            setReturn({success=false,message="An operational Headquarters and Power Grid are required."}); return;
+        end
+        local cyberLevel = tonumber(((state.headquarters.branches or {}).CyberWarfare)) or 0;
+        if cyberLevel < 1 then setReturn({success=false,message="Upgrade Cyber Warfare to Level 1 first."}); return; end
+        local currentTurn = GetCurrentEconomyTurn(data);
+        if state.lastCyberOperationTurn == currentTurn then
+            setReturn({success=false,message="Headquarters already launched a cyber operation this turn."}); return;
+        end
+        local targetState = (((pd.strategicMilitary or {}).byPlayer or {})[targetTerr.OwnerPlayerID]) or {};
+        local securityLevel = tonumber((((targetState.headquarters or {}).branches or {}).Security)) or 0;
+        local chance = math.max(20,math.min(90,55 + cyberLevel*8 - securityLevel*7));
+        local roll = math.random(1,100);
+        local result="FAILED"; local detail="No damage";
+        if roll <= chance then
+            local duration = math.max(1,math.min(4,1+math.floor(cyberLevel/2)));
+            targetState.disruptions = targetState.disruptions or {};
+            targetState.disruptions[territoryID] = currentTurn + duration;
+            result="DISABLED";
+            detail="Systems disrupted for "..tostring(duration).." turn(s)";
+        end
+        state.lastCyberOperationTurn=currentTurn;
+        UFAppendHQResult(state,"Cyber Operation",result,detail);
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        Mod.PrivateGameData=pd;
+        setReturn({success=true,message="CYBER OPERATION RESULT\nTarget: "..tostring((game.Map.Territories[territoryID] or {}).Name or territoryID).."\nResult: "..result.."\nDamage: "..detail}); return;
     end
 
     if payload.type == "buildHeadquarters" then
@@ -11916,6 +12004,150 @@ end
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
         local td=game.Map and game.Map.Territories and game.Map.Territories[targetID] or nil;
         setReturn({success=true,message=weapon.." strike scheduled against "..(td and td.Name or tostring(targetID))..". The strike resolves on turn advancement."}); return;
+    end
+
+    if payload.type == "specialForcesMission" then
+        if GetSetting("SpecialForcesEnabled",true) ~= true then setReturn({success=false,message="Special Forces are disabled by the host."}); return; end
+        local originID=MakeInteger(payload.originTerritoryID); local targetID=MakeInteger(payload.territoryID); local mission=tostring(payload.mission or "Recon");
+        local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
+        local origin=originID and standing and standing.Territories and standing.Territories[originID] or nil;
+        local target=targetID and standing and standing.Territories and standing.Territories[targetID] or nil;
+        if origin==nil or origin.OwnerPlayerID~=playerID then setReturn({success=false,message="Your Special Forces must launch from a territory you control."}); return; end
+        if target==nil or target.OwnerPlayerID==playerID or target.OwnerPlayerID==WL.PlayerID.Neutral or target.OwnerPlayerID==WL.PlayerID.Fogged then setReturn({success=false,message="Select a foreign player-controlled territory."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID);
+        local unitCount=tonumber((state.specialForces or {})[originID]) or 0;
+        if unitCount<=0 then setReturn({success=false,message="No Special Forces unit is based on the selected origin territory."}); return; end
+        local currentTurn=GetCurrentEconomyTurn(data);
+        state.specialOpsUsedTurn=state.specialOpsUsedTurn or {};
+        if tonumber(state.specialOpsUsedTurn[originID])==currentTurn then setReturn({success=false,message="This Special Forces base already launched an operation this turn."}); return; end
+        local targetOwner=target.OwnerPlayerID;
+        local destructive = mission ~= "Recon";
+        local rel=GetRelationship(data,playerID,targetOwner);
+        if destructive and (rel==nil or rel.status~="war") then setReturn({success=false,message="Sabotage and raid missions require an official war. Recon may be used outside war."}); return; end
+
+        local byPlayer=(pd.strategicMilitary or {}).byPlayer or {};
+        local targetState=byPlayer[targetOwner] or {headquarters=nil,airbases={},forwardAirstrips={},samSites={},missileSilos={},powerGrids={},airWings={},specialForces={}};
+        byPlayer[targetOwner]=targetState;
+        targetState.airbases=targetState.airbases or {}; targetState.forwardAirstrips=targetState.forwardAirstrips or {}; targetState.samSites=targetState.samSites or {};
+        targetState.missileSilos=targetState.missileSilos or {}; targetState.powerGrids=targetState.powerGrids or {}; targetState.airWings=targetState.airWings or {}; targetState.specialForces=targetState.specialForces or {};
+        local securityLevel=tonumber((((targetState.headquarters or {}).branches or {}).Security)) or 0;
+        local baseChance={Recon=80,Sabotage=70,["SAM Suppression"]=65,["Silo Raid"]=55,["Grid Sabotage"]=65,["HQ Raid"]=50,["Resource Sabotage"]=70};
+        local destroyChance={Recon=0,Sabotage=35,["SAM Suppression"]=40,["Silo Raid"]=50,["Grid Sabotage"]=40,["HQ Raid"]=25,["Resource Sabotage"]=30};
+        local chance=(baseChance[mission] or 60) - securityLevel*8 + math.min(15,math.max(0,unitCount-1)*5);
+        chance=math.max(20,math.min(90,chance));
+        local success=math.random(1,100)<=chance;
+        local td=game.Map and game.Map.Territories and game.Map.Territories[targetID] or nil; local targetName=td and td.Name or tostring(targetID);
+        state.specialOpsUsedTurn[originID]=currentTurn;
+        state.specialForcesReports=state.specialForcesReports or {};
+        local result="FAILED"; local detail="No damage";
+
+        local function damageLevel(tbl,label)
+            local lvl=tonumber(tbl[targetID]) or 0;
+            if lvl<=0 then return false,nil,nil; end
+            local dc=destroyChance[mission] or 30;
+            if lvl<=1 and math.random(1,100)<=dc then tbl[targetID]=nil; return true,"DESTROYED",label.." destroyed"; end
+            tbl[targetID]=math.max(0,lvl-1); if tbl[targetID]<=0 then tbl[targetID]=nil; return true,"DESTROYED",label.." destroyed"; end
+            return true,"DAMAGED",label.." reduced to Lv."..tostring(tbl[targetID]);
+        end
+
+        if success then
+            if mission=="Recon" then
+                local playerData=Mod.PlayerGameData or {};
+                local nodes=(resourceData and resourceData.territories and (resourceData.territories[targetID] or resourceData.territories[tostring(targetID)])) or nil;
+                if nodes then state.discoveredResourceTerritories[targetID]=true; UFPropagateResourceDiscovery(data,pd,playerData,playerID,targetID,targetOwner,nodes); end
+                local revealed=0;
+                local function reveal(kind,tbl,level,count)
+                    local lvl=level or (tbl and tbl[targetID]); if lvl and (tonumber(lvl) or 0)>0 then
+                        local key=tostring(targetOwner)..":"..kind..":"..tostring(targetID); state.discoveredMilitary[key]=true;
+                        UFPropagateMilitaryDiscovery(data,pd,playerData,playerID,targetOwner,kind,targetID,tonumber(lvl) or 1,count or 1); revealed=revealed+1;
+                    end
+                end
+                if targetState.headquarters and targetState.headquarters.territoryID==targetID then reveal("Headquarters",nil,1,1); end
+                reveal("Airbase",targetState.airbases); reveal("Forward Airstrip",targetState.forwardAirstrips); reveal("SAM Site",targetState.samSites); reveal("Missile Silo",targetState.missileSilos); reveal("Power Grid",targetState.powerGrids);
+                if (tonumber(targetState.airWings[targetID]) or 0)>0 then reveal("Air Wing",nil,1,targetState.airWings[targetID]); end
+                Mod.PlayerGameData=playerData; result="SUCCESS"; detail="Recon revealed "..tostring(revealed).." military detail(s)"..(nodes and " plus resource intelligence" or "");
+            elseif mission=="SAM Suppression" then
+                local ok,r,d=damageLevel(targetState.samSites,"SAM Site"); if ok then result=r; detail=d; else result="NO DAMAGE"; detail="No SAM Site on target"; end
+            elseif mission=="Silo Raid" then
+                local ok,r,d=damageLevel(targetState.missileSilos,"Missile Silo"); if ok then result=r; detail=d; else result="NO DAMAGE"; detail="No Missile Silo on target"; end
+            elseif mission=="Grid Sabotage" then
+                local ok,r,d=damageLevel(targetState.powerGrids,"Power Grid"); if ok then result=r; detail=d; else result="NO DAMAGE"; detail="No Power Grid on target"; end
+            elseif mission=="HQ Raid" then
+                if targetState.headquarters and targetState.headquarters.territoryID==targetID then
+                    targetState.headquarters.branches=targetState.headquarters.branches or {};
+                    local bestKey=nil; local best=0; for _,k in ipairs({"Intelligence","Security","CyberWarfare","JointCommand"}) do local lv=tonumber(targetState.headquarters.branches[k]) or 0; if lv>best then best=lv; bestKey=k; end end
+                    if bestKey and best>0 then targetState.headquarters.branches[bestKey]=best-1; result="DAMAGED"; detail="HQ "..bestKey.." reduced to Lv."..tostring(best-1); else result="DISABLED"; detail="HQ operations disrupted for this turn"; end
+                    targetState.headquarters.status="Damaged";
+                else result="NO DAMAGE"; detail="No Headquarters on target"; end
+            elseif mission=="Resource Sabotage" then
+                local nodes=(resourceData and resourceData.territories and (resourceData.territories[targetID] or resourceData.territories[tostring(targetID)])) or nil;
+                local chosen=nil; local highest=0; for rn,lvl in pairs(nodes or {}) do if (tonumber(lvl) or 0)>highest then highest=tonumber(lvl) or 0; chosen=rn; end end
+                if chosen then nodes[chosen]=math.max(0,highest-1); if nodes[chosen]<=0 then nodes[chosen]=nil; result="DESTROYED"; detail=chosen.." facility destroyed"; else result="DAMAGED"; detail=chosen.." reduced to Lv."..tostring(nodes[chosen]); end
+                else result="NO DAMAGE"; detail="No resource facility on target"; end
+            else
+                local handled=false; local r,d;
+                for _,pair in ipairs({{targetState.missileSilos,"Missile Silo"},{targetState.samSites,"SAM Site"},{targetState.powerGrids,"Power Grid"},{targetState.airbases,"Airbase"},{targetState.forwardAirstrips,"Forward Airstrip"}}) do
+                    local ok,rr,dd=damageLevel(pair[1],pair[2]); if ok then handled=true; r=rr; d=dd; break; end
+                end
+                if not handled then
+                    local recruiters=((data.globalEconomy or {}).armyRecruiters or {}).territories or {};
+                    local lvl=tonumber(recruiters[targetID]) or 0;
+                    if lvl>0 then recruiters[targetID]=lvl-1; if recruiters[targetID]<=0 then recruiters[targetID]=nil; result="DESTROYED"; detail="Recruiting Station destroyed"; else result="DAMAGED"; detail="Recruiting Station reduced to Lv."..tostring(recruiters[targetID]); end
+                    else result="NO DAMAGE"; detail="No strategic structure found on target"; end
+                else result=r; detail=d; end
+            end
+        else
+            local lossChance=mission=="Recon" and 10 or 25;
+            if math.random(1,100)<=lossChance then state.specialForces[originID]=math.max(0,unitCount-1); if state.specialForces[originID]<=0 then state.specialForces[originID]=nil; end; detail="Mission failed; Special Forces unit lost"; result="DESTROYED"; else detail="Mission failed; unit returned safely"; result="FAILED"; end
+        end
+        table.insert(state.specialForcesReports,{turn=currentTurn,mission=mission,target=targetName,result=result,detail=detail,chance=chance}); while #state.specialForcesReports>8 do table.remove(state.specialForcesReports,1); end
+        pd.strategicMilitary.byPlayer[targetOwner]=targetState;
+        UFSaveOwnerMilitaryToPlayerData(targetOwner,pd,targetState);
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
+        setReturn({success=true,message="SPECIAL FORCES RESULT\n"..mission.." → "..targetName.."\nResult: "..result.."\n"..detail.."\nSuccess chance: "..tostring(chance).."%"}); return;
+    end
+
+
+    if payload.type == "airWingMission" then
+        if GetSetting("AirWingsEnabled",true) ~= true then setReturn({success=false,message="Air Wings are disabled by the host."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID);
+        local originID=MakeInteger(payload.originTerritoryID); local targetID=MakeInteger(payload.territoryID);
+        local mission=tostring(payload.mission or "Recon");
+        if originID==nil or targetID==nil then setReturn({success=false,message="Select an Air Wing and a target territory."}); return; end
+        if not UFTerritoryOwnedBy(game,originID,playerID) or (tonumber((state.airWings or {})[originID]) or 0)<=0 then setReturn({success=false,message="No Air Wing is stationed at the selected origin."}); return; end
+        if (tonumber((state.airbases or {})[originID]) or 0)<=0 then setReturn({success=false,message="Air Wing missions must launch from an Airbase."}); return; end
+        local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; local target=standing and standing.Territories and standing.Territories[targetID] or nil;
+        if target==nil or target.OwnerPlayerID==playerID or target.OwnerPlayerID==WL.PlayerID.Neutral then setReturn({success=false,message="Select an enemy-controlled target territory."}); return; end
+        local currentTurn=(data.globalEconomy and data.globalEconomy.currentEconomyTurn) or data.tradeTurn or 1;
+        if tonumber((state.airMissionUsedTurn or {})[originID])==currentTurn then setReturn({success=false,message="This Airbase already launched an Air Wing mission this turn."}); return; end
+        local costs={Recon=30,["Air Superiority"]=50,["Ground Support"]=45,Bombing=60}; local cost=costs[mission] or 40;
+        if not RemoveGold(game,playerID,cost) then setReturn({success=false,message="You need "..tostring(cost).." Commerce for this Air Wing mission."}); return; end
+        local nation=EnsureNation(data,game,playerID); local oil=(nation.resourceProduction and tonumber(nation.resourceProduction.Oil)) or 0;
+        if oil<=0 and ((nation.resourceStockpile and tonumber(nation.resourceStockpile.Oil)) or 0)<=0 then
+            AddGold(game,playerID,cost); setReturn({success=false,message="Air Wing missions require access to Oil production or an Oil stockpile."}); return;
+        end
+        state.pendingAirMissions=state.pendingAirMissions or {};
+        table.insert(state.pendingAirMissions,{originTerritoryID=originID,targetTerritoryID=targetID,mission=mission,wingCount=tonumber(state.airWings[originID]) or 1,turn=currentTurn});
+        state.airMissionUsedTurn=state.airMissionUsedTurn or {}; state.airMissionUsedTurn[originID]=currentTurn;
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+        setReturn({success=true,message=mission.." mission queued. Cost: "..tostring(cost).." Commerce. Results will resolve on turn advancement."}); return;
+    end
+
+    if payload.type == "repairMilitaryAsset" then
+        local pd,state=UFEnsurePrivateMilitary(playerID); local kind=tostring(payload.kind or ""); local tid=MakeInteger(payload.territoryID);
+        if tid==nil then setReturn({success=false,message="Invalid repair target."}); return; end
+        local _,level=UFStructureTableAndLevel(state,kind,tid); if level<=0 then setReturn({success=false,message="You no longer control that asset."}); return; end
+        local cond=UFGetAssetCondition(state,kind,tid); local damage=math.max(0,math.min(100,tonumber(cond.damage) or 0));
+        local currentTurn=(data.globalEconomy and data.globalEconomy.currentEconomyTurn) or data.tradeTurn or 1;
+        local disabled=math.max(0,(tonumber(cond.disabledUntil) or 0)-currentTurn);
+        if damage<=0 and disabled<=0 then setReturn({success=false,message="This asset does not need repairs."}); return; end
+        local cost=math.max(25,math.floor(UFRepairBaseCost(kind)*(0.25+damage/100)*math.max(1,level)*0.45));
+        if not RemoveGold(game,playerID,cost) then setReturn({success=false,message="You need "..tostring(cost).." Commerce to repair this asset."}); return; end
+        cond.damage=0; cond.disabledUntil=0;
+        if kind=="Headquarters" and state.headquarters then state.headquarters.status="Operational"; end
+        state.hqRecentResults=state.hqRecentResults or {}; table.insert(state.hqRecentResults,{turn=currentTurn,action="Repair "..kind,result="SUCCESS",detail="Restored to Operational for "..tostring(cost).." Commerce"});
+        while #state.hqRecentResults>8 do table.remove(state.hqRecentResults,1); end
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); setReturn({success=true,message=kind.." repaired and returned to OPERATIONAL status. Cost: "..tostring(cost).." Commerce."}); return;
     end
 
     if payload.type == "purchaseAirWing" then

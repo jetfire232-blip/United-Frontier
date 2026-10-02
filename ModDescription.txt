@@ -7,3 +7,5 @@ Build national power through Commerce, Markets, private strategic resources, dip
 Resources are discovered through ownership, direct borders, allies/factions, and intelligence. Military installations appear as map assets while deeper strategic details can remain intelligence-sensitive.
 
 Operational Warfare: powered Headquarters, Airbase-gated airlifts, missile targeting, and enhanced Smart AI frontline behavior.
+
+Phase 7: operational HQ actions, AI airport airlifts, clearer war UI, and simple strategic-action results.

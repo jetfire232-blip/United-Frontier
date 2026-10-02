@@ -4524,6 +4524,8 @@ function CalculateCompanyDividendPool(
 
     end
 
+    local hostScale = math.max(25, math.min(300, tonumber(GetSetting("DividendPayoutScalePercent",100)) or 100));
+
     return
         math.floor(
             ownerIncome
@@ -4531,6 +4533,7 @@ function CalculateCompanyDividendPool(
                 payoutPercent
                 / 100
             )
+            * (hostScale / 100)
             + 0.5
         );
 
@@ -16878,6 +16881,9 @@ local function UFEnsureStrategicAIState(playerID)
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
     state.missileInventory=state.missileInventory or {}; state.pendingStrategicStrikes=state.pendingStrategicStrikes or {};
+    state.pendingAirMissions=state.pendingAirMissions or {}; state.airMissionUsedTurn=state.airMissionUsedTurn or {};
+    state.assetCondition=state.assetCondition or {}; state.cityDamage=state.cityDamage or {};
+    state.hqRecentResults=state.hqRecentResults or {};
     Mod.PrivateGameData=pd;
     return pd,state;
 end
@@ -17057,38 +17063,159 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
 end
 
 
+local function UFConditionKey(kind,tid) return tostring(kind)..":"..tostring(tid); end
+local function UFCondition(state,kind,tid)
+    state.assetCondition=state.assetCondition or {}; local k=UFConditionKey(kind,tid);
+    state.assetCondition[k]=state.assetCondition[k] or {damage=0,disabledUntil=0}; return state.assetCondition[k];
+end
+
+local UF_ASSET_TABLES={Airbase="airbases",ForwardAirstrip="forwardAirstrips",SAMSite="samSites",MissileSilo="missileSilos",PowerGrid="powerGrids"};
+local function UFDamageAsset(state,kind,tid,amount,currentTurn,disableTurns)
+    if kind=="Headquarters" then
+        if not (state.headquarters and state.headquarters.territoryID==tid) then return "NO DAMAGE","No Headquarters at target"; end
+    else
+        local tbl=state[UF_ASSET_TABLES[kind] or ""] or {}; if (tonumber(tbl[tid]) or 0)<=0 then return "NO DAMAGE","No "..kind.." at target"; end
+    end
+    local c=UFCondition(state,kind,tid); c.damage=math.min(100,(tonumber(c.damage) or 0)+math.max(0,amount or 0));
+    if disableTurns and disableTurns>0 then c.disabledUntil=math.max(tonumber(c.disabledUntil) or 0,currentTurn+disableTurns); end
+    if c.damage>=100 then
+        if kind=="Headquarters" then state.headquarters=nil; else state[UF_ASSET_TABLES[kind]][tid]=nil; end
+        return "DESTROYED",kind.." destroyed";
+    elseif (tonumber(c.disabledUntil) or 0)>currentTurn then
+        if kind=="Headquarters" and state.headquarters then state.headquarters.status="Disabled"; end
+        return "DISABLED",kind.." disabled ("..tostring(math.floor(c.damage)).."% damage)";
+    end
+    if kind=="Headquarters" and state.headquarters then state.headquarters.status=c.damage>0 and "Damaged" or "Operational"; end
+    return c.damage>0 and "DAMAGED" or "NO DAMAGE",kind.." at "..tostring(math.floor(c.damage)).."% damage";
+end
+
+local function UFBestSAMCoverage(game,standing,targetState,targetID)
+    if not targetState then return 0,nil; end
+    local best=tonumber((targetState.samSites or {})[targetID]) or 0; local bestTid=best>0 and targetID or nil;
+    local details=game.Map and game.Map.Territories and game.Map.Territories[targetID] or nil;
+    for nid,_ in pairs((details and details.ConnectedTo) or {}) do
+        local lvl=tonumber((targetState.samSites or {})[nid]) or 0;
+        if lvl>=2 and (lvl-1)>best then best=lvl-1; bestTid=nid; end
+    end
+    return best,bestTid;
+end
+
+local function UFSAMChance(samLevel,attackType)
+    if samLevel<=0 then return 0; end
+    local base=15+samLevel*15;
+    if attackType=="Nuclear" then base=base-20; elseif attackType=="EMP" then base=base-10; elseif attackType=="Air" then base=base+5; end
+    return math.max(5,math.min(80,base));
+end
+
+local function UFReduceResourcesAtTerritory(data,tid,severity)
+    local resources=((data.globalEconomy or {}).resources or {}).territories or {}; local nodes=resources[tid] or resources[tostring(tid)];
+    if not nodes then return 0; end
+    local hit=0; for rn,lvl in pairs(nodes) do local n=tonumber(lvl) or 0; if n>0 then local loss=math.max(1,math.floor(severity)); nodes[rn]=math.max(0,n-loss); hit=hit+1; end end
+    return hit;
+end
+
+local function UFApplyCityDamage(state,tid,percent)
+    state.cityDamage=state.cityDamage or {}; state.cityDamage[tid]=math.min(100,(tonumber(state.cityDamage[tid]) or 0)+percent); return state.cityDamage[tid];
+end
+
 local function UFResolveStrategicStrikes(game,data,addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return; end
     local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
     local currentTurn=(data.globalEconomy and data.globalEconomy.currentEconomyTurn) or data.tradeTurn or 1;
     for attackerID,state in pairs(byPlayer) do
+        state.hqRecentResults=state.hqRecentResults or {};
         local pending=state.pendingStrategicStrikes or {}; state.pendingStrategicStrikes={};
         for _,strike in ipairs(pending) do
             local tid=tonumber(strike.targetTerritoryID) or strike.targetTerritoryID; local terr=standing.Territories[tid];
             if terr~=nil then
-                local weapon=tostring(strike.weapon or "Conventional"); local level=math.max(1,tonumber(strike.siloLevel) or 1);
-                local currentArmies=terr.NumArmies and terr.NumArmies.NumArmies or 0; local damage=0;
-                if weapon=="Conventional" then damage=math.min(currentArmies,5+level*5);
-                elseif weapon=="Nuclear" then damage=math.min(currentArmies,20+level*15); end
-                local mods={};
-                if damage>0 then local mod=WL.TerritoryModification.Create(tid); mod.AddArmies=-damage; table.insert(mods,mod); end
+                local weapon=tostring(strike.weapon or "Conventional"); local level=math.max(1,tonumber(strike.siloLevel) or 1); local yield=tostring(strike.yield or "Low");
                 local ownerID=terr.OwnerPlayerID; local targetState=byPlayer[ownerID];
-                if targetState~=nil then
-                    targetState.disruptions=targetState.disruptions or {};
-                    if weapon=="EMP" then targetState.disruptions[tid]=currentTurn+2;
-                    elseif weapon=="Conventional" then
-                        for _,tblName in ipairs({"samSites","airbases","forwardAirstrips","powerGrids"}) do local tbl=targetState[tblName] or {}; if (tonumber(tbl[tid]) or 0)>1 then tbl[tid]=(tonumber(tbl[tid]) or 1)-1; break; end end
-                    elseif weapon=="Nuclear" then
-                        for _,tblName in ipairs({"samSites","airbases","forwardAirstrips","missileSilos","powerGrids"}) do if targetState[tblName] then targetState[tblName][tid]=nil; end end
-                        if targetState.headquarters and targetState.headquarters.territoryID==tid then targetState.headquarters=nil; end
+                local samLevel,samTid=UFBestSAMCoverage(game,standing,targetState,tid); local chance=UFSAMChance(samLevel,weapon);
+                local intercepted=chance>0 and math.random(1,100)<=chance;
+                local mods={}; local strikeResult="NO DAMAGE"; local details={};
+                if intercepted then
+                    strikeResult="INTERCEPTED"; table.insert(details,"SAM interception "..tostring(chance).."%");
+                else
+                    local targets={{tid=tid,scale=1.0}};
+                    if weapon=="Nuclear" then
+                        local d=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; local maxAdj=(yield=="High" and 99) or (yield=="Medium" and 3) or 0; local c=0;
+                        for nid,_ in pairs((d and d.ConnectedTo) or {}) do if c>=maxAdj then break; end table.insert(targets,{tid=nid,scale=(yield=="High" and 0.45 or 0.30)}); c=c+1; end
+                    elseif weapon=="EMP" and level>=2 then
+                        local d=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; for nid,_ in pairs((d and d.ConnectedTo) or {}) do table.insert(targets,{tid=nid,scale=0.5}); if #targets>=4 then break; end end
                     end
+                    local totalArmyDamage=0; local assetsHit=0; local resourcesHit=0;
+                    for _,t in ipairs(targets) do
+                        local tt=standing.Territories[t.tid]; if tt then
+                            local armies=tt.NumArmies and tt.NumArmies.NumArmies or 0; local armyDamage=0;
+                            if weapon=="Conventional" then armyDamage=math.min(armies,math.max(2,math.floor((5+level*5)*t.scale)));
+                            elseif weapon=="Nuclear" then local base=(yield=="High" and 65) or (yield=="Medium" and 45) or 30; armyDamage=math.min(armies,math.max(5,math.floor((base+level*8)*t.scale))); end
+                            if armyDamage>0 then local mod=WL.TerritoryModification.Create(t.tid); mod.AddArmies=-armyDamage; table.insert(mods,mod); totalArmyDamage=totalArmyDamage+armyDamage; end
+                            local oid=tt.OwnerPlayerID; local ts=byPlayer[oid];
+                            if ts then
+                                if weapon=="EMP" then
+                                    ts.disruptions=ts.disruptions or {}; local turns=math.max(2,level+1); ts.disruptions[t.tid]=currentTurn+turns;
+                                    for kind,_ in pairs(UF_ASSET_TABLES) do local r,dmg=UFDamageAsset(ts,kind,t.tid,0,currentTurn,turns); if r~="NO DAMAGE" then assetsHit=assetsHit+1; end end
+                                    if ts.headquarters and ts.headquarters.territoryID==t.tid then UFDamageAsset(ts,"Headquarters",t.tid,0,currentTurn,turns); assetsHit=assetsHit+1; end
+                                else
+                                    local sev=weapon=="Nuclear" and math.floor(((yield=="High" and 80) or (yield=="Medium" and 60) or 45)*t.scale) or math.floor((20+level*7)*t.scale);
+                                    for kind,_ in pairs(UF_ASSET_TABLES) do local r=UFDamageAsset(ts,kind,t.tid,sev,currentTurn,weapon=="Nuclear" and 1 or 0); if r~="NO DAMAGE" then assetsHit=assetsHit+1; end end
+                                    if ts.headquarters and ts.headquarters.territoryID==t.tid then local r=UFDamageAsset(ts,"Headquarters",t.tid,sev,currentTurn,weapon=="Nuclear" and 1 or 0); if r~="NO DAMAGE" then assetsHit=assetsHit+1; end end
+                                    UFApplyCityDamage(ts,t.tid,weapon=="Nuclear" and math.floor(55*t.scale) or math.floor(15*t.scale));
+                                    resourcesHit=resourcesHit+UFReduceResourcesAtTerritory(data,t.tid,weapon=="Nuclear" and (yield=="High" and 2 or 1) or 1);
+                                end
+                            end
+                        end
+                    end
+                    if weapon=="EMP" then strikeResult="DISABLED"; table.insert(details,"strategic systems disrupted");
+                    elseif weapon=="Nuclear" then strikeResult=(assetsHit>0 or resourcesHit>0 or totalArmyDamage>0) and "DAMAGED" or "NO DAMAGE"; table.insert(details,tostring(totalArmyDamage).." armies; "..tostring(assetsHit).." assets; "..tostring(resourcesHit).." resource facilities affected; city/territory damage applied");
+                    else strikeResult=(assetsHit>0 or totalArmyDamage>0) and "DAMAGED" or "NO DAMAGE"; table.insert(details,tostring(totalArmyDamage).." armies; "..tostring(assetsHit).." assets affected"); end
                 end
                 local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
-                addNewOrder(WL.GameOrderEvent.Create(attackerID,weapon.." missile strike on "..(td and td.Name or tostring(tid)),{},mods,nil,nil));
+                table.insert(state.hqRecentResults,{turn=currentTurn,action=weapon.." Missile Strike",result=strikeResult,detail=table.concat(details," | ")}); while #state.hqRecentResults>8 do table.remove(state.hqRecentResults,1); end
+                addNewOrder(WL.GameOrderEvent.Create(attackerID,weapon.." missile strike on "..(td and td.Name or tostring(tid)).." — "..strikeResult,{},mods,nil,nil));
             end
         end
     end
     Mod.PrivateGameData=pd;
+end
+
+local function UFResolveAirWingMissions(game,data,addNewOrder)
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if not standing then return; end
+    local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {}; local playerData=Mod.PlayerGameData or {};
+    local currentTurn=(data.globalEconomy and data.globalEconomy.currentEconomyTurn) or data.tradeTurn or 1;
+    for attackerID,state in pairs(byPlayer) do
+        state.airWingReports=state.airWingReports or {}; local pending=state.pendingAirMissions or {}; state.pendingAirMissions={};
+        for _,m in ipairs(pending) do
+            local tid=tonumber(m.targetTerritoryID) or m.targetTerritoryID; local target=standing.Territories[tid]; local mission=tostring(m.mission or "Recon");
+            if target then
+                local ownerID=target.OwnerPlayerID; local targetState=byPlayer[ownerID]; local samLevel=0; samLevel=select(1,UFBestSAMCoverage(game,standing,targetState,tid)); local samChance=UFSAMChance(samLevel,"Air");
+                local intercepted=samChance>0 and math.random(1,100)<=samChance; local result="SUCCESS"; local detail=""; local mods={};
+                if intercepted then result="INTERCEPTED"; detail="SAM defense stopped the mission ("..tostring(samChance).."% interception chance)";
+                elseif mission=="Recon" then
+                    local resources=((data.globalEconomy or {}).resources or {}).territories or {}; local nodes=resources[tid] or resources[tostring(tid)];
+                    playerData[attackerID]=playerData[attackerID] or {}; playerData[attackerID].strategicIntel=playerData[attackerID].strategicIntel or {knownResources={},knownMilitary={}};
+                    if nodes then playerData[attackerID].strategicIntel.knownResources[tid]={ownerPlayerID=ownerID,resources=nodes,reason="Air Recon"}; end
+                    if targetState then
+                        local known=playerData[attackerID].strategicIntel.knownMilitary; local function reveal(kind,tbl) local lvl=tonumber((tbl or {})[tid]) or 0; if lvl>0 then known[tostring(ownerID)..":"..kind..":"..tostring(tid)]={ownerPlayerID=ownerID,kind=kind,territoryID=tid,level=lvl,count=1,reason="Air Recon"}; end end
+                        reveal("Airbase",targetState.airbases); reveal("SAM Site",targetState.samSites); reveal("Missile Silo",targetState.missileSilos); reveal("Power Grid",targetState.powerGrids); if targetState.headquarters and targetState.headquarters.territoryID==tid then known[tostring(ownerID)..":Headquarters:"..tostring(tid)]={ownerPlayerID=ownerID,kind="Headquarters",territoryID=tid,level=1,count=1,reason="Air Recon"}; end
+                    end
+                    detail="Reconnaissance report generated for target territory";
+                elseif mission=="Ground Support" then
+                    local a=target.NumArmies and target.NumArmies.NumArmies or 0; local dmg=math.min(a,math.max(3,4+(tonumber(m.wingCount) or 1)*3)); if dmg>0 then local mod=WL.TerritoryModification.Create(tid); mod.AddArmies=-dmg; table.insert(mods,mod); result="DAMAGED"; detail=tostring(dmg).." defending armies damaged"; else result="NO DAMAGE"; detail="No armies available to damage"; end
+                elseif mission=="Air Superiority" then
+                    local enemyWings=targetState and (tonumber((targetState.airWings or {})[tid]) or 0) or 0; if enemyWings>0 then result="DAMAGED"; local c=UFCondition(targetState,"AirWing",tid); c.damage=math.min(100,(tonumber(c.damage) or 0)+35); detail="Enemy Air Wing effectiveness reduced; air-unit damage now "..tostring(c.damage).."%"; else detail="No enemy Air Wing found at target"; result="NO DAMAGE"; end
+                elseif mission=="Bombing" then
+                    local a=target.NumArmies and target.NumArmies.NumArmies or 0; local dmg=math.min(a,math.max(4,6+(tonumber(m.wingCount) or 1)*2)); if dmg>0 then local mod=WL.TerritoryModification.Create(tid); mod.AddArmies=-dmg; table.insert(mods,mod); end
+                    local hit=0; if targetState then for kind,_ in pairs(UF_ASSET_TABLES) do local r=UFDamageAsset(targetState,kind,tid,30,currentTurn,0); if r~="NO DAMAGE" then hit=hit+1; end end; if targetState.headquarters and targetState.headquarters.territoryID==tid then local r=UFDamageAsset(targetState,"Headquarters",tid,30,currentTurn,0); if r~="NO DAMAGE" then hit=hit+1; end end end
+                    local rh=UFReduceResourcesAtTerritory(data,tid,1); result=(dmg>0 or hit>0 or rh>0) and "DAMAGED" or "NO DAMAGE"; detail=tostring(dmg).." armies; "..tostring(hit).." assets; "..tostring(rh).." resource facilities affected";
+                end
+                local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; table.insert(state.airWingReports,{turn=currentTurn,mission=mission,target=td and td.Name or tostring(tid),result=result,detail=detail}); while #state.airWingReports>8 do table.remove(state.airWingReports,1); end
+                addNewOrder(WL.GameOrderEvent.Create(attackerID,"Air Wing "..mission.." on "..(td and td.Name or tostring(tid)).." — "..result,{},mods,nil,nil));
+            end
+        end
+        playerData[attackerID]=playerData[attackerID] or {}; playerData[attackerID].ownMilitary=state;
+    end
+    Mod.PrivateGameData=pd; Mod.PlayerGameData=playerData;
 end
 
 local function UFIsActiveAlliance(diplomacy,a,b)
@@ -17099,25 +17226,45 @@ end
 local function UFPairKeySimple(a,b) local sa,sb=tostring(a),tostring(b); return sa<sb and (sa.."|"..sb) or (sb.."|"..sa); end
 
 
+local function UFAIIdeologyBloc(ideology)
+    ideology=tostring(ideology or "");
+    if ideology=="Free Market" or ideology=="Capitalist" then return "market"; end
+    if ideology=="Social Democratic" or ideology=="State Capitalist" then return "mixed"; end
+    if ideology=="Socialist" or ideology=="Communist" then return "left"; end
+    if ideology=="Fascist" or ideology=="Nationalist" then return "national"; end
+    return ideology;
+end
+
 local function UFAIConsiderAlliance(game,data,playerID)
     local diplomacy=GetDiplomacyData(data); diplomacy.pendingAllianceOffers=diplomacy.pendingAllianceOffers or {}; diplomacy.alliances=diplomacy.alliances or {};
+    -- AI alliances are intentionally scarce. Factions can still provide broader blocs.
     local existing=0; for _,a in pairs(diplomacy.alliances) do if a and a.active and (a.player1==playerID or a.player2==playerID) then existing=existing+1; end end
-    if existing>=2 then return false; end
+    if existing>=1 then return false; end
+    local n1=((data.globalEconomy or {}).nations or {})[playerID] or {};
+    local bloc1=UFAIIdeologyBloc(n1.ideology);
     local bestID=nil; local bestScore=-999999;
     for otherID,other in pairs(game.Game.Players or {}) do
         if otherID~=playerID and other~=nil and not other.Surrendered and IsNationEconomyReady(game,data,otherID) and not IsDiplomacyWar(data,playerID,otherID) and not UFIsActiveAlliance(diplomacy,playerID,otherID) then
             local pending=false; for _,o in ipairs(diplomacy.pendingAllianceOffers) do if (o.fromPlayerID==playerID and o.toPlayerID==otherID) or (o.fromPlayerID==otherID and o.toPlayerID==playerID) then pending=true; break; end end
             if not pending then
-                local score=0; if HasAgreement(data,playerID,otherID) then score=score+30; end; if GetActiveDiplomacyNAP(data,playerID,otherID)~=nil then score=score+25; end
-                local n1=((data.globalEconomy or {}).nations or {})[playerID] or {}; local n2=((data.globalEconomy or {}).nations or {})[otherID] or {};
-                score=score-math.floor(math.abs((tonumber(n1.militaryReadiness) or 100)-(tonumber(n2.militaryReadiness) or 100))/5);
-                if score>bestScore then bestScore=score; bestID=otherID; end
+                local n2=((data.globalEconomy or {}).nations or {})[otherID] or {};
+                local tradePartner=HasAgreement(data,playerID,otherID)==true;
+                local ideologyAligned=bloc1~="" and bloc1==UFAIIdeologyBloc(n2.ideology);
+                -- No random alliance spam: an AI needs an economic partnership or ideological alignment.
+                if tradePartner or ideologyAligned then
+                    local score=0;
+                    if tradePartner then score=score+60; end
+                    if ideologyAligned then score=score+45; end
+                    if GetActiveDiplomacyNAP(data,playerID,otherID)~=nil then score=score+10; end
+                    score=score-math.floor(math.abs((tonumber(n1.militaryReadiness) or 100)-(tonumber(n2.militaryReadiness) or 100))/8);
+                    if score>bestScore then bestScore=score; bestID=otherID; end
+                end
             end
         end
     end
-    if bestID~=nil and (bestScore>=20 or math.random(1,100)<=20) then
+    if bestID~=nil and bestScore>=40 then
         table.insert(diplomacy.pendingAllianceOffers,{fromPlayerID=playerID,toPlayerID=bestID,createdTurn=GetCurrentDiplomacyTurn(data)});
-        AddDiplomacyHistory(data,"alliance_proposed",playerID,bestID,GetEconomicPlayerName(game,playerID).." proposed an Alliance with "..GetEconomicPlayerName(game,bestID)..".",{aiActivity=true});
+        AddDiplomacyHistory(data,"alliance_proposed",playerID,bestID,GetEconomicPlayerName(game,playerID).." proposed an Alliance with "..GetEconomicPlayerName(game,bestID).." based on trade/ideological alignment.",{aiActivity=true});
         return true;
     end
     return false;
@@ -17155,6 +17302,71 @@ local function UFAIJoinAlliedWars(game,data,playerID)
     return false;
 end
 
+local function UFStrategicTerritoryValue(data, ownerID, territoryID)
+    local value=0;
+    local pd=Mod.PrivateGameData or {};
+    local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
+    local st=byPlayer[ownerID] or {};
+    if st.headquarters and st.headquarters.territoryID==territoryID then value=value+45; end
+    if (tonumber((st.powerGrids or {})[territoryID]) or 0)>0 then value=value+25; end
+    if (tonumber((st.missileSilos or {})[territoryID]) or 0)>0 then value=value+30; end
+    if (tonumber((st.samSites or {})[territoryID]) or 0)>0 then value=value+20; end
+    if (tonumber((st.airbases or {})[territoryID]) or 0)>0 then value=value+22; end
+    if (tonumber((st.forwardAirstrips or {})[territoryID]) or 0)>0 then value=value+10; end
+    local recruiters=((data.globalEconomy or {}).armyRecruiters or {}).territories or {};
+    if (tonumber(recruiters[territoryID]) or 0)>0 then value=value+28; end
+    local resources=((data.globalEconomy or {}).resources or {}).territories or {};
+    local nodes=resources[territoryID] or resources[tostring(territoryID)] or {};
+    local resourceLevels=0; for _,lvl in pairs(nodes or {}) do resourceLevels=resourceLevels+(tonumber(lvl) or 0); end
+    if resourceLevels>0 then value=value+8+math.min(22,resourceLevels*3); end
+    return value;
+end
+
+local function UFGenerateAIAirliftOrder(game,data,playerID,addNewOrder)
+    if GetSetting("AirbasesEnabled",true)~=true and GetSetting("ForwardAirstripsEnabled",true)~=true then return false; end
+    if not UFAIAtWar(data,playerID) then return false; end
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return false; end
+    local cards=standing.Cards and standing.Cards[playerID] or nil; if cards==nil or cards.WholeCards==nil then return false; end
+    local airliftCardID=nil;
+    for instanceID,card in pairs(cards.WholeCards) do
+        if card~=nil and card.CardID==WL.CardID.Airlift then airliftCardID=card.ID or instanceID; break; end
+    end
+    if airliftCardID==nil then return false; end
+    local pd,state=UFEnsureStrategicAIState(playerID);
+    local airports={};
+    for tid,lvl in pairs(state.airbases or {}) do if (tonumber(lvl) or 0)>0 then airports[tonumber(tid) or tid]=true; end end
+    for tid,lvl in pairs(state.forwardAirstrips or {}) do if (tonumber(lvl) or 0)>0 then airports[tonumber(tid) or tid]=true; end end
+    local function isFront(tid)
+        local d=game.Map.Territories[tid];
+        for nid,_ in pairs((d and d.ConnectedTo) or {}) do
+            local nt=standing.Territories[nid]; local oid=nt and nt.OwnerPlayerID or nil;
+            if oid and oid~=playerID and oid~=WL.PlayerID.Neutral and IsDiplomacyWar(data,playerID,oid) then return true; end
+        end
+        return false;
+    end
+    local bestFrom=nil; local bestFromArmies=0; local bestTo=nil; local bestToScore=-999999;
+    for tid,_ in pairs(airports) do
+        local terr=standing.Territories[tid];
+        if terr and terr.OwnerPlayerID==playerID then
+            local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
+            if isFront(tid) then
+                -- Prefer weak frontline airports protecting resources/HQ/recruiters/other strategic assets.
+                local priority=UFStrategicTerritoryValue(data,playerID,tid) - armies*1.5;
+                if priority>bestToScore then bestToScore=priority; bestTo=tid; end
+            elseif armies>=10 and armies>bestFromArmies and UFStrategicTerritoryValue(data,playerID,tid)<35 then
+                bestFromArmies=armies; bestFrom=tid;
+            end
+        end
+    end
+    if bestFrom==nil or bestTo==nil or bestFrom==bestTo then return false; end
+    local send=math.max(1,math.floor((bestFromArmies-4)*0.75));
+    if send<5 then return false; end
+    addNewOrder(WL.GameOrderPlayCardAirlift.Create(airliftCardID,playerID,bestFrom,bestTo,WL.Armies.Create(send)));
+    local nation=((data.globalEconomy or {}).nations or {})[playerID];
+    if nation then nation.aiLastAirlift="Moved "..tostring(send).." armies from "..tostring(bestFrom).." to front airport "..tostring(bestTo); end
+    return true;
+end
+
 local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil or standing.Territories==nil then return; end
     local atWar=UFAIAtWar(data,playerID); local bestAttack=nil; local bestScore=-999999; local frontFriendly={};
@@ -17170,7 +17382,9 @@ local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
                 for _,nid in ipairs(hostileNeighbors) do
                     local nt=standing.Territories[nid]; local def=nt.NumArmies and nt.NumArmies.NumArmies or 0;
                     local reserve=math.max(3,math.floor(armies*0.20)); local send=math.max(0,armies-reserve);
-                    local score=(send-def*1.10) + math.max(0,10-def);
+                    local targetOwner=nt and nt.OwnerPlayerID or nil;
+                    local strategicBonus=targetOwner and UFStrategicTerritoryValue(data,targetOwner,nid) or 0;
+                    local score=(send-def*1.10) + math.max(0,10-def) + strategicBonus;
                     if send>=math.max(3,math.ceil(def*1.10)) and score>bestScore then bestScore=score; bestAttack={from=tid,to=nid,num=send}; end
                 end
             end
@@ -17302,6 +17516,7 @@ function Server_AdvanceTurn_Start(
     ProcessArmyRecruiterProduction(game, data, addNewOrder);
 
     UFResolveStrategicStrikes(game, data, addNewOrder);
+    UFResolveAirWingMissions(game, data, addNewOrder);
 
     ProcessUnitedNations(
         game,

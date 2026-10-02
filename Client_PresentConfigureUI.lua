@@ -394,6 +394,13 @@ function Client_PresentConfigureUI(rootParent)
             3
         );
 
+    local dividendPayoutScalePercent =
+        GetNumberSetting(
+            settings,
+            "DividendPayoutScalePercent",
+            100
+        );
+
     local stockVolatilityPercent =
         GetNumberSetting(
             settings,
@@ -1145,6 +1152,16 @@ function Client_PresentConfigureUI(rootParent)
         1,
         10,
         "Growth, Balanced, and Dividend companies will use different dividend behavior."
+    );
+
+    AddNumberInput(
+        root,
+        "DividendPayoutScalePercent",
+        "Dividend Payout Scale (%)",
+        dividendPayoutScalePercent,
+        25,
+        300,
+        "Scales stock dividends to match the Commerce scale of the scenario. 100% is the default."
     );
 
 

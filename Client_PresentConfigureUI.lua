@@ -712,6 +712,7 @@ function Client_PresentConfigureUI(rootParent)
 
     local specialForcesEnabled = GetBoolSetting(settings, "SpecialForcesEnabled", true);
     local specialForcesBaseCost = GetNumberSetting(settings, "SpecialForcesBaseCost", 180);
+    local specialForcesCombatStrength = GetNumberSetting(settings, "SpecialForcesCombatStrength", 5);
     local specialForcesMaxPerPlayer = GetNumberSetting(settings, "SpecialForcesMaxPerPlayer", 4);
 
     local uraniumDistributionMode = GetNumberSetting(settings, "UraniumDistributionMode", 1);
@@ -1509,7 +1510,8 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "AirWingMaxPerPlayer", "Maximum Air Wings per Player", airWingMaxPerPlayer, 1, 100, "Host-configurable national limit.");
 
     AddCheckBox(root, "SpecialForcesEnabled", "Enable Special Forces Infantry", specialForcesEnabled);
-    AddNumberInput(root, "SpecialForcesBaseCost", "Special Forces Cost (Commerce)", specialForcesBaseCost, 25, 5000, "Elite unit for reconnaissance, raids, sabotage, and strategic missions.");
+    AddNumberInput(root, "SpecialForcesBaseCost", "Special Forces Cost (Commerce)", specialForcesBaseCost, 25, 5000, "Elite visible military unit. Dedicated covert-operation missions are not enabled in this release.");
+    AddNumberInput(root, "SpecialForcesCombatStrength", "Army Strength Represented per Special Forces Unit", specialForcesCombatStrength, 1, 50, "Controls the unit's attack, defense, damage-to-kill, and damage absorption. Default 5 means one Special Forces icon fights roughly like five normal armies.");
     AddNumberInput(root, "SpecialForcesMaxPerPlayer", "Maximum Special Forces Units per Player", specialForcesMaxPerPlayer, 1, 25, "Keeps Special Forces elite rather than replacing normal armies.");
 
     AddSection(root, "URANIUM STRATEGY", "Uranium is intentionally rarer and more expensive than ordinary resources. Players do not automatically receive Uranium based on Commerce or income.");

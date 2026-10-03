@@ -223,3 +223,22 @@ This release candidate removes dedicated Air Wing and Special Forces operation m
 - AI Missile Silos now maintain ammunition and can queue strategic strikes against high-value enemy territories such as Headquarters, Recruiters, Power Grids, Silos, Airbases, SAMs and resource centers.
 - Military assets upgrade **in place** from the Military screen. `SHOW` locates the asset; `UPGRADE` raises the existing asset level and the map icon tier updates instead of placing a duplicate icon. `MAX` appears at the host maximum.
 - Headquarters remain limited to **one per nation**. The Headquarters row opens its four branch upgrade/action screen instead of placing a second HQ. If the HQ is destroyed/lost, it can be rebuilt after restoring operational power.
+
+
+## Special Forces host scaling
+The host can configure **Army Strength Represented per Special Forces Unit** (default 5). This value drives the custom unit's attack, defense, damage-to-kill, and damage absorption, alongside the existing host settings for purchase cost and maximum Special Forces units per player.
+
+## AI War Preparedness Gate
+
+Independent AI nations will not voluntarily declare a new war until they have a basic war-fighting foundation. When the related host systems are enabled, the AI requires an operational Power Grid, one Headquarters, at least 1-2 Recruiting Stations depending on country size, at least one Airbase or Forward Airstrip, at least 70% military readiness, and no active Oil/Food/Iron shortage. The strategic AI keeps building or upgrading the missing requirements until it is ready. Defensive wars and explicit coalition support are not prevented by this preparation rule.
+
+## Airlift Card Compatibility
+
+Airport restrictions only apply when the host enables Airbases and/or Forward Airstrips. If the host disables **both** airport systems, United Frontier does not impose the airport-to-airport restriction and War.app Airlift Cards operate under the game's normal rules. If either airport system is enabled, Airlift orders must use valid enabled airport infrastructure at both endpoints.
+
+- RC4 adds an AI War Preparedness gate and automatically lifts airport-based Airlift restrictions when both Airbases and Forward Airstrips are disabled by the host.
+
+
+## Final RC4 — War Preparedness
+
+This consolidated candidate adds AI war-preparedness gating and host-aware Airlift compatibility.

@@ -5539,6 +5539,7 @@ function ShowMilitaryMenu(parent, game)
     UI.CreateLabel(area).SetText("AIRLIFT RULE: when the host enables Airlift Cards, troop airlifts must originate and land on an Airbase or Forward Airstrip. Ordinary territories are rejected by United Frontier.").SetColor("#82CFFF");
     UI.CreateLabel(area).SetText("SPECIAL OPERATIONS").SetColor("#D995FF");
     UI.CreateButton(area).SetText("TRAIN SPECIAL FORCES").SetOnClick(function() UFShowTerritorySelector(parent,game,"Training Special Forces...",{type="purchaseSpecialForces"}); end);
+    UI.CreateLabel(area).SetText("1 Special Forces unit = "..tostring(GetClientSetting("SpecialForcesCombatStrength",5)).." army combat strength (host configured).").SetColor("#D995FF");
     UI.CreateButton(area).SetText("DAMAGE & REPAIRS").SetOnClick(function() ShowMilitaryRepairsMenu(parent,game); end);
     UI.CreateLabel(area).SetText("Air Wings and Special Forces remain visible purchasable custom units. Dedicated Air Wing and Special Forces operation menus are not part of this release.").SetColor("#AAAAAA");
 end
@@ -13193,7 +13194,7 @@ function ShowHowItWorks(parent)
     Section("AIRBASES, AIRSTRIPS & AIR WINGS",
         "Airbases are the main air infrastructure and may be upgraded. Forward Airstrips are cheaper, more limited forward facilities.\n\n" ..
         "Air Wings are custom special units stationed through Airbases. The host chooses how many real aircraft one Air Wing represents for scenario scale. Airbase capacity limits how many Air Wings may be stationed there.\n\n" ..
-        "When the host enables War.app Airlift Cards, United Frontier restricts troop airlifts so the origin and destination must contain an Airbase or Forward Airstrip. The mod does not create Airlift Cards itself; the host must enable them in normal game settings. AI nations can use valid Airlift routes to move rear-area armies toward threatened or active fronts. Air Wings remain visible purchasable units; this release does not include a separate Air Wing mission menu.",
+        "When the host enables Airbases or Forward Airstrips, United Frontier restricts War.app Airlift Cards so the origin and destination must contain enabled airport infrastructure. If the host disables BOTH Airbases and Forward Airstrips, this restriction is lifted and Airlift Cards follow normal War.app rules. The mod does not create Airlift Cards itself; the host must enable them in normal game settings. AI nations can use valid Airlift routes to move rear-area armies toward threatened or active fronts. Air Wings remain visible purchasable units; this release does not include a separate Air Wing mission menu.",
         "#62B6FF");
 
     Section("SAM SITES",
@@ -13211,7 +13212,7 @@ function ShowHowItWorks(parent)
         "#FFE066");
 
     Section("SPECIAL FORCES",
-        "Special Forces are visible custom special units, separate from normal War.app infantry. They are limited and expensive so they remain elite. This release keeps them as visible purchasable units without a separate covert-operation mission menu.",
+        "Special Forces are visible custom special units, separate from normal War.app infantry. The host configures how much normal-army combat strength each Special Forces unit represents, along with purchase cost and the maximum per player. The configured strength controls attack, defense, damage-to-kill, and damage absorption. This release keeps them as visible purchasable units without a separate covert-operation mission menu.",
         "#D995FF");
 
     Section("TERRITORY SELECTION",

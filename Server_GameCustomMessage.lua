@@ -12170,7 +12170,8 @@ end
         state.pendingSpecialForces=state.pendingSpecialForces or {};
         state.pendingSpecialForces[territoryID]=(tonumber(state.pendingSpecialForces[territoryID]) or 0)+1;
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        setReturn({success=true,message="Special Forces unit trained. It will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."}); return;
+        local strength=math.max(1,math.min(50,math.floor(tonumber(GetSetting("SpecialForcesCombatStrength",5)) or 5)));
+        setReturn({success=true,message="Special Forces unit trained. It represents "..tostring(strength).." army combat strength and will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."}); return;
     end
 
     -- =====================================================

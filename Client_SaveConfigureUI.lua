@@ -491,6 +491,7 @@ function Client_SaveConfigureUI(
     local airWingMaxPerPlayer = ReadNumber("AirWingMaxPerPlayer");
     local specialForcesEnabled = ReadBool("SpecialForcesEnabled");
     local specialForcesBaseCost = ReadNumber("SpecialForcesBaseCost");
+    local specialForcesCombatStrength = ReadNumber("SpecialForcesCombatStrength");
     local specialForcesMaxPerPlayer = ReadNumber("SpecialForcesMaxPerPlayer");
     local uraniumDistributionMode = ReadNumber("UraniumDistributionMode");
     local uraniumFacilityCostMultiplier = ReadNumber("UraniumFacilityCostMultiplier");
@@ -1351,6 +1352,7 @@ function Client_SaveConfigureUI(
     Mod.Settings.AirWingMaxPerPlayer = math.max(1, math.min(100, airWingMaxPerPlayer or 10));
     Mod.Settings.SpecialForcesEnabled = specialForcesEnabled;
     Mod.Settings.SpecialForcesBaseCost = math.max(25, math.min(5000, specialForcesBaseCost or 180));
+    Mod.Settings.SpecialForcesCombatStrength = math.max(1, math.min(50, specialForcesCombatStrength or 5));
     Mod.Settings.SpecialForcesMaxPerPlayer = math.max(1, math.min(25, specialForcesMaxPerPlayer or 4));
     Mod.Settings.UraniumDistributionMode = math.max(0, math.min(5, uraniumDistributionMode or 1));
     Mod.Settings.UraniumFacilityCostMultiplier = math.max(100, math.min(500, uraniumFacilityCostMultiplier or 200));

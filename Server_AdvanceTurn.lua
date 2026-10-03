@@ -10783,6 +10783,13 @@ end
         return false;
     end
 
+    -- Secondary safeguard: no independent AI declaration can bypass the
+    -- preparedness gate through another call path.  Defensive wars and explicit
+    -- coalition/join-war logic are handled elsewhere and are not blocked here.
+    if not AIHasWarPreparedness(game, data, aiPlayerID) then
+        return false;
+    end
+
 
     local diplomacy =
         GetDiplomacyData(
@@ -12709,6 +12716,130 @@ end
 
 
 -- =========================================================
+-- AI WAR PREPAREDNESS GATE
+-- =========================================================
+-- Independent AI wars should start only after the nation has built a basic
+-- war-fighting foundation.  This prevents an AI from declaring war while it
+-- still lacks power, command, recruitment or logistics.  If the host disables
+-- an entire system (for example Airbases/Airstrips), that requirement is waived.
+function AIHasWarPreparedness(game, data, aiPlayerID)
+    local economy = data.globalEconomy or {};
+    local nation = (economy.nations or {})[aiPlayerID];
+    if nation == nil then return false; end
+
+    local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if standing == nil or standing.Territories == nil then return false; end
+
+    local privateData = Mod.PrivateGameData or {};
+    local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
+    local state = byPlayer[aiPlayerID] or {
+        headquarters=nil, airbases={}, forwardAirstrips={}, powerGrids={}
+    };
+
+    local missing = {};
+    local checks = 0;
+    local passed = 0;
+    local function requireCheck(ok, label)
+        checks = checks + 1;
+        if ok then passed = passed + 1; else table.insert(missing, label); end
+    end
+
+    -- Count owned territories once for country-size scaling.
+    local territoryCount = 0;
+    for _, terr in pairs(standing.Territories) do
+        if terr.OwnerPlayerID == aiPlayerID then territoryCount = territoryCount + 1; end
+    end
+
+    -- National power.
+    if GetSetting("PowerGridEnabled", true) == true then
+        local hasGrid = false;
+        for tid, lvl in pairs(state.powerGrids or {}) do
+            local ntid = tonumber(tid) or tid;
+            local terr = standing.Territories[ntid];
+            if (tonumber(lvl) or 0) > 0 and terr ~= nil and terr.OwnerPlayerID == aiPlayerID then
+                hasGrid = true; break;
+            end
+        end
+        requireCheck(hasGrid, "Power Grid");
+    end
+
+    -- One national Headquarters.  If Power Grids are enabled, a power-disrupted
+    -- HQ does not count as war-ready.
+    if GetSetting("HeadquartersEnabled", true) == true then
+        local hqReady = state.headquarters ~= nil;
+        if hqReady and GetSetting("PowerGridEnabled", true) == true then
+            hqReady = tostring(state.headquarters.status or "Operational") ~= "Power Disrupted";
+        end
+        requireCheck(hqReady, "Headquarters");
+    end
+
+    -- Recruitment base: one station for very small nations, otherwise two.
+    if GetSetting("ArmyRecruitersEnabled", true) == true then
+        local recruiters = (economy.armyRecruiters or {}).territories or {};
+        local recruiterCount = 0;
+        for tid, lvl in pairs(recruiters) do
+            local ntid = tonumber(tid) or tid;
+            local terr = standing.Territories[ntid];
+            if (tonumber(lvl) or 0) > 0 and terr ~= nil and terr.OwnerPlayerID == aiPlayerID then
+                recruiterCount = recruiterCount + 1;
+            end
+        end
+        local hostMax = math.max(1, math.floor(tonumber(GetSetting("ArmyRecruiterMaxPerPlayer", 3)) or 3));
+        local requiredRecruiters = territoryCount <= 3 and 1 or 2;
+        requiredRecruiters = math.min(requiredRecruiters, hostMax);
+        requireCheck(recruiterCount >= requiredRecruiters, tostring(requiredRecruiters) .. " Recruiting Station(s)");
+    end
+
+    -- Logistics requirement exists only when the host actually enables airports.
+    local airbasesEnabled = GetSetting("AirbasesEnabled", true) == true;
+    local airstripsEnabled = GetSetting("ForwardAirstripsEnabled", true) == true;
+    if airbasesEnabled or airstripsEnabled then
+        local hasAirport = false;
+        if airbasesEnabled then
+            for tid, lvl in pairs(state.airbases or {}) do
+                local ntid = tonumber(tid) or tid;
+                local terr = standing.Territories[ntid];
+                if (tonumber(lvl) or 0) > 0 and terr ~= nil and terr.OwnerPlayerID == aiPlayerID then
+                    hasAirport = true; break;
+                end
+            end
+        end
+        if not hasAirport and airstripsEnabled then
+            for tid, lvl in pairs(state.forwardAirstrips or {}) do
+                local ntid = tonumber(tid) or tid;
+                local terr = standing.Territories[ntid];
+                if (tonumber(lvl) or 0) > 0 and terr ~= nil and terr.OwnerPlayerID == aiPlayerID then
+                    hasAirport = true; break;
+                end
+            end
+        end
+        requireCheck(hasAirport, "Airbase / Forward Airstrip");
+    end
+
+    -- Do not voluntarily start a war while the resource system is already
+    -- undermining readiness.  The strategic AI will upgrade these resources first.
+    local readiness = tonumber(nation.resourceMilitaryReadiness or nation.militaryReadiness) or 100;
+    requireCheck(readiness >= 70, "Military Readiness 70%+");
+
+    local shortages = nation.resourceShortages or {};
+    local criticalShortage = false;
+    for _, resourceName in ipairs({"Oil", "Food", "Iron"}) do
+        if (tonumber(shortages[resourceName]) or 0) > 0 then criticalShortage = true; break; end
+    end
+    requireCheck(not criticalShortage, "No Oil/Food/Iron shortage");
+
+    local score = checks > 0 and math.floor((passed / checks) * 100 + 0.5) or 100;
+    nation.aiWarPreparedness = {
+        ready = (#missing == 0),
+        score = score,
+        missing = missing,
+        checkedTurn = data.tradeTurn or 0
+    };
+
+    return #missing == 0;
+end
+
+-- =========================================================
 -- AI CONSIDERS WAR
 -- =========================================================
 
@@ -12726,6 +12857,12 @@ local nation =
     );
 
 if nation == nil then
+    return;
+end
+
+-- Voluntary war declarations are gated by national preparedness.  The strategic
+-- planner will keep building the missing assets/resources until this becomes true.
+if not AIHasWarPreparedness(game, data, aiPlayerID) then
     return;
 end
 
@@ -17112,6 +17249,17 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
             local tid=UFPickAITerritory(game,standing,playerID,true,excluded);
             if tid and canSpend(cost) then spend(cost); state.airbases[tid]=1; end
         end
+    elseif GetSetting("ForwardAirstripsEnabled",true)==true then
+        -- If the host disables full Airbases but keeps Forward Airstrips, AI nations
+        -- still need one valid logistics point so they can satisfy war preparedness
+        -- and use Airlift Cards under the enabled-airport rules.
+        local airstripCount=0; for _,lvl in pairs(state.forwardAirstrips or {}) do if (tonumber(lvl) or 0)>0 then airstripCount=airstripCount+1; end end
+        if airstripCount<1 then
+            local excluded={}; for tid,_ in pairs(state.forwardAirstrips or {}) do excluded[tonumber(tid) or tid]=true; end
+            local cost=math.max(25,math.floor(tonumber(GetSetting("ForwardAirstripBaseCost",175)) or 175));
+            local tid=UFPickAITerritory(game,standing,playerID,false,excluded);
+            if tid and canSpend(cost) then spend(cost); state.forwardAirstrips[tid]=1; end
+        end
     end
     if atWar and GetSetting("SAMSitesEnabled",true)==true then
         local tid=UFPickAITerritory(game,standing,playerID,false,state.samSites); local cost=math.max(25,math.floor(tonumber(GetSetting("SAMSiteBaseCost",300)) or 300));
@@ -19219,11 +19367,12 @@ local function UFMakeSpecialForces(ownerID)
     builder.Name="Special Forces";
     builder.IncludeABeforeName=true;
     builder.ImageFilename="SpecialForces.png";
-    builder.AttackPower=4;
-    builder.DefensePower=4;
+    local strength=math.max(1,math.min(50,math.floor(tonumber(GetSetting("SpecialForcesCombatStrength",5)) or 5)));
+    builder.AttackPower=strength;
+    builder.DefensePower=strength;
     builder.CombatOrder=3384;
-    builder.DamageToKill=4;
-    builder.DamageAbsorbedWhenAttacked=4;
+    builder.DamageToKill=strength;
+    builder.DamageAbsorbedWhenAttacked=strength;
     builder.CanBeGiftedWithGiftCard=false;
     builder.CanBeTransferredToTeammate=false;
     builder.CanBeAirliftedToSelf=true;

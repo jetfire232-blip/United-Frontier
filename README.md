@@ -49,7 +49,7 @@ The current military asset set is:
 
 Military installation locations are visible map assets. Sensitive military details can remain intelligence-dependent. Power Grid is deliberately public.
 
-Headquarters, Airbases, Airstrips, SAMs, Silos, Power Grids, and Recruiters use structure-style map assets. Air Wings and Special Forces use custom special-unit icons.
+Headquarters, Airbases, Airstrips, SAMs, Silos, Power Grids, and Recruiters use structure-style map assets. Air Wings and Special Forces use custom special-unit icons and remain visible purchasable units.
 
 ## Headquarters
 
@@ -68,7 +68,7 @@ Faction members automatically share strategic intelligence. Normal allies do not
 
 Air Wings are visible custom special units and require Airbase capacity. The host controls how many aircraft one Air Wing represents for scenario scale.
 
-Special Forces are visible custom special units intended for reconnaissance, raids, sabotage, infrastructure operations, and intelligence support rather than replacing normal armies.
+Special Forces are visible custom special units intended to remain elite rather than replacing normal armies. Dedicated Special Forces operation missions are not included in this release.
 
 ## Territory Selection
 
@@ -114,7 +114,7 @@ United Frontier retains the Global Affairs long-game safeguards:
 
 This all-in-one development build integrates the new navigation, resource intelligence, Headquarters sharing, visible military structure framework, Air Wing/Special Forces custom units, territory-selection rewrite, Overview command dashboard, AI strategic spending foundation, resource trading/requests, UN duration controls, and existing Global Affairs economy/diplomacy systems.
 
-Advanced strategic combat effects such as full Air Wing mission resolution, SAM interception, missile inventory/reload, EMP/nuclear area effects, cyber damage, and the complete Operational/Damaged/Disabled/Destroyed repair loop are represented in the architecture and How It Works design but should not be treated as fully verified gameplay until implemented and tested in War.app.
+Strategic missile inventory/reload, SAM interception, EMP/nuclear area effects, cyber disruption, and the Operational/Damaged/Disabled/Destroyed repair loop are included for testing. Dedicated Air Wing and Special Forces operation mission menus are intentionally removed from this release.
 
 ## QA Checklist
 
@@ -175,12 +175,10 @@ This pass focuses on usability, Headquarters depth, market visibility, controlle
 - War Bonds were removed from the player Markets UI.
 - Markets now includes public trend panels for flagship-stock momentum, global resource demand, strongest militaries (rank only), and largest Commerce reserves (rank only).
 - Stock dividends continue to scale with the issuing nation's Commerce income and now include a host Dividend Payout Scale setting.
-- Special Forces now have operational missions launched from their own territory: Recon, Sabotage, SAM Suppression, Silo Raid, Grid Sabotage, HQ Raid, and Resource Sabotage. Results use simple SUCCESS / FAILED / NO DAMAGE / DAMAGED / DISABLED / DESTROYED language and are stored as recent reports.
 - Strategic AI attack scoring now prioritizes Headquarters, Recruiting Stations, Power Grids, Missile Silos, Airbases, SAMs, and valuable resource territories. AI Airlifts also prioritize threatened strategic areas.
 - SHOW HQ / SHOW military asset now clears the main menu and leaves a compact Back control over the map.
 
 ### Still intentionally separate / next test focus
-- Full Air Wing mission resolution (air superiority, ground support, recon, bombing).
 - Complete SAM interception resolution against Air Wings and strategic missiles.
 - Full persistent damaged/disabled/repair state system and advanced EMP effects.
 - Expanded nuclear yield/AoE balancing.
@@ -188,8 +186,6 @@ This pass focuses on usability, Headquarters depth, market visibility, controlle
 
 ## Phase 9 complete warfare pass
 
-- Air Wing missions: Recon, Air Superiority, Ground Support, and Bombing.
-- SAM interception against Air Wing missions and missile strikes, with stronger local/adjacent coverage at higher levels.
 - Persistent asset condition data for damage/disable states plus a player Repair screen.
 - EMP strategic disruption and nuclear Low/Medium/High yield targeting.
 - Nuclear strikes affect armies, city/territory damage records, resource facilities, and strategic assets; medium/high yields can spread to adjacent territories.
@@ -204,3 +200,15 @@ This pass focuses on usability, Headquarters depth, market visibility, controlle
 - Flagship owners can turn acquisition offers on/off and accept/reject offers.
 - Other players can submit acquisition offers when enabled.
 - Successful acquisitions pay target shareholders, boost the buyer flagship price/confidence, and allow the acquired nation to rebuild a new flagship after a host-configurable cooldown.
+
+
+## Release-candidate changes
+
+- Dedicated Air Wing operation missions and Special Forces operation missions are removed from the player UI in this release. Air Wings and Special Forces remain visible purchasable units.
+- Hosts can configure conventional missile army, infrastructure, city/territory, and resource damage; EMP disable duration; and Low/Medium/High nuclear damage.
+- Missile reports now list the target territory/city, troop losses, strategic-asset effects, Recruiter effects, resource-facility level changes, and city/territory damage.
+- Headquarters action screens now explain what Intelligence, Security, Cyber Warfare, and Joint Command actions actually do before the player uses them.
+
+## Final Release Candidate
+
+This release candidate removes dedicated Air Wing and Special Forces operation mission menus, adds host-configurable Missile Silo damage/effect controls, expands missile reports with troop/city/resource/Recruiter/asset details, and explains Headquarters actions directly in the HQ interface.

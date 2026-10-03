@@ -5195,6 +5195,7 @@ function ShowHeadquartersMenu(parent, game)
         UI.CreateLabel(area).SetText("HQ ACTIONS").SetColor("#FFFFFF");
 
         local securityLevel = tonumber(branches.Security) or 0;
+        UI.CreateLabel(area).SetText("SECURITY — WHAT IT DOES: Passive protection. Reduces enemy intelligence/cyber success and, at higher levels, improves strategic-strike warning and hardening.").SetColor("#9BD59B");
         if securityLevel >= 1 then
             local counterBonus = math.min(60, 10 + securityLevel * 10);
             local warningBonus = securityLevel >= 3 and math.min(80, 20 + securityLevel * 12) or 0;
@@ -5210,6 +5211,7 @@ function ShowHeadquartersMenu(parent, game)
         end
 
         local cyberLevel = tonumber(branches.CyberWarfare) or 0;
+        UI.CreateLabel(area).SetText("CYBER WARFARE — WHAT IT DOES: Select an enemy territory during an active war. A successful operation temporarily disables strategic systems there; enemy Security lowers the success chance. One cyber operation per turn.").SetColor("#D9A7FF");
         if cyberLevel >= 1 then
             UI.CreateButton(area).SetText("LAUNCH CYBER DISRUPTION").SetOnClick(function()
                 UFShowTerritorySelector(parent,game,"Launching cyber operation...",{type="hqCyberDisrupt"});
@@ -5219,6 +5221,7 @@ function ShowHeadquartersMenu(parent, game)
         end
 
         local jointLevel = tonumber(branches.JointCommand) or 0;
+        UI.CreateLabel(area).SetText("JOINT COMMAND — WHAT IT DOES: Manages allied/faction coordination. Levels unlock shared-intelligence support, military-access benefits, airbase/faction coordination, and stronger shared warnings.").SetColor("#FFD166");
         if jointLevel >= 1 then
             local jointRow = UI.CreateHorizontalLayoutGroup(area);
             UI.CreateButton(jointRow).SetText("ALLIANCE / FACTION COMMAND").SetOnClick(function() ShowDiplomacyMenu(parent,game); end);
@@ -5246,6 +5249,7 @@ function ShowHeadquartersMenu(parent, game)
         if intelligenceLevel>=1 then
             UI.CreateLabel(area).SetText("----------------------------------------");
             UI.CreateLabel(area).SetText("INTELLIGENCE OPERATIONS").SetColor("#62B6FF");
+            UI.CreateLabel(area).SetText("WHAT IT DOES: Privately discovers another nation's resources and, from L3, military infrastructure details. Enemy Security reduces how many new locations/details are uncovered. Successful discoveries are shared with eligible faction members and Shared-Intelligence allies.").SetColor("#9CCBFF");
             UI.CreateLabel(area).SetText("Select a nation. Resource scans are available at Intelligence L1; military-detail scans unlock at L3. One of each scan type may be used per turn.").SetColor("#BBBBBB");
             local intelTarget=nil;
             local targetLabel=UI.CreateLabel(area).SetText("Target: None").SetColor("#FFD166");
@@ -5374,82 +5378,21 @@ function ShowMissileCommandMenu(parent, game)
             UFShowTerritorySelector(parent,game,"Scheduling Nuclear strike...",{type="launchMissile",siloTerritoryID=selectedSilo,weapon="Nuclear",yield=yy});
         end);
     end
-    UI.CreateLabel(area).SetText("Conventional damages armies/assets. EMP disables strategic systems and can spread from higher-level Silos. Nuclear strikes damage armies, cities/territories, resource facilities and military assets; Medium/High yields expand into adjacent territories. SAM Sites can intercept strategic missiles.").SetColor("#AAAAAA");
-    UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
-end
-
-function ShowAirWingOperationsMenu(parent, game)
-    local area=CreateContentArea(parent); local state=UFPrivateMilitaryState();
-    UI.CreateLabel(area).SetText("AIR WING OPERATIONS").SetColor("#62B6FF");
-    UI.CreateLabel(area).SetText("Select an Air Wing base, choose a mission, then select an enemy territory. Missions resolve on turn advancement and can be intercepted by SAM Sites.").SetColor("#BBBBBB");
-    local selectedOrigin=nil; local found=false; local originLabel=UI.CreateLabel(area).SetText("Selected Air Wing: None").SetColor("#FFD166");
-    for tid,cnt in pairs(state.airWings or {}) do if (tonumber(cnt) or 0)>0 then found=true; local ntid=tonumber(tid) or tid; local c=tonumber(cnt) or 1; local td=game.Map and game.Map.Territories and game.Map.Territories[ntid] or nil;
-        UI.CreateButton(area).SetText((td and td.Name or tostring(ntid)).." | x"..tostring(c)).SetOnClick(function() selectedOrigin=ntid; originLabel.SetText("Selected Air Wing: "..(td and td.Name or tostring(ntid)).." | x"..tostring(c)); end); end end
-    if not found then UI.CreateLabel(area).SetText("You do not currently control an Air Wing.").SetColor("#888888"); end
-    local mission="Recon"; local ml=UI.CreateLabel(area).SetText("Selected: Recon | 30 Commerce").SetColor("#BBBBBB");
-    local defs={{"RECON","Recon",30},{"AIR SUPERIORITY","Air Superiority",50},{"GROUND SUPPORT","Ground Support",45},{"BOMBING","Bombing",60}};
-    local row=nil; for i,d in ipairs(defs) do if (i-1)%2==0 then row=UI.CreateHorizontalLayoutGroup(area); end local label,key,cost=d[1],d[2],d[3]; UI.CreateButton(row).SetText(label).SetOnClick(function() mission=key; ml.SetText("Selected: "..key.." | "..tostring(cost).." Commerce"); end); end
-    UI.CreateLabel(area).SetText("Recon reveals target intelligence. Air Superiority contests enemy Air Wings. Ground Support damages defending armies. Bombing damages armies, infrastructure and resource facilities. Oil access is required.").SetColor("#AAAAAA");
-    local reports=state.airWingReports or {}; if #reports>0 then UI.CreateLabel(area).SetText("RECENT AIR WING REPORTS").SetColor("#62B6FF"); for i=math.max(1,#reports-4),#reports do local r=reports[i]; if r then local c=(r.result=="SUCCESS" and "#79D279") or (r.result=="INTERCEPTED" and "#FF7B7B") or (r.result=="DAMAGED" and "#FFB366") or "#BBBBBB"; UI.CreateLabel(area).SetText(tostring(r.mission).." | "..tostring(r.target).." | "..tostring(r.result).." | "..tostring(r.detail)).SetColor(c); end end end
-    UI.CreateButton(area).SetText("SELECT TARGET TERRITORY").SetInteractable(found).SetOnClick(function() if selectedOrigin==nil then UI.Alert("Select an Air Wing first."); return; end UFShowTerritorySelector(parent,game,"Queuing Air Wing mission...",{type="airWingMission",originTerritoryID=selectedOrigin,mission=mission}); end);
-    UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
-end
-
-function ShowSpecialForcesOperationsMenu(parent, game)
-    local area=CreateContentArea(parent);
-    local state=UFPrivateMilitaryState();
-    UI.CreateLabel(area).SetText("SPECIAL FORCES OPERATIONS").SetColor("#D995FF");
-    UI.CreateLabel(area).SetText("Special Forces stay based on your territory. Select a unit, choose an operation, then target an enemy territory.").SetColor("#BBBBBB");
-    local selectedOrigin=nil;
-    local originLabel=UI.CreateLabel(area).SetText("Selected Unit: None").SetColor("#FFD166");
-    local found=false;
-    for tid,cnt in pairs(state.specialForces or {}) do
-        if (tonumber(cnt) or 0)>0 then
-            found=true; local ntid=tonumber(tid) or tid; local c=tonumber(cnt) or 1;
-            local td=game.Map and game.Map.Territories and game.Map.Territories[ntid] or nil;
-            UI.CreateButton(area).SetText((td and td.Name or tostring(ntid)).." | x"..tostring(c)).SetOnClick(function()
-                selectedOrigin=ntid; originLabel.SetText("Selected Unit: "..(td and td.Name or tostring(ntid)).." | x"..tostring(c));
-            end);
+    UI.CreateLabel(area).SetText("HOST DAMAGE SETTINGS").SetColor("#FFD166");
+    UI.CreateLabel(area).SetText("Conventional: "..tostring(GetClientSetting("ConventionalMissileArmyDamagePercent",20)).."% armies | "..tostring(GetClientSetting("ConventionalMissileStructureDamagePercent",30)).."% infrastructure | "..tostring(GetClientSetting("ConventionalMissileCityDamagePercent",15)).."% city/territory").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Nuclear armies: Low "..tostring(GetClientSetting("NuclearLowDamagePercent",35)).."% | Medium "..tostring(GetClientSetting("NuclearMediumDamagePercent",55)).."% | High "..tostring(GetClientSetting("NuclearHighDamagePercent",75)).."% | Infrastructure "..tostring(GetClientSetting("NuclearStructureDamagePercent",70)).."%").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("EMP base disable: "..tostring(GetClientSetting("EMPBaseDisableTurns",3)).." turn(s). SAM Sites can intercept strategic missiles. Strike reports list troop, city/territory, resource, Recruiter, and strategic-asset effects.").SetColor("#AAAAAA");
+    local recent=state.hqRecentResults or {}; local shown=0;
+    for i=math.max(1,#recent-7),#recent do
+        local r=recent[i];
+        if r and string.find(tostring(r.action or ""),"Missile Strike",1,true) then
+            if shown==0 then UI.CreateLabel(area).SetText("RECENT MISSILE REPORTS").SetColor("#FFB366"); end
+            shown=shown+1;
+            local rc=(r.result=="INTERCEPTED" and "#79C7FF") or (r.result=="NO DAMAGE" and "#BBBBBB") or (r.result=="DESTROYED" and "#FF5A5A") or "#FFB366";
+            UI.CreateLabel(area).SetText("Turn "..tostring(r.turn or "?").." | "..tostring(r.action or "Strike").." | "..tostring(r.result or "RESULT").."\n"..tostring(r.detail or "No additional detail")).SetColor(rc);
         end
     end
-    if not found then UI.CreateLabel(area).SetText("You do not currently control a Special Forces unit.").SetColor("#888888"); end
-    UI.CreateLabel(area).SetText("MISSION").SetColor("#D995FF");
-    local mission="Recon";
-    local missionLabel=UI.CreateLabel(area).SetText("Selected: Recon | Base success 80% | No direct damage").SetColor("#BBBBBB");
-    local defs={
-        {"RECON","Recon",80,0},
-        {"SABOTAGE","Sabotage",70,35},
-        {"SAM SUPPRESSION","SAM Suppression",65,40},
-        {"SILO RAID","Silo Raid",55,50},
-        {"GRID SABOTAGE","Grid Sabotage",65,40},
-        {"HQ RAID","HQ Raid",50,25},
-        {"RESOURCE SABOTAGE","Resource Sabotage",70,30}
-    };
-    local row=nil;
-    for i,d in ipairs(defs) do
-        if (i-1)%2==0 then row=UI.CreateHorizontalLayoutGroup(area); end
-        local label=d[1]; local key=d[2]; local chance=d[3]; local destroy=d[4];
-        UI.CreateButton(row).SetText(label).SetOnClick(function()
-            mission=key;
-            local damageText=destroy>0 and (" | up to "..tostring(destroy).."% destroy chance after success") or " | intelligence only";
-            missionLabel.SetText("Selected: "..key.." | Base success "..tostring(chance).."%"..damageText);
-        end);
-    end
-    UI.CreateLabel(area).SetText("Enemy Headquarters Security lowers success. Multiple Special Forces at the origin slightly improve the mission. One origin may run one operation per turn.").SetColor("#AAAAAA");
-    local reports=state.specialForcesReports or {};
-    if #reports>0 then
-        UI.CreateLabel(area).SetText("RECENT SPECIAL FORCES REPORTS").SetColor("#D995FF");
-        for i=math.max(1,#reports-4),#reports do
-            local r=reports[i]; if r then
-                local rc=(r.result=="SUCCESS" and "#79D279") or (r.result=="DESTROYED" and "#FF5A5A") or ((r.result=="DAMAGED" or r.result=="DISABLED") and "#FFB366") or "#BBBBBB";
-                UI.CreateLabel(area).SetText(tostring(r.mission).." | "..tostring(r.target).." | "..tostring(r.result).." | "..tostring(r.detail)).SetColor(rc);
-            end
-        end
-    end
-    UI.CreateButton(area).SetText("SELECT TARGET TERRITORY").SetInteractable(found).SetOnClick(function()
-        if selectedOrigin==nil then UI.Alert("Select a Special Forces unit first."); return; end
-        UFShowTerritorySelector(parent,game,"Running Special Forces operation...",{type="specialForcesMission",originTerritoryID=selectedOrigin,mission=mission});
-    end);
+    if shown==0 then UI.CreateLabel(area).SetText("No missile strike reports yet.").SetColor("#777777"); end
     UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
 end
 
@@ -5549,7 +5492,6 @@ function ShowMilitaryMenu(parent, game)
     UFAddStructureAction(area,parent,game,"AIRBASE","Airbase",GetClientSetting("AirbaseBaseCost",350)," | max L"..tostring(GetClientSetting("AirbaseMaxLevel",3)),"#62B6FF");
     UFAddStructureAction(area,parent,game,"FORWARD AIRSTRIP","ForwardAirstrip",GetClientSetting("ForwardAirstripBaseCost",175),"","#82CFFF");
     UI.CreateButton(area).SetText("PURCHASE AIR WING").SetOnClick(function() UFShowTerritorySelector(parent,game,"Purchasing Air Wing...",{type="purchaseAirWing"}); end);
-    UI.CreateButton(area).SetText("AIR WING OPERATIONS").SetOnClick(function() ShowAirWingOperationsMenu(parent,game); end);
     UI.CreateLabel(area).SetText("1 Air Wing = "..tostring(GetClientSetting("AircraftPerAirWing",25)).." aircraft (host configured).").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("STRATEGIC DEFENSE & INFRASTRUCTURE").SetColor("#79D279");
     UFAddStructureAction(area,parent,game,"SAM SITE","SAMSite",GetClientSetting("SAMSiteBaseCost",300)," | max L"..tostring(GetClientSetting("SAMSiteMaxLevel",3)),"#79D279");
@@ -5561,9 +5503,8 @@ function ShowMilitaryMenu(parent, game)
     UI.CreateLabel(area).SetText("AIRLIFT RULE: when the host enables Airlift Cards, troop airlifts must originate and land on an Airbase or Forward Airstrip. Ordinary territories are rejected by United Frontier.").SetColor("#82CFFF");
     UI.CreateLabel(area).SetText("SPECIAL OPERATIONS").SetColor("#D995FF");
     UI.CreateButton(area).SetText("TRAIN SPECIAL FORCES").SetOnClick(function() UFShowTerritorySelector(parent,game,"Training Special Forces...",{type="purchaseSpecialForces"}); end);
-    UI.CreateButton(area).SetText("SPECIAL FORCES OPERATIONS").SetOnClick(function() ShowSpecialForcesOperationsMenu(parent,game); end);
     UI.CreateButton(area).SetText("DAMAGE & REPAIRS").SetOnClick(function() ShowMilitaryRepairsMenu(parent,game); end);
-    UI.CreateLabel(area).SetText("Air Wings and Special Forces are visible custom units. Special Forces now launch missions from their own territory instead of occupying enemy land.").SetColor("#AAAAAA");
+    UI.CreateLabel(area).SetText("Air Wings and Special Forces remain visible purchasable custom units. Dedicated Air Wing and Special Forces operation menus are not part of this release.").SetColor("#AAAAAA");
 end
 
 
@@ -13216,11 +13157,11 @@ function ShowHowItWorks(parent)
     Section("AIRBASES, AIRSTRIPS & AIR WINGS",
         "Airbases are the main air infrastructure and may be upgraded. Forward Airstrips are cheaper, more limited forward facilities.\n\n" ..
         "Air Wings are custom special units stationed through Airbases. The host chooses how many real aircraft one Air Wing represents for scenario scale. Airbase capacity limits how many Air Wings may be stationed there.\n\n" ..
-        "When the host enables War.app Airlift Cards, United Frontier restricts troop airlifts so the origin and destination must contain an Airbase or Forward Airstrip. The mod does not create Airlift Cards itself; the host must enable them in normal game settings. AI nations now look for usable Airlift Cards and can move rear-area armies between their airports toward threatened or active fronts. Air Wings now support Recon, Air Superiority, Ground Support, and Bombing missions. Missions require Oil access, cost Commerce, resolve on turn advancement, and can be intercepted by SAM coverage.",
+        "When the host enables War.app Airlift Cards, United Frontier restricts troop airlifts so the origin and destination must contain an Airbase or Forward Airstrip. The mod does not create Airlift Cards itself; the host must enable them in normal game settings. AI nations can use valid Airlift routes to move rear-area armies toward threatened or active fronts. Air Wings remain visible purchasable units; this release does not include a separate Air Wing mission menu.",
         "#62B6FF");
 
     Section("SAM SITES",
-        "SAM Sites are visible air/strategic-defense structures. A SAM protects its own territory, and higher-level SAMs extend reduced coverage to adjacent territories. SAMs can intercept Air Wing missions and strategic missiles; nuclear missiles are harder to intercept than conventional strikes.",
+        "SAM Sites are visible strategic-defense structures. A SAM protects its own territory, and higher-level SAMs extend reduced coverage to adjacent territories. SAMs can intercept strategic missiles; nuclear missiles are harder to intercept than conventional strikes.",
         "#79D279");
 
     Section("MISSILE SILOS",
@@ -13229,12 +13170,12 @@ function ShowHowItWorks(parent)
         "#FF7B7B");
 
     Section("POWER / ELECTRICAL GRID",
-        "Power Grid infrastructure is deliberately PUBLIC. It represents major national electrical/industrial support and is intended to interact with Commerce, resource production, Headquarters systems, air operations, Recruiters and strategic defense.\n\n" ..
+        "Power Grid infrastructure is deliberately PUBLIC. It represents major national electrical/industrial support and is intended to interact with Commerce, resource production, Headquarters systems, air infrastructure, Recruiters and strategic defense.\n\n" ..
         "The Grid is an obvious strategic target for future conventional, EMP and cyber disruption. Because it is public, players do not need an intelligence discovery just to know where a Grid exists.",
         "#FFE066");
 
     Section("SPECIAL FORCES",
-        "Special Forces are visible custom special units, separate from normal War.app infantry. They are limited and expensive so they remain elite. Their strategic role is reconnaissance, raids, sabotage, infrastructure operations, and support for intelligence missions rather than replacing ordinary armies.",
+        "Special Forces are visible custom special units, separate from normal War.app infantry. They are limited and expensive so they remain elite. This release keeps them as visible purchasable units without a separate covert-operation mission menu.",
         "#D995FF");
 
     Section("TERRITORY SELECTION",

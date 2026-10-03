@@ -690,6 +690,17 @@ function Client_PresentConfigureUI(rootParent)
     local missileSilosEnabled = GetBoolSetting(settings, "MissileSilosEnabled", true);
     local missileSiloBaseCost = GetNumberSetting(settings, "MissileSiloBaseCost", 500);
     local missileSiloMaxLevel = GetNumberSetting(settings, "MissileSiloMaxLevel", 3);
+    local conventionalMissileArmyDamagePercent = GetNumberSetting(settings, "ConventionalMissileArmyDamagePercent", 20);
+    local conventionalMissileStructureDamagePercent = GetNumberSetting(settings, "ConventionalMissileStructureDamagePercent", 30);
+    local conventionalMissileCityDamagePercent = GetNumberSetting(settings, "ConventionalMissileCityDamagePercent", 15);
+    local conventionalMissileResourceLevelDamage = GetNumberSetting(settings, "ConventionalMissileResourceLevelDamage", 1);
+    local empBaseDisableTurns = GetNumberSetting(settings, "EMPBaseDisableTurns", 3);
+    local nuclearLowDamagePercent = GetNumberSetting(settings, "NuclearLowDamagePercent", 35);
+    local nuclearMediumDamagePercent = GetNumberSetting(settings, "NuclearMediumDamagePercent", 55);
+    local nuclearHighDamagePercent = GetNumberSetting(settings, "NuclearHighDamagePercent", 75);
+    local nuclearStructureDamagePercent = GetNumberSetting(settings, "NuclearStructureDamagePercent", 70);
+    local nuclearCityDamagePercent = GetNumberSetting(settings, "NuclearCityDamagePercent", 60);
+    local nuclearResourceLevelDamage = GetNumberSetting(settings, "NuclearResourceLevelDamage", 2);
 
     local powerGridEnabled = GetBoolSetting(settings, "PowerGridEnabled", true);
     local powerGridBaseCost = GetNumberSetting(settings, "PowerGridBaseCost", 300);
@@ -1461,6 +1472,19 @@ function Client_PresentConfigureUI(rootParent)
     AddCheckBox(root, "MissileSilosEnabled", "Enable Missile Silos", missileSilosEnabled);
     AddNumberInput(root, "MissileSiloBaseCost", "Missile Silo Base Cost (Commerce)", missileSiloBaseCost, 50, 10000, "Missile Silos are visible strategic assets designed for limited missile inventory, reloads, and strategic strike orders.");
     AddNumberInput(root, "MissileSiloMaxLevel", "Missile Silo Maximum Level", missileSiloMaxLevel, 1, 5, "Recommended default: 3 visual levels.");
+
+    AddSection(root, "MISSILE DAMAGE & EFFECTS", "Host controls for how destructive Missile Silo strikes are. Percent values are applied to the target and are reduced on nuclear splash territories.");
+    AddNumberInput(root, "ConventionalMissileArmyDamagePercent", "Conventional Missile Army Damage (%)", conventionalMissileArmyDamagePercent, 0, 100, "Percent of armies removed on the primary target before SAM interception and splash scaling.");
+    AddNumberInput(root, "ConventionalMissileStructureDamagePercent", "Conventional Infrastructure Damage (%)", conventionalMissileStructureDamagePercent, 0, 100, "Damage applied to strategic structures on a successful conventional strike.");
+    AddNumberInput(root, "ConventionalMissileCityDamagePercent", "Conventional City / Territory Damage (%)", conventionalMissileCityDamagePercent, 0, 100, "Adds persistent city/territory damage to the struck territory.");
+    AddNumberInput(root, "ConventionalMissileResourceLevelDamage", "Conventional Resource Level Damage", conventionalMissileResourceLevelDamage, 0, 5, "How many facility levels can be removed from each resource present on the target territory.");
+    AddNumberInput(root, "EMPBaseDisableTurns", "EMP Base Disable Duration (turns)", empBaseDisableTurns, 1, 10, "Base strategic-system shutdown duration. Higher-level Silos can still improve EMP reach.");
+    AddNumberInput(root, "NuclearLowDamagePercent", "Nuclear LOW Army Damage (%)", nuclearLowDamagePercent, 0, 100, "Primary-target army damage for Low yield.");
+    AddNumberInput(root, "NuclearMediumDamagePercent", "Nuclear MEDIUM Army Damage (%)", nuclearMediumDamagePercent, 0, 100, "Primary-target army damage for Medium yield.");
+    AddNumberInput(root, "NuclearHighDamagePercent", "Nuclear HIGH Army Damage (%)", nuclearHighDamagePercent, 0, 100, "Primary-target army damage for High yield.");
+    AddNumberInput(root, "NuclearStructureDamagePercent", "Nuclear Infrastructure Damage (%)", nuclearStructureDamagePercent, 0, 100, "Base infrastructure damage. Low/High yield modifies this value down/up.");
+    AddNumberInput(root, "NuclearCityDamagePercent", "Nuclear City / Territory Damage (%)", nuclearCityDamagePercent, 0, 100, "Base persistent city/territory damage on the primary target.");
+    AddNumberInput(root, "NuclearResourceLevelDamage", "Nuclear Resource Level Damage", nuclearResourceLevelDamage, 0, 5, "Base resource-facility level loss. High yield can remove an additional level.");
 
     AddCheckBox(root, "PowerGridEnabled", "Enable Power Grid", powerGridEnabled);
     AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid structures are intended to remain publicly visible.");

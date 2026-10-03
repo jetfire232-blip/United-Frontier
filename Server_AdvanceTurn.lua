@@ -17118,10 +17118,65 @@ local function UFApplyCityDamage(state,tid,percent)
     state.cityDamage=state.cityDamage or {}; state.cityDamage[tid]=math.min(100,(tonumber(state.cityDamage[tid]) or 0)+percent); return state.cityDamage[tid];
 end
 
+local function UFReduceResourcesDetailed(data,tid,levelsLost)
+    local resources=((data.globalEconomy or {}).resources or {}).territories or {};
+    local nodes=resources[tid] or resources[tostring(tid)];
+    if not nodes or (tonumber(levelsLost) or 0)<=0 then return 0,"none"; end
+    local hit=0; local details={}; local loss=math.max(0,math.floor(tonumber(levelsLost) or 0));
+    for rn,lvl in pairs(nodes) do
+        local before=tonumber(lvl) or 0;
+        if before>0 then
+            local after=math.max(0,before-loss);
+            if after<before then
+                nodes[rn]=after; hit=hit+1;
+                table.insert(details,tostring(rn).." L"..tostring(before).."→L"..tostring(after));
+            end
+        end
+    end
+    return hit,(#details>0 and table.concat(details,", ") or "none");
+end
+
+local function UFDamageRecruiterDetailed(data,tid,severity)
+    local recruiters=(((data.globalEconomy or {}).armyRecruiters or {}).territories or {});
+    local key=recruiters[tid]~=nil and tid or tostring(tid);
+    local before=tonumber(recruiters[key]) or 0;
+    if before<=0 or (tonumber(severity) or 0)<=0 then return 0,"none"; end
+    local sev=math.max(0,math.min(100,math.floor(tonumber(severity) or 0)));
+    if math.random(1,100)>sev then return 0,"Recruiter resisted damage"; end
+    local levelsLost=sev>=80 and before or (sev>=45 and math.min(2,before) or 1);
+    local after=math.max(0,before-levelsLost);
+    if after<=0 then recruiters[key]=nil; return 1,"Recruiter L"..tostring(before).." DESTROYED"; end
+    recruiters[key]=after; return 1,"Recruiter L"..tostring(before).."→L"..tostring(after);
+end
+
 local function UFResolveStrategicStrikes(game,data,addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return; end
     local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
     local currentTurn=(data.globalEconomy and data.globalEconomy.currentEconomyTurn) or data.tradeTurn or 1;
+
+    local convArmy=math.max(0,math.min(100,tonumber(GetSetting("ConventionalMissileArmyDamagePercent",20)) or 20));
+    local convStruct=math.max(0,math.min(100,tonumber(GetSetting("ConventionalMissileStructureDamagePercent",30)) or 30));
+    local convCity=math.max(0,math.min(100,tonumber(GetSetting("ConventionalMissileCityDamagePercent",15)) or 15));
+    local convRes=math.max(0,math.min(5,math.floor(tonumber(GetSetting("ConventionalMissileResourceLevelDamage",1)) or 1)));
+    local empTurns=math.max(1,math.min(10,math.floor(tonumber(GetSetting("EMPBaseDisableTurns",3)) or 3)));
+    local nukeArmy={Low=math.max(0,math.min(100,tonumber(GetSetting("NuclearLowDamagePercent",35)) or 35)),Medium=math.max(0,math.min(100,tonumber(GetSetting("NuclearMediumDamagePercent",55)) or 55)),High=math.max(0,math.min(100,tonumber(GetSetting("NuclearHighDamagePercent",75)) or 75))};
+    local nukeStruct=math.max(0,math.min(100,tonumber(GetSetting("NuclearStructureDamagePercent",70)) or 70));
+    local nukeCity=math.max(0,math.min(100,tonumber(GetSetting("NuclearCityDamagePercent",60)) or 60));
+    local nukeRes=math.max(0,math.min(5,math.floor(tonumber(GetSetting("NuclearResourceLevelDamage",2)) or 2)));
+
+    local function assetEffects(ts,tid,severity,disableTurns)
+        local effects={}; local count=0;
+        for kind,_ in pairs(UF_ASSET_TABLES) do
+            local r,d=UFDamageAsset(ts,kind,tid,severity,currentTurn,disableTurns or 0);
+            if r~="NO DAMAGE" then count=count+1; table.insert(effects,tostring(d or (kind.." "..r))); end
+        end
+        if ts.headquarters and ts.headquarters.territoryID==tid then
+            local r,d=UFDamageAsset(ts,"Headquarters",tid,severity,currentTurn,disableTurns or 0);
+            if r~="NO DAMAGE" then count=count+1; table.insert(effects,tostring(d or ("Headquarters "..r))); end
+        end
+        return count,effects;
+    end
+
     for attackerID,state in pairs(byPlayer) do
         state.hqRecentResults=state.hqRecentResults or {};
         local pending=state.pendingStrategicStrikes or {}; state.pendingStrategicStrikes={};
@@ -17129,50 +17184,71 @@ local function UFResolveStrategicStrikes(game,data,addNewOrder)
             local tid=tonumber(strike.targetTerritoryID) or strike.targetTerritoryID; local terr=standing.Territories[tid];
             if terr~=nil then
                 local weapon=tostring(strike.weapon or "Conventional"); local level=math.max(1,tonumber(strike.siloLevel) or 1); local yield=tostring(strike.yield or "Low");
+                if yield~="Low" and yield~="Medium" and yield~="High" then yield="Low"; end
                 local ownerID=terr.OwnerPlayerID; local targetState=byPlayer[ownerID];
-                local samLevel,samTid=UFBestSAMCoverage(game,standing,targetState,tid); local chance=UFSAMChance(samLevel,weapon);
+                local samLevel=UFBestSAMCoverage(game,standing,targetState,tid); local chance=UFSAMChance(samLevel,weapon);
                 local intercepted=chance>0 and math.random(1,100)<=chance;
                 local mods={}; local strikeResult="NO DAMAGE"; local details={};
+                local primaryName=((game.Map and game.Map.Territories and game.Map.Territories[tid]) or {}).Name or tostring(tid);
                 if intercepted then
-                    strikeResult="INTERCEPTED"; table.insert(details,"SAM interception "..tostring(chance).."%");
+                    strikeResult="INTERCEPTED"; table.insert(details,"Target: "..primaryName); table.insert(details,"SAM interception chance: "..tostring(chance).."% | Damage: NONE");
                 else
-                    local targets={{tid=tid,scale=1.0}};
+                    local targets={{tid=tid,scale=1.0,primary=true}};
                     if weapon=="Nuclear" then
                         local d=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; local maxAdj=(yield=="High" and 99) or (yield=="Medium" and 3) or 0; local c=0;
-                        for nid,_ in pairs((d and d.ConnectedTo) or {}) do if c>=maxAdj then break; end table.insert(targets,{tid=nid,scale=(yield=="High" and 0.45 or 0.30)}); c=c+1; end
+                        for nid,_ in pairs((d and d.ConnectedTo) or {}) do if c>=maxAdj then break; end table.insert(targets,{tid=nid,scale=(yield=="High" and 0.45 or 0.30),primary=false}); c=c+1; end
                     elseif weapon=="EMP" and level>=2 then
-                        local d=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; for nid,_ in pairs((d and d.ConnectedTo) or {}) do table.insert(targets,{tid=nid,scale=0.5}); if #targets>=4 then break; end end
+                        local d=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; for nid,_ in pairs((d and d.ConnectedTo) or {}) do table.insert(targets,{tid=nid,scale=0.5,primary=false}); if #targets>=4 then break; end end
                     end
-                    local totalArmyDamage=0; local assetsHit=0; local resourcesHit=0;
+                    local totalArmyDamage=0; local assetsHit=0; local resourcesHit=0; local recruitersHit=0;
                     for _,t in ipairs(targets) do
-                        local tt=standing.Territories[t.tid]; if tt then
-                            local armies=tt.NumArmies and tt.NumArmies.NumArmies or 0; local armyDamage=0;
-                            if weapon=="Conventional" then armyDamage=math.min(armies,math.max(2,math.floor((5+level*5)*t.scale)));
-                            elseif weapon=="Nuclear" then local base=(yield=="High" and 65) or (yield=="Medium" and 45) or 30; armyDamage=math.min(armies,math.max(5,math.floor((base+level*8)*t.scale))); end
+                        local tt=standing.Territories[t.tid];
+                        if tt then
+                            local tname=((game.Map and game.Map.Territories and game.Map.Territories[t.tid]) or {}).Name or tostring(t.tid);
+                            local localDetails={}; local armies=tt.NumArmies and tt.NumArmies.NumArmies or 0; local armyDamage=0;
+                            if weapon=="Conventional" then
+                                local pct=math.min(100,convArmy*(1+0.10*(level-1))*t.scale); armyDamage=math.min(armies,math.floor(armies*pct/100));
+                            elseif weapon=="Nuclear" then
+                                local pct=(nukeArmy[yield] or nukeArmy.Low)*t.scale; armyDamage=math.min(armies,math.floor(armies*pct/100));
+                            end
                             if armyDamage>0 then local mod=WL.TerritoryModification.Create(t.tid); mod.AddArmies=-armyDamage; table.insert(mods,mod); totalArmyDamage=totalArmyDamage+armyDamage; end
+                            table.insert(localDetails,"troops -"..tostring(armyDamage).." / "..tostring(armies));
                             local oid=tt.OwnerPlayerID; local ts=byPlayer[oid];
                             if ts then
                                 if weapon=="EMP" then
-                                    ts.disruptions=ts.disruptions or {}; local turns=math.max(2,level+1); ts.disruptions[t.tid]=currentTurn+turns;
-                                    for kind,_ in pairs(UF_ASSET_TABLES) do local r,dmg=UFDamageAsset(ts,kind,t.tid,0,currentTurn,turns); if r~="NO DAMAGE" then assetsHit=assetsHit+1; end end
-                                    if ts.headquarters and ts.headquarters.territoryID==t.tid then UFDamageAsset(ts,"Headquarters",t.tid,0,currentTurn,turns); assetsHit=assetsHit+1; end
+                                    ts.disruptions=ts.disruptions or {}; local turns=math.max(1,empTurns + math.max(0,level-1)); ts.disruptions[t.tid]=currentTurn+turns;
+                                    local hit,effects=assetEffects(ts,t.tid,0,turns); assetsHit=assetsHit+hit;
+                                    table.insert(localDetails,"EMP disabled systems for "..tostring(turns).." turn(s)");
+                                    if #effects>0 then table.insert(localDetails,"assets: "..table.concat(effects,", ")); end
                                 else
-                                    local sev=weapon=="Nuclear" and math.floor(((yield=="High" and 80) or (yield=="Medium" and 60) or 45)*t.scale) or math.floor((20+level*7)*t.scale);
-                                    for kind,_ in pairs(UF_ASSET_TABLES) do local r=UFDamageAsset(ts,kind,t.tid,sev,currentTurn,weapon=="Nuclear" and 1 or 0); if r~="NO DAMAGE" then assetsHit=assetsHit+1; end end
-                                    if ts.headquarters and ts.headquarters.territoryID==t.tid then local r=UFDamageAsset(ts,"Headquarters",t.tid,sev,currentTurn,weapon=="Nuclear" and 1 or 0); if r~="NO DAMAGE" then assetsHit=assetsHit+1; end end
-                                    UFApplyCityDamage(ts,t.tid,weapon=="Nuclear" and math.floor(55*t.scale) or math.floor(15*t.scale));
-                                    resourcesHit=resourcesHit+UFReduceResourcesAtTerritory(data,t.tid,weapon=="Nuclear" and (yield=="High" and 2 or 1) or 1);
+                                    local severity;
+                                    local cityAdd; local resLoss;
+                                    if weapon=="Nuclear" then
+                                        local yf=(yield=="High" and 1.25) or (yield=="Low" and 0.75) or 1.0;
+                                        severity=math.floor(math.min(100,nukeStruct*yf)*t.scale);
+                                        cityAdd=math.floor(math.min(100,nukeCity*yf)*t.scale);
+                                        resLoss=math.max(0,math.floor((nukeRes + (yield=="High" and 1 or 0))*t.scale));
+                                    else
+                                        severity=math.floor(convStruct*t.scale); cityAdd=math.floor(convCity*t.scale); resLoss=math.max(0,math.floor(convRes*t.scale));
+                                    end
+                                    local hit,effects=assetEffects(ts,t.tid,severity,weapon=="Nuclear" and 1 or 0); assetsHit=assetsHit+hit;
+                                    if #effects>0 then table.insert(localDetails,"assets: "..table.concat(effects,", ")); else table.insert(localDetails,"assets: none damaged"); end
+                                    local rh,rdesc=UFReduceResourcesDetailed(data,t.tid,resLoss); resourcesHit=resourcesHit+rh; table.insert(localDetails,"resources: "..rdesc);
+                                    local recHit,recDesc=UFDamageRecruiterDetailed(data,t.tid,severity); recruitersHit=recruitersHit+recHit; table.insert(localDetails,"recruiter: "..recDesc);
+                                    local cityTotal=UFApplyCityDamage(ts,t.tid,cityAdd); table.insert(localDetails,"city/territory +"..tostring(cityAdd).."% damage (total "..tostring(cityTotal).."%)");
                                 end
+                            else
+                                table.insert(localDetails,"strategic assets: no tracked national assets on territory");
                             end
+                            table.insert(details,(t.primary and "PRIMARY " or "SPLASH ")..tname.." → "..table.concat(localDetails,"; "));
                         end
                     end
-                    if weapon=="EMP" then strikeResult="DISABLED"; table.insert(details,"strategic systems disrupted");
-                    elseif weapon=="Nuclear" then strikeResult=(assetsHit>0 or resourcesHit>0 or totalArmyDamage>0) and "DAMAGED" or "NO DAMAGE"; table.insert(details,tostring(totalArmyDamage).." armies; "..tostring(assetsHit).." assets; "..tostring(resourcesHit).." resource facilities affected; city/territory damage applied");
-                    else strikeResult=(assetsHit>0 or totalArmyDamage>0) and "DAMAGED" or "NO DAMAGE"; table.insert(details,tostring(totalArmyDamage).." armies; "..tostring(assetsHit).." assets affected"); end
+                    if weapon=="EMP" then strikeResult=assetsHit>0 and "DISABLED" or "NO DAMAGE";
+                    else strikeResult=(assetsHit>0 or resourcesHit>0 or recruitersHit>0 or totalArmyDamage>0) and "DAMAGED" or "NO DAMAGE"; end
+                    table.insert(details,1,"SUMMARY: troops -"..tostring(totalArmyDamage).." | strategic assets affected "..tostring(assetsHit).." | recruiters affected "..tostring(recruitersHit).." | resource types affected "..tostring(resourcesHit));
                 end
-                local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
-                table.insert(state.hqRecentResults,{turn=currentTurn,action=weapon.." Missile Strike",result=strikeResult,detail=table.concat(details," | ")}); while #state.hqRecentResults>8 do table.remove(state.hqRecentResults,1); end
-                addNewOrder(WL.GameOrderEvent.Create(attackerID,weapon.." missile strike on "..(td and td.Name or tostring(tid)).." — "..strikeResult,{},mods,nil,nil));
+                table.insert(state.hqRecentResults,{turn=currentTurn,action=weapon..(weapon=="Nuclear" and (" "..yield) or "").." Missile Strike",result=strikeResult,detail=table.concat(details,"\n")}); while #state.hqRecentResults>8 do table.remove(state.hqRecentResults,1); end
+                addNewOrder(WL.GameOrderEvent.Create(attackerID,weapon.." missile strike on "..primaryName.." — "..strikeResult,{},mods,nil,nil));
             end
         end
     end
@@ -17516,7 +17592,6 @@ function Server_AdvanceTurn_Start(
     ProcessArmyRecruiterProduction(game, data, addNewOrder);
 
     UFResolveStrategicStrikes(game, data, addNewOrder);
-    UFResolveAirWingMissions(game, data, addNewOrder);
 
     ProcessUnitedNations(
         game,

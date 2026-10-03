@@ -11,3 +11,5 @@ Operational Warfare: powered Headquarters, Airbase-gated airlifts, missile targe
 Phase 7: operational HQ actions, AI airport airlifts, clearer war UI, and simple strategic-action results.
 
 Includes host-configurable missile damage, detailed strike reports, Headquarters intelligence/cyber systems, resources, diplomacy, markets, and strategic infrastructure.
+
+AI nations now follow a stronger War Economy doctrine, spend excess Commerce instead of hoarding it, maintain resource-supported Recruiters and logistics, use Airlift/Gift support where appropriate, and operate Missile Silos against strategic targets. Military assets upgrade in place from the Military screen.

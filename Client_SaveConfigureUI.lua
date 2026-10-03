@@ -511,6 +511,16 @@ function Client_SaveConfigureUI(
             "AIBaseReservePercent"
         );
 
+    local aiPeaceReserveCap =
+        ReadNumber(
+            "AIPeaceReserveCap"
+        );
+
+    local aiWarReserveCap =
+        ReadNumber(
+            "AIWarReserveCap"
+        );
+
     local aiEconomicAggressiveness =
         ReadNumber(
             "AIEconomicAggressiveness"
@@ -1356,6 +1366,12 @@ function Client_SaveConfigureUI(
 
     Mod.Settings.AIBaseReservePercent =
         aiBaseReservePercent;
+
+    Mod.Settings.AIPeaceReserveCap =
+        math.max(50, math.min(1000, aiPeaceReserveCap or 300));
+
+    Mod.Settings.AIWarReserveCap =
+        math.max(0, math.min(500, aiWarReserveCap or 150));
 
     Mod.Settings.AIEconomicAggressiveness =
         aiEconomicAggressiveness;

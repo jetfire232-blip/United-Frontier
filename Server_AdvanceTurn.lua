@@ -5173,6 +5173,12 @@ function ProcessAIMarketBuying(
     nation.aiStrategicState
     or "stable";
 
+    -- War Economy: do not spend scarce Commerce buying stocks while the nation
+    -- has military, resource, repair, or strategic-infrastructure obligations.
+    if strategicState == "war" or strategicState == "war economy" then
+        return;
+    end
+
     nation.stockHoldings =
         nation.stockHoldings
         or {};
@@ -8185,7 +8191,8 @@ end
 
     if strategicState == "recovery"
     or strategicState == "strained"
-    or strategicState == "war" then
+    or strategicState == "war"
+    or strategicState == "war economy" then
 
     return;
 
@@ -16931,9 +16938,55 @@ local function UFHasPowerGrid(state)
     return false;
 end
 
+local UFStrategicTerritoryValue
+
 local function UFHQUpgradeCost(level)
     local base=math.max(25,math.floor((tonumber(GetSetting("HeadquartersBaseCost",500)) or 500)*0.35));
     return base*math.max(1,math.floor(tonumber(level) or 1));
+end
+
+-- Recruiters increase Oil/Food/Iron maintenance by one per level.  Before the AI
+-- builds another level, make sure those three resources can carry the added load.
+local function UFAIRecruiterSupplyReady(nation, extraLevels)
+    extraLevels=math.max(0,math.floor(tonumber(extraLevels) or 0));
+    for _,resourceName in ipairs({"Oil","Food","Iron"}) do
+        local production=tonumber((nation.resourceProduction or {})[resourceName]) or 0;
+        local stock=tonumber((nation.resourceStockpile or {})[resourceName]) or 0;
+        local baseReq=tonumber((nation.resourceRequirements or {})[resourceName]) or 0;
+        local currentRecruiterReq=0;
+        -- resourceRequirements stores the original baseline; current shortages already
+        -- include Recruiter load, so use current effective demand inferred from shortage state.
+        local shortage=tonumber((nation.resourceShortages or {})[resourceName]) or 0;
+        local available=production+math.min(stock,3);
+        if shortage>0 or available < (baseReq + extraLevels) then return false,resourceName; end
+    end
+    return true,nil;
+end
+
+local function UFAIQueueResourceUpgradeFor(game,data,resourceChanges,playerID,resourceName,standing,canSpend,spend)
+    local resources=EnsureStrategicResourceState(data);
+    if not resources or resources.enabled~=true then return false; end
+    local maxLevel=math.max(1,math.min(5,math.floor(tonumber(GetSetting("ResourceFacilityMaxLevel",5)) or 5)));
+    local baseCost=math.max(1,math.floor(tonumber(GetSetting("ResourceFacilityBaseCost",100)) or 100));
+    local bestTid=nil; local current=-1;
+    for tid,nodes in pairs(resources.territories or {}) do
+        local ntid=tonumber(tid) or tid; local terr=standing.Territories[ntid];
+        local lvl=tonumber((nodes or {})[resourceName]) or 0;
+        if terr and terr.OwnerPlayerID==playerID and lvl>0 and lvl<maxLevel and lvl>current then bestTid=ntid; current=lvl; end
+    end
+    if not bestTid then return false; end
+    local cost=baseCost*(current+1);
+    if resourceName=="Uranium" then
+        local mult=math.max(100,math.min(500,tonumber(GetSetting("UraniumFacilityCostMultiplier",200)) or 200));
+        cost=math.max(1,math.floor(cost*mult/100+0.5));
+    end
+    if not canSpend(cost) then return false; end
+    for _,b in ipairs(resources.pendingBuilds or {}) do
+        if b.playerID==playerID and b.territoryID==bestTid and b.resource==resourceName then return false; end
+    end
+    spend(cost);
+    table.insert(resources.pendingBuilds,{playerID=playerID,territoryID=bestTid,resource=resourceName,fromLevel=current,toLevel=current+1,cost=cost,paid=true,requestedTurn=data.tradeTurn or 0});
+    return true;
 end
 
 local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
@@ -16941,10 +16994,14 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return; end
     local nation=((data.globalEconomy or {}).nations or {})[playerID]; if nation==nil then return; end
     local atWar=UFAIAtWar(data,playerID);
-    nation.aiStrategicState=atWar and "war economy" or "peace buildup";
+    nation.aiStrategicState=atWar and "war" or "stable";
+    nation.aiDoctrine=atWar and "War Economy" or "Peace Economy";
     local available=GetAvailableGold(game,resourceChanges,playerID);
     local reservePercent=atWar and 20 or 40;
-    local reserve=budgetCap~=nil and 0 or math.floor(available*reservePercent/100);
+    local reserveCap=atWar
+        and math.max(0,math.floor(tonumber(GetSetting("AIWarReserveCap",150)) or 150))
+        or math.max(50,math.floor(tonumber(GetSetting("AIPeaceReserveCap",300)) or 300));
+    local reserve=budgetCap~=nil and 0 or math.min(reserveCap,math.floor(available*reservePercent/100));
     local spendable=math.max(0,available-reserve);
     if budgetCap~=nil then spendable=math.min(spendable,math.max(0,math.floor(tonumber(budgetCap) or 0))); end
     if spendable<50 then return 0; end
@@ -17008,25 +17065,53 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
         end
     end
 
-    -- 3) Recruiters: every AI should create army production instead of only stockpiling Commerce.
+    -- 3) Recruiters: maintain a useful national recruiting network, but never
+    -- expand it faster than Oil/Food/Iron can support.  Peace target is two;
+    -- wartime target is three (subject to host maximum and geography).
     if GetSetting("ArmyRecruitersEnabled",true)==true then
-        local r=EnsureArmyRecruiterState(data); local maxPer=math.max(1,math.floor(tonumber(GetSetting("ArmyRecruiterMaxPerPlayer",3)) or 3));
-        local maxLevel=math.max(1,math.floor(tonumber(GetSetting("ArmyRecruiterMaxLevel",3)) or 3)); local base=math.max(25,math.floor(tonumber(GetSetting("ArmyRecruiterBaseCost",250)) or 250));
-        local owned={};
-        for tid,lvl in pairs(r.territories or {}) do local ntid=tonumber(tid) or tid; local terr=standing.Territories[ntid]; if terr and terr.OwnerPlayerID==playerID and (tonumber(lvl) or 0)>0 then table.insert(owned,{tid=ntid,lvl=tonumber(lvl) or 0}); end end
+        local r=EnsureArmyRecruiterState(data);
+        local maxPer=math.max(1,math.floor(tonumber(GetSetting("ArmyRecruiterMaxPerPlayer",3)) or 3));
+        local targetCount=math.min(maxPer,atWar and 3 or 2);
+        local maxLevel=math.max(1,math.floor(tonumber(GetSetting("ArmyRecruiterMaxLevel",3)) or 3));
+        local base=math.max(25,math.floor(tonumber(GetSetting("ArmyRecruiterBaseCost",250)) or 250));
+        local owned={}; local totalLevels=0;
+        for tid,lvl in pairs(r.territories or {}) do
+            local ntid=tonumber(tid) or tid; local terr=standing.Territories[ntid];
+            if terr and terr.OwnerPlayerID==playerID and (tonumber(lvl) or 0)>0 then
+                table.insert(owned,{tid=ntid,lvl=tonumber(lvl) or 0}); totalLevels=totalLevels+(tonumber(lvl) or 0);
+            end
+        end
         table.sort(owned,function(a,b) return a.lvl<b.lvl; end);
-        if #owned<maxPer then
+        local ready,missing=UFAIRecruiterSupplyReady(nation,totalLevels+1);
+        if not ready and missing then
+            UFAIQueueResourceUpgradeFor(game,data,resourceChanges,playerID,missing,standing,canSpend,spend);
+        elseif #owned<targetCount then
             local tid=UFPickAITerritory(game,standing,playerID,true,r.territories); local cost=base;
-            if tid and canSpend(cost) then spend(cost); r.territories[tid]=1; table.insert(r.pendingBuilds,{playerID=playerID,territoryID=tid,fromLevel=0,toLevel=1,cost=cost,paid=true,requestedTurn=data.tradeTurn or 0}); end
+            if tid and canSpend(cost) then
+                spend(cost); r.territories[tid]=1;
+                table.insert(r.pendingBuilds,{playerID=playerID,territoryID=tid,fromLevel=0,toLevel=1,cost=cost,paid=true,requestedTurn=data.tradeTurn or 0});
+            end
         elseif atWar and owned[1] and owned[1].lvl<maxLevel then
-            local cost=base*(owned[1].lvl+1); if canSpend(cost) then spend(cost); local old=owned[1].lvl; r.territories[owned[1].tid]=old+1; table.insert(r.pendingBuilds,{playerID=playerID,territoryID=owned[1].tid,fromLevel=old,toLevel=old+1,cost=cost,paid=true,requestedTurn=data.tradeTurn or 0}); end
+            local cost=base*(owned[1].lvl+1);
+            if canSpend(cost) then
+                spend(cost); local old=owned[1].lvl; r.territories[owned[1].tid]=old+1;
+                table.insert(r.pendingBuilds,{playerID=playerID,territoryID=owned[1].tid,fromLevel=old,toLevel=old+1,cost=cost,paid=true,requestedTurn=data.tradeTurn or 0});
+            end
         end
     end
 
-    -- 4) Airbase and SAM priorities. Peace builds logistics; war raises defense.
-    if GetSetting("AirbasesEnabled",true)==true and next(state.airbases)==nil then
-        local cost=math.max(25,math.floor(tonumber(GetSetting("AirbaseBaseCost",350)) or 350)); local tid=UFPickAITerritory(game,standing,playerID,true,nil);
-        if tid and canSpend(cost) then spend(cost); state.airbases[tid]=1; end
+    -- 4) Airbase and SAM priorities. Maintain one logistics base in peace and
+    -- normally two in war when the nation has enough territory and Commerce.
+    if GetSetting("AirbasesEnabled",true)==true then
+        local airbaseCount=0; for _,lvl in pairs(state.airbases or {}) do if (tonumber(lvl) or 0)>0 then airbaseCount=airbaseCount+1; end end
+        local territoryCount=0; for _,terr in pairs(standing.Territories or {}) do if terr.OwnerPlayerID==playerID then territoryCount=territoryCount+1; end end
+        local targetAirbases=(atWar and territoryCount>=8) and 2 or 1;
+        if airbaseCount<targetAirbases then
+            local excluded={}; for tid,_ in pairs(state.airbases or {}) do excluded[tonumber(tid) or tid]=true; end
+            local cost=math.max(25,math.floor(tonumber(GetSetting("AirbaseBaseCost",350)) or 350));
+            local tid=UFPickAITerritory(game,standing,playerID,true,excluded);
+            if tid and canSpend(cost) then spend(cost); state.airbases[tid]=1; end
+        end
     end
     if atWar and GetSetting("SAMSitesEnabled",true)==true then
         local tid=UFPickAITerritory(game,standing,playerID,false,state.samSites); local cost=math.max(25,math.floor(tonumber(GetSetting("SAMSiteBaseCost",300)) or 300));
@@ -17052,6 +17137,90 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
         local tid=UFPickAITerritory(game,standing,playerID,true,nil); local cost=math.max(25,math.floor(tonumber(GetSetting("MissileSiloBaseCost",500)) or 500));
         if tid and canSpend(cost) then
             spend(cost); state.missileSilos[tid]=1; state.missileInventory=state.missileInventory or {}; state.missileInventory[tid]={Conventional=1,EMP=0,Nuclear=0};
+        end
+    end
+
+    -- Missile doctrine: a Silo is not decorative. During war the AI maintains
+    -- ammunition and queues one strike against the highest-value enemy target.
+    if atWar and GetSetting("MissileSilosEnabled",true)==true and next(state.missileSilos or {})~=nil then
+        state.missileInventory=state.missileInventory or {};
+        state.pendingStrategicStrikes=state.pendingStrategicStrikes or {};
+        if #state.pendingStrategicStrikes==0 then
+            local bestTarget=nil; local bestOwner=nil; local bestValue=-999999;
+            for tid,terr in pairs(standing.Territories or {}) do
+                local owner=terr.OwnerPlayerID;
+                if owner~=nil and owner~=playerID and owner~=WL.PlayerID.Neutral and owner~=WL.PlayerID.Fogged and IsDiplomacyWar(data,playerID,owner) then
+                    local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
+                    local value=UFStrategicTerritoryValue(data,owner,tid)+math.min(35,armies*0.6);
+                    if value>bestValue then bestValue=value; bestTarget=tid; bestOwner=owner; end
+                end
+            end
+            if bestTarget~=nil then
+                local siloID=nil; local siloLevel=0;
+                for tid,lvl in pairs(state.missileSilos or {}) do
+                    if (tonumber(lvl) or 0)>siloLevel then siloID=tonumber(tid) or tid; siloLevel=tonumber(lvl) or 1; end
+                end
+                if siloID~=nil then
+                    state.missileInventory[siloID]=state.missileInventory[siloID] or {Conventional=0,EMP=0,Nuclear=0};
+                    local inv=state.missileInventory[siloID];
+                    local weapon="Conventional"; local strikeYield="Low";
+                    -- EMP is preferred against dense infrastructure. Nuclear is rare and
+                    -- reserved for extremely valuable targets with Uranium support.
+                    local uranium=tonumber((nation.resourceStockpile or {}).Uranium) or 0;
+                    if bestValue>=85 and siloLevel>=3 and uranium>=1 then weapon="Nuclear"; strikeYield="Medium";
+                    elseif bestValue>=50 and siloLevel>=2 then weapon="EMP"; end
+                    local costs={Conventional=100,EMP=175,Nuclear=300};
+                    if (tonumber(inv[weapon]) or 0)<=0 then
+                        local cost=costs[weapon];
+                        if canSpend(cost) then
+                            if weapon~="Nuclear" or uranium>=1 then
+                                spend(cost); inv[weapon]=(tonumber(inv[weapon]) or 0)+1;
+                                if weapon=="Nuclear" then nation.resourceStockpile.Uranium=math.max(0,uranium-1); end
+                            end
+                        end
+                    end
+                    if (tonumber(inv[weapon]) or 0)>0 then
+                        inv[weapon]=math.max(0,(tonumber(inv[weapon]) or 0)-1);
+                        table.insert(state.pendingStrategicStrikes,{attackerID=playerID,siloTerritoryID=siloID,targetTerritoryID=bestTarget,targetOwnerID=bestOwner,weapon=weapon,yield=strikeYield,siloLevel=siloLevel,queuedTurn=data.tradeTurn or 0});
+                        nation.aiLastMissileOrder=weapon.." strike queued against territory "..tostring(bestTarget).." (strategic value "..tostring(math.floor(bestValue))..").";
+                    end
+                end
+            end
+        end
+    end
+
+    -- Final wartime spending sweep: if the AI still has authorized Commerce above
+    -- its reserve cap, improve existing military infrastructure instead of hoarding it.
+    if atWar then
+        local function upgradeOne(tbl,baseSetting,defaultBase,maxSetting,defaultMax)
+            local bestTid=nil; local bestLvl=999;
+            local maxLvl=math.max(1,math.floor(tonumber(maxSetting and GetSetting(maxSetting,defaultMax) or defaultMax) or defaultMax));
+            for tid,lvl in pairs(tbl or {}) do
+                lvl=tonumber(lvl) or 0; if lvl>0 and lvl<maxLvl and lvl<bestLvl then bestTid=tonumber(tid) or tid; bestLvl=lvl; end
+            end
+            if bestTid~=nil then
+                local base=math.max(25,math.floor(tonumber(GetSetting(baseSetting,defaultBase)) or defaultBase));
+                local cost=base*(bestLvl+1);
+                if canSpend(cost) then spend(cost); tbl[bestTid]=bestLvl+1; return true; end
+            end
+            return false;
+        end
+        local safety=0;
+        while (spendable-spent)>=50 and safety<8 do
+            safety=safety+1; local did=false;
+            -- Finish HQ development before speculative purchases.
+            if state.headquarters and UFHasPowerGrid(state) then
+                state.headquarters.branches=state.headquarters.branches or {Intelligence=0,Security=0,CyberWarfare=0,JointCommand=0};
+                for _,branch in ipairs({"Security","CyberWarfare","JointCommand","Intelligence"}) do
+                    local lvl=tonumber(state.headquarters.branches[branch]) or 0;
+                    if lvl<5 then local cost=UFHQUpgradeCost(lvl+1); if canSpend(cost) then spend(cost); state.headquarters.branches[branch]=lvl+1; did=true; break; end end
+                end
+            end
+            if not did then did=upgradeOne(state.samSites,"SAMSiteBaseCost",300,"SAMSiteMaxLevel",3); end
+            if not did then did=upgradeOne(state.missileSilos,"MissileSiloBaseCost",500,"MissileSiloMaxLevel",3); end
+            if not did then did=upgradeOne(state.airbases,"AirbaseBaseCost",350,"AirbaseMaxLevel",3); end
+            if not did then did=upgradeOne(state.powerGrids,"PowerGridBaseCost",300,nil,3); end
+            if not did then break; end
         end
     end
 
@@ -17378,7 +17547,7 @@ local function UFAIJoinAlliedWars(game,data,playerID)
     return false;
 end
 
-local function UFStrategicTerritoryValue(data, ownerID, territoryID)
+UFStrategicTerritoryValue = function(data, ownerID, territoryID)
     local value=0;
     local pd=Mod.PrivateGameData or {};
     local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
@@ -17441,6 +17610,61 @@ local function UFGenerateAIAirliftOrder(game,data,playerID,addNewOrder)
     local nation=((data.globalEconomy or {}).nations or {})[playerID];
     if nation then nation.aiLastAirlift="Moved "..tostring(send).." armies from "..tostring(bestFrom).." to front airport "..tostring(bestTo); end
     return true;
+end
+
+local function UFAIUseGiftCardToSupportAlly(game,data,playerID,addNewOrder)
+    if not UFAIAtWar(data,playerID) then return false; end
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return false; end
+    local cards=standing.Cards and standing.Cards[playerID] or nil; if cards==nil or cards.WholeCards==nil then return false; end
+    local giftCardID=nil;
+    for instanceID,card in pairs(cards.WholeCards) do
+        if card~=nil and card.CardID==WL.CardID.Gift then giftCardID=card.ID or instanceID; break; end
+    end
+    if giftCardID==nil then return false; end
+    local diplomacy=(data.globalEconomy or {}).diplomacy or {}; local pf=diplomacy.playerFaction or {}; local ownFaction=pf[playerID];
+    local function allied(a,b) return (ownFaction~=nil and pf[b]==ownFaction and b~=a) or UFIsActiveAlliance(diplomacy,a,b); end
+    for allyID,ally in pairs(game.Game.Players or {}) do
+        if allyID~=playerID and ally and not ally.Surrendered and allied(playerID,allyID) then
+            -- Only create a foothold when this ally is fighting an enemy but has no
+            -- direct land border with that enemy.
+            local enemyID=nil;
+            for _,rel in pairs(diplomacy.relationships or {}) do
+                if rel and rel.status=="war" and (rel.player1==allyID or rel.player2==allyID) then enemyID=(rel.player1==allyID) and rel.player2 or rel.player1; break; end
+            end
+            if enemyID~=nil then
+                local allyBordersEnemy=false;
+                for tid,terr in pairs(standing.Territories or {}) do
+                    if terr.OwnerPlayerID==allyID then
+                        local d=game.Map.Territories[tid];
+                        for nid,_ in pairs((d and d.ConnectedTo) or {}) do local nt=standing.Territories[nid]; if nt and nt.OwnerPlayerID==enemyID then allyBordersEnemy=true; break; end end
+                        if allyBordersEnemy then break; end
+                    end
+                end
+                if not allyBordersEnemy then
+                    local candidate=nil; local candidateScore=999999;
+                    for tid,terr in pairs(standing.Territories or {}) do
+                        if terr.OwnerPlayerID==playerID then
+                            local d=game.Map.Territories[tid]; local bordersEnemy=false;
+                            for nid,_ in pairs((d and d.ConnectedTo) or {}) do local nt=standing.Territories[nid]; if nt and nt.OwnerPlayerID==enemyID then bordersEnemy=true; break; end end
+                            if bordersEnemy then
+                                local strategic=UFStrategicTerritoryValue(data,playerID,tid);
+                                local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
+                                if strategic<20 and armies<=8 then
+                                    local score=strategic+armies; if score<candidateScore then candidateScore=score; candidate=tid; end
+                                end
+                            end
+                        end
+                    end
+                    if candidate~=nil then
+                        addNewOrder(WL.GameOrderPlayCardGift.Create(giftCardID,playerID,candidate,allyID));
+                        local nation=((data.globalEconomy or {}).nations or {})[playerID]; if nation then nation.aiLastGiftSupport="Gifted territory "..tostring(candidate).." to ally "..tostring(allyID).." to create a wartime foothold."; end
+                        return true;
+                    end
+                end
+            end
+        end
+    end
+    return false;
 end
 
 local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
@@ -17782,6 +18006,8 @@ UpdateAIStrategicReserve(
 UFRunStrategicAI(game, data, resourceChanges, playerID);
 UFAIJoinAlliedWars(game, data, playerID);
 UFAIConsiderAlliance(game, data, playerID);
+UFGenerateAIAirliftOrder(game, data, playerID, addNewOrder);
+UFAIUseGiftCardToSupportAlly(game, data, playerID, addNewOrder);
 UFGenerateAIMilitaryOrders(game, data, playerID, addNewOrder);
 
 if ShouldRunAIWork(data, playerID, aiCityCadence) then

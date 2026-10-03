@@ -212,3 +212,14 @@ This pass focuses on usability, Headquarters depth, market visibility, controlle
 ## Final Release Candidate
 
 This release candidate removes dedicated Air Wing and Special Forces operation mission menus, adds host-configurable Missile Silo damage/effect controls, expands missile reports with troop/city/resource/Recruiter/asset details, and explains Headquarters actions directly in the HQ interface.
+
+## Final AI / Military Management Polish
+
+- AI uses **War Economy** doctrine while at war: no new stock purchases or investment projects, and Commerce is redirected to military readiness, resources, repairs, Headquarters, Recruiters, logistics, SAMs and Missile Silos.
+- Host controls the AI's idle Commerce ceiling. Defaults are **300 Commerce in peace** and **150 Commerce in war**. Commerce above the ceiling is actively put to work when useful purchases/upgrades are available.
+- AI aims for roughly **2 Recruiting Stations in peace** and **3 in war** (subject to host limits). Before adding another Recruiter level it checks Oil, Food and Iron support and prioritizes the missing resource first.
+- AI maintains at least **1 Airbase** when enabled and normally **2 in larger wartime nations**, while avoiding airport spam.
+- AI can actively use valid **Airlift Cards** between Airbases/Forward Airstrips and can use a **Gift Card** conservatively to give an ally a low-value frontline foothold when that ally cannot reach its war enemy by land.
+- AI Missile Silos now maintain ammunition and can queue strategic strikes against high-value enemy territories such as Headquarters, Recruiters, Power Grids, Silos, Airbases, SAMs and resource centers.
+- Military assets upgrade **in place** from the Military screen. `SHOW` locates the asset; `UPGRADE` raises the existing asset level and the map icon tier updates instead of placing a duplicate icon. `MAX` appears at the host maximum.
+- Headquarters remain limited to **one per nation**. The Headquarters row opens its four branch upgrade/action screen instead of placing a second HQ. If the HQ is destroyed/lost, it can be rebuilt after restoring operational power.

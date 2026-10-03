@@ -737,6 +737,20 @@ function Client_PresentConfigureUI(rootParent)
             40
         );
 
+    local aiPeaceReserveCap =
+        GetNumberSetting(
+            settings,
+            "AIPeaceReserveCap",
+            300
+        );
+
+    local aiWarReserveCap =
+        GetNumberSetting(
+            settings,
+            "AIWarReserveCap",
+            150
+        );
+
     local aiEconomicAggressiveness =
         GetNumberSetting(
             settings,
@@ -1527,7 +1541,27 @@ function Client_PresentConfigureUI(rootParent)
         aiBaseReservePercent,
         10,
         90,
-        "This becomes a baseline rather than a hard reserve. AI will dynamically raise or lower reserves based on war, threats, obligations, and opportunities."
+        "Baseline reserve percentage. The hard Commerce caps below prevent AI nations from hoarding large idle balances."
+    );
+
+    AddNumberInput(
+        root,
+        "AIPeaceReserveCap",
+        "AI Maximum Idle Commerce - Peace",
+        aiPeaceReserveCap,
+        50,
+        1000,
+        "Default 300. Commerce above this should be put to work on resources, infrastructure, Headquarters, Recruiters, logistics, or peaceful market/investment growth."
+    );
+
+    AddNumberInput(
+        root,
+        "AIWarReserveCap",
+        "AI Maximum Idle Commerce - War",
+        aiWarReserveCap,
+        0,
+        500,
+        "Default 150. During war, survival and military readiness take priority over Markets and Investments."
     );
 
     AddNumberInput(

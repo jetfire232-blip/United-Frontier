@@ -5429,7 +5429,7 @@ function ShowMilitaryMenu(parent, game)
         UI.CreateButton(frow).SetText((MilitaryIntelFilter==key and "▶ " or "")..label).SetOnClick(function() MilitaryIntelFilter=key; ShowMilitaryMenu(parent,game); end);
     end
 
-    local function addAssetRow(kind,tid,level,count,color,note)
+    local function addAssetRow(kind,tid,level,count,color,note,upgradeSpec)
         local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
         local row=UI.CreateHorizontalLayoutGroup(area);
         local suffix=""; if level then suffix=suffix.." | Lv."..tostring(level); end; if count and count>1 then suffix=suffix.." | x"..tostring(count); end;
@@ -5451,22 +5451,57 @@ function ShowMilitaryMenu(parent, game)
                 end);
             end);
         end);
+
+        if upgradeSpec~=nil then
+            if upgradeSpec.mode=="hq" then
+                UI.CreateButton(row).SetText("OPEN / UPGRADE").SetOnClick(function() ShowHeadquartersMenu(parent,game); end);
+            elseif upgradeSpec.maxed==true then
+                UI.CreateLabel(row).SetText("MAX").SetColor("#79D279");
+            elseif upgradeSpec.mode=="recruiter" then
+                local newLevel=(tonumber(level) or 0)+1;
+                local cost=(tonumber(upgradeSpec.baseCost) or 250)*newLevel;
+                UI.CreateButton(row).SetText("UPGRADE L"..tostring(newLevel).." — "..tostring(cost)).SetOnClick(function()
+                    SafeSendGameCustomMessage(game,"Upgrading Recruiting Station...",{type="buildArmyRecruiter",territoryID=captured},function(r)
+                        if r and r.message then UI.Alert(r.message); end; ShowMilitaryMenu(parent,game);
+                    end);
+                end);
+            elseif upgradeSpec.mode=="structure" then
+                local newLevel=(tonumber(level) or 0)+1;
+                local cost=(tonumber(upgradeSpec.baseCost) or 250)*newLevel;
+                UI.CreateButton(row).SetText("UPGRADE L"..tostring(newLevel).." — "..tostring(cost)).SetOnClick(function()
+                    SafeSendGameCustomMessage(game,"Upgrading "..kind.."...",{type="buildStrategicMilitary",kind=upgradeSpec.kind,territoryID=captured},function(r)
+                        if r and r.message then UI.Alert(r.message); end; ShowMilitaryMenu(parent,game);
+                    end);
+                end);
+            end
+        end
     end
 
     if MilitaryIntelFilter=="My Assets" or MilitaryIntelFilter=="All Known" then
         UI.CreateLabel(area).SetText("YOUR MILITARY ASSETS").SetColor("#8FD694");
         local ownShown=0;
-        if state.headquarters then addAssetRow("Headquarters",state.headquarters.territoryID,1,nil,"#7FB3FF",state.headquarters.status or "Operational"); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.airbases or {}) do addAssetRow("Airbase",tonumber(tid) or tid,lvl,nil,"#62B6FF","Visible"); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.forwardAirstrips or {}) do addAssetRow("Forward Airstrip",tonumber(tid) or tid,lvl,nil,"#82CFFF","Visible"); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.samSites or {}) do addAssetRow("SAM Site",tonumber(tid) or tid,lvl,nil,"#79D279","Visible"); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.missileSilos or {}) do addAssetRow("Missile Silo",tonumber(tid) or tid,lvl,nil,"#FF7B7B","Visible"); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.powerGrids or {}) do addAssetRow("Power Grid",tonumber(tid) or tid,lvl,nil,"#FFE066","PUBLIC"); ownShown=ownShown+1; end
+        if state.headquarters then
+            addAssetRow("Headquarters",state.headquarters.territoryID,1,nil,"#7FB3FF",state.headquarters.status or "Operational",{mode="hq"}); ownShown=ownShown+1;
+        end
+        local airbaseMax=math.max(1,math.floor(tonumber(GetClientSetting("AirbaseMaxLevel",3)) or 3));
+        local samMax=math.max(1,math.floor(tonumber(GetClientSetting("SAMSiteMaxLevel",3)) or 3));
+        local siloMax=math.max(1,math.floor(tonumber(GetClientSetting("MissileSiloMaxLevel",3)) or 3));
+        for tid,lvl in pairs(state.airbases or {}) do addAssetRow("Airbase",tonumber(tid) or tid,lvl,nil,"#62B6FF","Visible",{mode="structure",kind="Airbase",baseCost=GetClientSetting("AirbaseBaseCost",350),maxed=(tonumber(lvl) or 0)>=airbaseMax}); ownShown=ownShown+1; end
+        for tid,lvl in pairs(state.forwardAirstrips or {}) do addAssetRow("Forward Airstrip",tonumber(tid) or tid,lvl,nil,"#82CFFF","Visible",{mode="structure",kind="ForwardAirstrip",baseCost=GetClientSetting("ForwardAirstripBaseCost",175),maxed=(tonumber(lvl) or 0)>=1}); ownShown=ownShown+1; end
+        for tid,lvl in pairs(state.samSites or {}) do addAssetRow("SAM Site",tonumber(tid) or tid,lvl,nil,"#79D279","Visible",{mode="structure",kind="SAMSite",baseCost=GetClientSetting("SAMSiteBaseCost",300),maxed=(tonumber(lvl) or 0)>=samMax}); ownShown=ownShown+1; end
+        for tid,lvl in pairs(state.missileSilos or {}) do addAssetRow("Missile Silo",tonumber(tid) or tid,lvl,nil,"#FF7B7B","Visible",{mode="structure",kind="MissileSilo",baseCost=GetClientSetting("MissileSiloBaseCost",500),maxed=(tonumber(lvl) or 0)>=siloMax}); ownShown=ownShown+1; end
+        for tid,lvl in pairs(state.powerGrids or {}) do addAssetRow("Power Grid",tonumber(tid) or tid,lvl,nil,"#FFE066","PUBLIC",{mode="structure",kind="PowerGrid",baseCost=GetClientSetting("PowerGridBaseCost",300),maxed=(tonumber(lvl) or 0)>=3}); ownShown=ownShown+1; end
         for tid,cnt in pairs(state.airWings or {}) do addAssetRow("Air Wing",tonumber(tid) or tid,nil,tonumber(cnt) or 1,"#62B6FF","Visible Unit"); ownShown=ownShown+1; end
         for tid,cnt in pairs(state.specialForces or {}) do addAssetRow("Special Forces",tonumber(tid) or tid,nil,tonumber(cnt) or 1,"#D995FF","Visible Unit"); ownShown=ownShown+1; end
         local recruiters=((economy.armyRecruiters or {}).territories or {});
+        local recruiterMax=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterMaxLevel",3)) or 3));
         local standing=game.LatestStanding;
-        for tid,lvl in pairs(recruiters) do local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid]; if terr and terr.OwnerPlayerID==ourID and (tonumber(lvl) or 0)>0 then addAssetRow("Recruiting Station",ntid,lvl,nil,"#D4AF37","Visible"); ownShown=ownShown+1; end end
+        for tid,lvl in pairs(recruiters) do
+            local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid];
+            if terr and terr.OwnerPlayerID==ourID and (tonumber(lvl) or 0)>0 then
+                addAssetRow("Recruiting Station",ntid,lvl,nil,"#D4AF37","Visible",{mode="recruiter",baseCost=GetClientSetting("ArmyRecruiterBaseCost",250),maxed=(tonumber(lvl) or 0)>=recruiterMax}); ownShown=ownShown+1;
+            end
+        end
         if ownShown==0 then UI.CreateLabel(area).SetText("No military assets constructed yet.").SetColor("#888888"); end
     end
 
@@ -5486,6 +5521,7 @@ function ShowMilitaryMenu(parent, game)
     UI.CreateLabel(area).SetText("----------------------------------------");
     UI.CreateLabel(area).SetText("BUILD & MANAGE").SetColor("#FFFFFF");
     UI.CreateButton(area).SetText("HEADQUARTERS").SetOnClick(function() ShowHeadquartersMenu(parent,game); end);
+    UI.CreateLabel(area).SetText("Headquarters limit: ONE per nation. If it is destroyed or the HQ territory is lost, you may rebuild it after restoring an operational Power Grid.").SetColor("#7FB3FF");
     UI.CreateButton(area).SetText("RECRUITING STATIONS").SetOnClick(function() ShowArmyRecruitersMenu(parent,game); end);
     UI.CreateLabel(area).SetText("AIR OPERATIONS").SetColor("#62B6FF");
     UI.CreateLabel(area).SetText("Airbases: "..UFCountTableEntries(state.airbases).." | Airstrips: "..UFCountTableEntries(state.forwardAirstrips).." | Air Wings: "..tostring((function() local n=0 for _,v in pairs(state.airWings or {}) do n=n+(tonumber(v) or 0) end return n end)()));

@@ -105,3 +105,11 @@ COLOR / CLARITY PASS
 - Ideology, strategy, tax, company-strategy and live-preview blocks are color separated.
 - National Setup now explicitly explains the implemented Company Confidence stock-price effect with hard examples.
 - National Setup now displays the complete Unrest penalty ladder with exact Commerce and Recruiter penalties.
+
+V3 FOLLOW-UP
+- Factions moved out of the long Diplomacy page into a dedicated FACTIONS button / command screen.
+- Power Grid and Cyber Facility standing icons are suppressed; they are private intelligence assets like Resources and appear through Military Infrastructure intelligence instead.
+- Legacy Grid/Cyber standing icons are stripped on turn advance.
+- Missile Silo construction and each upgrade now require and consume 1 Uranium in addition to Commerce and an operational Grid.
+- Nuclear missile resupply continues to consume 1 Uranium per missile.
+- AI must also possess and spend Uranium to build or upgrade Missile Silos.

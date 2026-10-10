@@ -341,6 +341,516 @@ function ShowWarDeclarationReasonMenu(parent, game, targetPlayerID)
     end);
 end
 
+
+
+function ShowFactionMenu(parent, game)
+    local area = CreateContentArea(parent);
+    local data = Mod.PublicGameData or {};
+    local economy = data.globalEconomy or {};
+    local diplomacy = economy.diplomacy or {};
+    local factions = diplomacy.factions or {};
+    local pendingFactionInvites = diplomacy.pendingFactionInvites or {};
+    local playerFaction = diplomacy.playerFaction or {};
+    local ourID = GetLocalPlayerID(game);
+    local ourFactionID = ourID ~= nil and playerFaction[ourID] or nil;
+    local ourFaction = ourFactionID ~= nil and factions[ourFactionID] or nil;
+
+    UI.CreateLabel(area).SetText("FACTION COMMAND").SetColor("#D4AF37");
+    UI.CreateLabel(area).SetText("Faction membership, leadership, invitations and Military Exercises are managed here.").SetColor("#9CCBFF");
+    UI.CreateButton(area).SetText("← BACK TO DIPLOMACY").SetOnClick(function() ShowDiplomacyMenu(parent,game); end);
+
+-- =====================================================
+-- FACTIONS
+-- =====================================================
+
+UI.CreateLabel(area)
+    .SetText(
+        "\nFACTIONS"
+    );
+
+
+UI.CreateLabel(area).SetText("Factions share discovered strategic intelligence automatically; Faction and alliance intelligence sharing is managed here.").SetColor("#9CCBFF");
+
+if ourFaction == nil then
+
+    UI.CreateLabel(area)
+        .SetText(
+            "Your nation does not currently belong to a Faction."
+        );
+
+
+    local factionNameInput =
+        CreateWideTextInput(
+            area
+        )
+            .SetPlaceholderText(
+                "Enter Faction name..."
+            );
+
+
+    UI.CreateButton(area)
+        .SetText(
+            "CREATE FACTION"
+        )
+        .SetInteractable(not IsViewerMode(game))
+        .SetOnClick(function()
+
+            local factionName =
+                factionNameInput.GetText();
+
+
+            SafeSendGameCustomMessage(game, 
+                "Creating Faction...",
+                {
+
+                    type =
+                        "createFaction",
+
+                    factionName =
+                        factionName
+
+                },
+
+                function(result)
+
+                    if result ~= nil
+                        and result.message ~= nil then
+
+                        UI.Alert(
+                            result.message
+                        );
+
+                    end
+
+
+                    ShowFactionMenu(
+                        parent,
+                        game
+                    );
+
+                end
+            );
+
+        end);
+
+
+else
+
+    UI.CreateLabel(area)
+        .SetText(
+            "Faction: " ..
+            tostring(
+                ourFaction.name
+                or "Unnamed Faction"
+            )
+        );
+
+
+    local leaderName =
+        GetPlayerName(
+            game,
+            ourFaction.leaderPlayerID
+        );
+
+
+    UI.CreateLabel(area)
+        .SetText(
+            "Leader: " ..
+            leaderName
+        );
+
+
+    UI.CreateLabel(area)
+        .SetText(
+            "Members:"
+        );
+
+
+    for memberID, isMember in pairs(
+        ourFaction.members
+        or {}
+    ) do
+
+        if isMember == true then
+
+            local memberName =
+                GetPlayerName(
+                    game,
+                    memberID
+                );
+
+
+            local memberGroup =
+                UI.CreateHorizontalLayoutGroup(
+                    area
+                );
+
+
+            local memberText =
+                memberName;
+
+
+            if memberID
+                == ourFaction.leaderPlayerID then
+
+                memberText =
+                    memberText ..
+                    " | LEADER";
+
+            end
+
+
+            UI.CreateLabel(memberGroup)
+                .SetText(
+                    memberText
+                );
+
+
+            if ourFaction.leaderPlayerID
+                == ourID
+                and memberID
+                ~= ourID then
+
+                local removableID =
+                    memberID;
+
+
+                UI.CreateButton(memberGroup).SetText("PROMOTE TO LEADER").SetOnClick(function()
+                    SafeSendGameCustomMessage(game,"Transferring Faction leadership...",{type="promoteFactionLeader",targetPlayerID=removableID},function(result) if result and result.message then UI.Alert(result.message); end; ShowFactionMenu(parent,game); end);
+                end);
+
+                UI.CreateButton(memberGroup)
+                    .SetText(
+                        "REMOVE"
+                    )
+                    .SetOnClick(function()
+
+                        SafeSendGameCustomMessage(game, 
+                            "Removing Faction member...",
+                            {
+
+                                type =
+                                    "removeFactionMember",
+
+                                targetPlayerID =
+                                    removableID
+
+                            },
+
+                            function(result)
+
+                                if result ~= nil
+                                    and result.message ~= nil then
+
+                                    UI.Alert(
+                                        result.message
+                                    );
+
+                                end
+
+
+                                ShowFactionMenu(
+                                    parent,
+                                    game
+                                );
+
+                            end
+                        );
+
+                    end);
+
+            end
+
+        end
+
+    end
+
+
+    UI.CreateLabel(area).SetText("FACTION MILITARY EXERCISE").SetColor("#D4AF37");
+    local function ExerciseTroopsPerTurn(memberID, bonusPercent)
+        local memberNation=(economy.nations or {})[memberID] or {}; local readiness=math.max(0,math.min(100,tonumber(memberNation.resourceMilitaryReadiness) or 100)); local unrest=math.max(0,math.min(100,tonumber(memberNation.resourceUnrest) or 0));
+        local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local total=0;
+        local recruiters=((economy.armyRecruiters or {}).territories or {}); local standing=game.LatestStanding;
+        for tid,lvl in pairs(recruiters) do local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid] or nil; if terr and terr.OwnerPlayerID==memberID then local mult=math.max(0,100-penalty+(tonumber(bonusPercent) or 0)); total=total+math.max(0,math.floor(base*(tonumber(lvl) or 0)*readiness/100*mult/100+0.5)); end end
+        return total;
+    end
+    local ex=ourFaction.militaryExercise or {}; local turn=tonumber((economy or {}).currentEconomyTurn or (Mod.PublicGameData or {}).tradeTurn) or 0;
+    if ex.active==true and turn<=tonumber(ex.endTurn or 0) then
+        UI.CreateLabel(area).SetText("ACTIVE | Ends Turn "..tostring(ex.endTurn).." | Recruiter boosts apply only to members who contribute.").SetColor("#79D279");
+        local mine=(ex.contributions or {})[ourID];
+        if mine then local normal=ExerciseTroopsPerTurn(ourID,0); local boosted=ExerciseTroopsPerTurn(ourID,mine.bonusPercent); UI.CreateLabel(area).SetText("Your contribution: "..tostring(mine.commerce).." Commerce | +"..tostring(mine.bonusPercent).."% | CURRENT Recruiter output "..tostring(normal).." -> "..tostring(boosted).." troops/turn (+"..tostring(math.max(0,boosted-normal))..")").SetColor("#8FD694");
+        else
+            UI.CreateLabel(area).SetText("Choose once per exercise. Buttons show your CURRENT exact Recruiter output after Readiness and Unrest.").SetColor("#FFFFFF");
+            local cr=UI.CreateVerticalLayoutGroup(area); for _,tier in ipairs({{50,10},{100,20},{200,40},{300,60}}) do local a=tier[1]; local pct=tier[2]; local normal=ExerciseTroopsPerTurn(ourID,0); local boosted=ExerciseTroopsPerTurn(ourID,pct); UI.CreateButton(cr).SetText(tostring(a).." Commerce | +"..tostring(pct).."% | "..tostring(normal).." -> "..tostring(boosted).." troops/turn (+"..tostring(math.max(0,boosted-normal))..")").SetOnClick(function() SafeSendGameCustomMessage(game,"Contributing to Faction exercise...",{type="contributeFactionExercise",amount=a},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); end
+        end
+        UI.CreateLabel(area).SetText("MEMBER PARTICIPATION").SetColor("#FFD166");
+        for memberID,isMember in pairs(ourFaction.members or {}) do if isMember then local c=(ex.contributions or {})[memberID]; local normal=ExerciseTroopsPerTurn(memberID,0); local boosted=c and ExerciseTroopsPerTurn(memberID,c.bonusPercent) or normal; UI.CreateLabel(area).SetText(GetPlayerName(game,memberID).." | "..(c and (tostring(c.commerce).." Commerce | +"..tostring(c.bonusPercent).."% | "..tostring(normal).." -> "..tostring(boosted).." troops/turn") or ("No contribution | Current "..tostring(normal).." troops/turn"))).SetColor(c and "#8FD694" or "#AAAAAA"); end end
+    else
+        local cd=tonumber(ex.cooldownUntilTurn or 0); if cd>turn then UI.CreateLabel(area).SetText("COOLDOWN | Next exercise available Turn "..tostring(cd)).SetColor("#FFB366"); elseif ourFaction.leaderPlayerID==ourID then UI.CreateButton(area).SetText("START MILITARY EXERCISE").SetOnClick(function() SafeSendGameCustomMessage(game,"Starting Faction military exercise...",{type="startFactionExercise"},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); else UI.CreateLabel(area).SetText("No active exercise. The Faction leader may start one when cooldown is ready.").SetColor("#888888"); end
+    end
+
+    if ourFaction.leaderPlayerID
+        ~= ourID then
+
+        UI.CreateButton(area)
+            .SetText(
+                "LEAVE FACTION"
+            )
+            .SetOnClick(function()
+
+                SafeSendGameCustomMessage(game, 
+                    "Leaving Faction...",
+                    {
+
+                        type =
+                            "leaveFaction"
+
+                    },
+
+                    function(result)
+
+                        if result ~= nil
+                            and result.message ~= nil then
+
+                            UI.Alert(
+                                result.message
+                            );
+
+                        end
+
+
+                        ShowFactionMenu(
+                            parent,
+                            game
+                        );
+
+                    end
+                );
+
+            end);
+
+    else
+
+        UI.CreateLabel(area)
+            .SetText(
+                "As Faction leader, you manage invitations and membership."
+            );
+
+
+
+    UI.CreateButton(area)
+        .SetText(
+            "DISBAND FACTION"
+        )
+        .SetOnClick(function()
+
+            SafeSendGameCustomMessage(game, 
+                "Disbanding Faction...",
+                {
+
+                    type =
+                        "disbandFaction"
+
+                },
+
+                function(result)
+
+                    if result ~= nil
+                        and result.message ~= nil then
+
+                        UI.Alert(
+                            result.message
+                        );
+
+                    end
+
+
+                    ShowFactionMenu(
+                        parent,
+                        game
+                    );
+
+                end
+            );
+
+        end);
+
+end
+    end
+
+
+
+-- =====================================================
+-- INCOMING FACTION INVITATIONS
+-- =====================================================
+
+UI.CreateLabel(area)
+    .SetText(
+        "\nFACTION INVITATIONS"
+    );
+
+
+local foundFactionInvite =
+    false;
+
+
+for _, invite in ipairs(
+    pendingFactionInvites
+) do
+
+    if invite.toPlayerID
+        == ourID then
+
+        foundFactionInvite =
+            true;
+
+
+        local faction =
+            factions[
+                invite.factionID
+            ];
+
+
+        local factionName =
+            faction ~= nil
+            and faction.name
+            or "Unknown Faction";
+
+
+        local inviterName =
+            GetPlayerName(
+                game,
+                invite.fromPlayerID
+            );
+
+
+        local inviteGroup =
+            UI.CreateVerticalLayoutGroup(
+                area
+            );
+
+
+        UI.CreateLabel(inviteGroup)
+            .SetText(
+                inviterName ..
+                " invited you to join \"" ..
+                tostring(
+                    factionName
+                ) ..
+                "\"."
+            );
+
+
+        local buttons =
+            UI.CreateHorizontalLayoutGroup(
+                inviteGroup
+            );
+
+
+        local selectedFactionID =
+            invite.factionID;
+
+
+        UI.CreateButton(buttons)
+            .SetText(
+                "ACCEPT"
+            )
+            .SetOnClick(function()
+
+                SafeSendGameCustomMessage(game, 
+                    "Accepting Faction invitation...",
+                    {
+
+                        type =
+                            "acceptFactionInvite",
+
+                        factionID =
+                            selectedFactionID
+
+                    },
+
+                    function(result)
+
+                        if result ~= nil
+                            and result.message ~= nil then
+
+                            UI.Alert(
+                                result.message
+                            );
+
+                        end
+
+
+                        ShowFactionMenu(
+                            parent,
+                            game
+                        );
+
+                    end
+                );
+
+            end);
+
+
+        UI.CreateButton(buttons)
+            .SetText(
+                "REJECT"
+            )
+            .SetOnClick(function()
+
+                SafeSendGameCustomMessage(game, 
+                    "Rejecting Faction invitation...",
+                    {
+
+                        type =
+                            "rejectFactionInvite",
+
+                        factionID =
+                            selectedFactionID
+
+                    },
+
+                    function(result)
+
+                        if result ~= nil
+                            and result.message ~= nil then
+
+                            UI.Alert(
+                                result.message
+                            );
+
+                        end
+
+
+                        ShowFactionMenu(
+                            parent,
+                            game
+                        );
+
+                    end
+                );
+
+            end);
+
+    end
+
+end
+
+
+if not foundFactionInvite then
+
+    UI.CreateLabel(area)
+        .SetText(
+            "No incoming Faction invitations."
+        );
+
+end
+
+
+
+    UI.CreateButton(area).SetText("← BACK TO DIPLOMACY").SetOnClick(function() ShowDiplomacyMenu(parent,game); end);
+end
+
 function ShowDiplomacyMenu(
     parent,
     game
@@ -455,6 +965,7 @@ local playerFaction =
 
     local economyRow = UI.CreateHorizontalLayoutGroup(area);
     UI.CreateButton(economyRow).SetText("TRADE AGREEMENTS").SetOnClick(function() ShowTradeAgreementsMenu(parent,game); end);
+    UI.CreateButton(economyRow).SetText("FACTIONS").SetOnClick(function() ShowFactionMenu(parent,game); end);
 
 local ourFactionID =
     playerFaction[
@@ -2453,492 +2964,7 @@ if not foundAllianceOffer then
 
 end
 
--- =====================================================
--- FACTIONS
--- =====================================================
-
-UI.CreateLabel(area)
-    .SetText(
-        "\nFACTIONS"
-    );
-
-
-UI.CreateLabel(area).SetText("Factions share discovered strategic intelligence automatically; Faction and alliance intelligence sharing is managed here.").SetColor("#9CCBFF");
-
-if ourFaction == nil then
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Your nation does not currently belong to a Faction."
-        );
-
-
-    local factionNameInput =
-        CreateWideTextInput(
-            area
-        )
-            .SetPlaceholderText(
-                "Enter Faction name..."
-            );
-
-
-    UI.CreateButton(area)
-        .SetText(
-            "CREATE FACTION"
-        )
-        .SetInteractable(not IsViewerMode(game))
-        .SetOnClick(function()
-
-            local factionName =
-                factionNameInput.GetText();
-
-
-            SafeSendGameCustomMessage(game, 
-                "Creating Faction...",
-                {
-
-                    type =
-                        "createFaction",
-
-                    factionName =
-                        factionName
-
-                },
-
-                function(result)
-
-                    if result ~= nil
-                        and result.message ~= nil then
-
-                        UI.Alert(
-                            result.message
-                        );
-
-                    end
-
-
-                    ShowDiplomacyMenu(
-                        parent,
-                        game
-                    );
-
-                end
-            );
-
-        end);
-
-
-else
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Faction: " ..
-            tostring(
-                ourFaction.name
-                or "Unnamed Faction"
-            )
-        );
-
-
-    local leaderName =
-        GetPlayerName(
-            game,
-            ourFaction.leaderPlayerID
-        );
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Leader: " ..
-            leaderName
-        );
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Members:"
-        );
-
-
-    for memberID, isMember in pairs(
-        ourFaction.members
-        or {}
-    ) do
-
-        if isMember == true then
-
-            local memberName =
-                GetPlayerName(
-                    game,
-                    memberID
-                );
-
-
-            local memberGroup =
-                UI.CreateHorizontalLayoutGroup(
-                    area
-                );
-
-
-            local memberText =
-                memberName;
-
-
-            if memberID
-                == ourFaction.leaderPlayerID then
-
-                memberText =
-                    memberText ..
-                    " | LEADER";
-
-            end
-
-
-            UI.CreateLabel(memberGroup)
-                .SetText(
-                    memberText
-                );
-
-
-            if ourFaction.leaderPlayerID
-                == ourID
-                and memberID
-                ~= ourID then
-
-                local removableID =
-                    memberID;
-
-
-                UI.CreateButton(memberGroup).SetText("PROMOTE TO LEADER").SetOnClick(function()
-                    SafeSendGameCustomMessage(game,"Transferring Faction leadership...",{type="promoteFactionLeader",targetPlayerID=removableID},function(result) if result and result.message then UI.Alert(result.message); end; ShowDiplomacyMenu(parent,game); end);
-                end);
-
-                UI.CreateButton(memberGroup)
-                    .SetText(
-                        "REMOVE"
-                    )
-                    .SetOnClick(function()
-
-                        SafeSendGameCustomMessage(game, 
-                            "Removing Faction member...",
-                            {
-
-                                type =
-                                    "removeFactionMember",
-
-                                targetPlayerID =
-                                    removableID
-
-                            },
-
-                            function(result)
-
-                                if result ~= nil
-                                    and result.message ~= nil then
-
-                                    UI.Alert(
-                                        result.message
-                                    );
-
-                                end
-
-
-                                ShowDiplomacyMenu(
-                                    parent,
-                                    game
-                                );
-
-                            end
-                        );
-
-                    end);
-
-            end
-
-        end
-
-    end
-
-
-    UI.CreateLabel(area).SetText("FACTION MILITARY EXERCISE").SetColor("#D4AF37");
-    local function ExerciseTroopsPerTurn(memberID, bonusPercent)
-        local memberNation=(economy.nations or {})[memberID] or {}; local readiness=math.max(0,math.min(100,tonumber(memberNation.resourceMilitaryReadiness) or 100)); local unrest=math.max(0,math.min(100,tonumber(memberNation.resourceUnrest) or 0));
-        local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local total=0;
-        local recruiters=((economy.armyRecruiters or {}).territories or {}); local standing=game.LatestStanding;
-        for tid,lvl in pairs(recruiters) do local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid] or nil; if terr and terr.OwnerPlayerID==memberID then local mult=math.max(0,100-penalty+(tonumber(bonusPercent) or 0)); total=total+math.max(0,math.floor(base*(tonumber(lvl) or 0)*readiness/100*mult/100+0.5)); end end
-        return total;
-    end
-    local ex=ourFaction.militaryExercise or {}; local turn=tonumber((economy or {}).currentEconomyTurn or (Mod.PublicGameData or {}).tradeTurn) or 0;
-    if ex.active==true and turn<=tonumber(ex.endTurn or 0) then
-        UI.CreateLabel(area).SetText("ACTIVE | Ends Turn "..tostring(ex.endTurn).." | Recruiter boosts apply only to members who contribute.").SetColor("#79D279");
-        local mine=(ex.contributions or {})[ourID];
-        if mine then local normal=ExerciseTroopsPerTurn(ourID,0); local boosted=ExerciseTroopsPerTurn(ourID,mine.bonusPercent); UI.CreateLabel(area).SetText("Your contribution: "..tostring(mine.commerce).." Commerce | +"..tostring(mine.bonusPercent).."% | CURRENT Recruiter output "..tostring(normal).." -> "..tostring(boosted).." troops/turn (+"..tostring(math.max(0,boosted-normal))..")").SetColor("#8FD694");
-        else
-            UI.CreateLabel(area).SetText("Choose once per exercise. Buttons show your CURRENT exact Recruiter output after Readiness and Unrest.").SetColor("#FFFFFF");
-            local cr=UI.CreateVerticalLayoutGroup(area); for _,tier in ipairs({{50,10},{100,20},{200,40},{300,60}}) do local a=tier[1]; local pct=tier[2]; local normal=ExerciseTroopsPerTurn(ourID,0); local boosted=ExerciseTroopsPerTurn(ourID,pct); UI.CreateButton(cr).SetText(tostring(a).." Commerce | +"..tostring(pct).."% | "..tostring(normal).." -> "..tostring(boosted).." troops/turn (+"..tostring(math.max(0,boosted-normal))..")").SetOnClick(function() SafeSendGameCustomMessage(game,"Contributing to Faction exercise...",{type="contributeFactionExercise",amount=a},function(r) if r and r.message then UI.Alert(r.message); end; ShowDiplomacyMenu(parent,game); end); end); end
-        end
-        UI.CreateLabel(area).SetText("MEMBER PARTICIPATION").SetColor("#FFD166");
-        for memberID,isMember in pairs(ourFaction.members or {}) do if isMember then local c=(ex.contributions or {})[memberID]; local normal=ExerciseTroopsPerTurn(memberID,0); local boosted=c and ExerciseTroopsPerTurn(memberID,c.bonusPercent) or normal; UI.CreateLabel(area).SetText(GetPlayerName(game,memberID).." | "..(c and (tostring(c.commerce).." Commerce | +"..tostring(c.bonusPercent).."% | "..tostring(normal).." -> "..tostring(boosted).." troops/turn") or ("No contribution | Current "..tostring(normal).." troops/turn"))).SetColor(c and "#8FD694" or "#AAAAAA"); end end
-    else
-        local cd=tonumber(ex.cooldownUntilTurn or 0); if cd>turn then UI.CreateLabel(area).SetText("COOLDOWN | Next exercise available Turn "..tostring(cd)).SetColor("#FFB366"); elseif ourFaction.leaderPlayerID==ourID then UI.CreateButton(area).SetText("START MILITARY EXERCISE").SetOnClick(function() SafeSendGameCustomMessage(game,"Starting Faction military exercise...",{type="startFactionExercise"},function(r) if r and r.message then UI.Alert(r.message); end; ShowDiplomacyMenu(parent,game); end); end); else UI.CreateLabel(area).SetText("No active exercise. The Faction leader may start one when cooldown is ready.").SetColor("#888888"); end
-    end
-
-    if ourFaction.leaderPlayerID
-        ~= ourID then
-
-        UI.CreateButton(area)
-            .SetText(
-                "LEAVE FACTION"
-            )
-            .SetOnClick(function()
-
-                SafeSendGameCustomMessage(game, 
-                    "Leaving Faction...",
-                    {
-
-                        type =
-                            "leaveFaction"
-
-                    },
-
-                    function(result)
-
-                        if result ~= nil
-                            and result.message ~= nil then
-
-                            UI.Alert(
-                                result.message
-                            );
-
-                        end
-
-
-                        ShowDiplomacyMenu(
-                            parent,
-                            game
-                        );
-
-                    end
-                );
-
-            end);
-
-    else
-
-        UI.CreateLabel(area)
-            .SetText(
-                "As Faction leader, you manage invitations and membership."
-            );
-
-
-
-    UI.CreateButton(area)
-        .SetText(
-            "DISBAND FACTION"
-        )
-        .SetOnClick(function()
-
-            SafeSendGameCustomMessage(game, 
-                "Disbanding Faction...",
-                {
-
-                    type =
-                        "disbandFaction"
-
-                },
-
-                function(result)
-
-                    if result ~= nil
-                        and result.message ~= nil then
-
-                        UI.Alert(
-                            result.message
-                        );
-
-                    end
-
-
-                    ShowDiplomacyMenu(
-                        parent,
-                        game
-                    );
-
-                end
-            );
-
-        end);
-
-end
-    end
-
-
-
--- =====================================================
--- INCOMING FACTION INVITATIONS
--- =====================================================
-
-UI.CreateLabel(area)
-    .SetText(
-        "\nFACTION INVITATIONS"
-    );
-
-
-local foundFactionInvite =
-    false;
-
-
-for _, invite in ipairs(
-    pendingFactionInvites
-) do
-
-    if invite.toPlayerID
-        == ourID then
-
-        foundFactionInvite =
-            true;
-
-
-        local faction =
-            factions[
-                invite.factionID
-            ];
-
-
-        local factionName =
-            faction ~= nil
-            and faction.name
-            or "Unknown Faction";
-
-
-        local inviterName =
-            GetPlayerName(
-                game,
-                invite.fromPlayerID
-            );
-
-
-        local inviteGroup =
-            UI.CreateVerticalLayoutGroup(
-                area
-            );
-
-
-        UI.CreateLabel(inviteGroup)
-            .SetText(
-                inviterName ..
-                " invited you to join \"" ..
-                tostring(
-                    factionName
-                ) ..
-                "\"."
-            );
-
-
-        local buttons =
-            UI.CreateHorizontalLayoutGroup(
-                inviteGroup
-            );
-
-
-        local selectedFactionID =
-            invite.factionID;
-
-
-        UI.CreateButton(buttons)
-            .SetText(
-                "ACCEPT"
-            )
-            .SetOnClick(function()
-
-                SafeSendGameCustomMessage(game, 
-                    "Accepting Faction invitation...",
-                    {
-
-                        type =
-                            "acceptFactionInvite",
-
-                        factionID =
-                            selectedFactionID
-
-                    },
-
-                    function(result)
-
-                        if result ~= nil
-                            and result.message ~= nil then
-
-                            UI.Alert(
-                                result.message
-                            );
-
-                        end
-
-
-                        ShowDiplomacyMenu(
-                            parent,
-                            game
-                        );
-
-                    end
-                );
-
-            end);
-
-
-        UI.CreateButton(buttons)
-            .SetText(
-                "REJECT"
-            )
-            .SetOnClick(function()
-
-                SafeSendGameCustomMessage(game, 
-                    "Rejecting Faction invitation...",
-                    {
-
-                        type =
-                            "rejectFactionInvite",
-
-                        factionID =
-                            selectedFactionID
-
-                    },
-
-                    function(result)
-
-                        if result ~= nil
-                            and result.message ~= nil then
-
-                            UI.Alert(
-                                result.message
-                            );
-
-                        end
-
-
-                        ShowDiplomacyMenu(
-                            parent,
-                            game
-                        );
-
-                    end
-                );
-
-            end);
-
-    end
-
-end
-
-
-if not foundFactionInvite then
-
-    UI.CreateLabel(area)
-        .SetText(
-            "No incoming Faction invitations."
-        );
-
-end
+-- Faction management moved to the dedicated FACTIONS tab.
 
     -- =====================================================
     -- DIPLOMACY HISTORY
@@ -5011,7 +5037,7 @@ function ShowMissileCommandMenu(parent, game)
     local silos=state.missileSilos or {};
     local stock=state.missileInventory or {};
     UI.CreateLabel(area).SetText("MISSILE COMMAND").SetColor("#FF7B7B");
-    UI.CreateLabel(area).SetText("Select a silo, resupply missiles, then choose a weapon and target. Strikes resolve on turn advancement.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Silo construction/upgrades require 1 Uranium per level. Nuclear missile resupply consumes 1 additional Uranium. Select a silo, resupply missiles, then choose a weapon and target. Strikes resolve on turn advancement.").SetColor("#BBBBBB");
     local selectedSilo=nil;
     local selectedLabel=UI.CreateLabel(area).SetText("Selected Silo: None").SetColor("#FFD166");
     local found=false;
@@ -5096,7 +5122,7 @@ function ShowMilitaryMenu(parent, game)
     local area=CreateContentArea(parent); local state=UFPrivateMilitaryState(); local intel=(Mod.PlayerGameData or {}).strategicIntel or {};
     local data=Mod.PublicGameData or {}; local economy=data.globalEconomy or {}; local ourID=GetLocalPlayerID(game); local standing=game.LatestStanding;
     UI.CreateLabel(area).SetText("MILITARY INFRASTRUCTURE").SetColor("#8FBF6F");
-    UI.CreateLabel(area).SetText("Infrastructure details follow the same private-intelligence model as Resources. Enemy Air Wings and Special Forces use normal fog visibility and are no longer globally visible.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Infrastructure intelligence follows the same private model as Resources. Power Grids and Cyber Facilities never broadcast global map icons. Enemy Air Wings and Special Forces use normal fog visibility and are no longer globally visible.").SetColor("#BBBBBB");
     local filterRow=UI.CreateHorizontalLayoutGroup(area); local filters={{"My Infrastructure","MY INFRASTRUCTURE"},{"Neighbors","NEIGHBORS"},{"Shared Intel","ALLY / FACTION"},{"All Known","ALL KNOWN"}};
     for _,fd in ipairs(filters) do local key,label=fd[1],fd[2]; UI.CreateButton(filterRow).SetText((MilitaryIntelFilter==key and "▶ " or "")..label).SetOnClick(function() MilitaryIntelFilter=key; ShowMilitaryMenu(parent,game); end); end
     local function hp(kind,tid)
@@ -5137,7 +5163,7 @@ function ShowMilitaryMenu(parent, game)
     if GetClientSetting("PowerGridEnabled",true) then UFAddStructureAction(area,parent,game,"POWER / ELECTRICAL GRID","PowerGrid",GetClientSetting("PowerGridBaseCost",300)," | required for Airbases, Missile Silos & Cyber Facilities","#FFE066"); end
     if GetClientSetting("AirbasesEnabled",true) then UFAddStructureAction(area,parent,game,"AIRBASE","Airbase",GetClientSetting("AirbaseBaseCost",350)," | requires Grid","#62B6FF"); end
     if GetClientSetting("ForwardAirstripsEnabled",true) then UFAddStructureAction(area,parent,game,"FORWARD AIRSTRIP","ForwardAirstrip",GetClientSetting("ForwardAirstripBaseCost",175),"","#82CFFF"); end
-    if GetClientSetting("MissileSilosEnabled",true) then UFAddStructureAction(area,parent,game,"MISSILE SILO","MissileSilo",GetClientSetting("MissileSiloBaseCost",500)," | requires Grid","#FF7B7B"); UI.CreateButton(area).SetText("MISSILE COMMAND / TARGETING").SetOnClick(function() ShowMissileCommandMenu(parent,game); end); end
+    if GetClientSetting("MissileSilosEnabled",true) then UFAddStructureAction(area,parent,game,"MISSILE SILO","MissileSilo",GetClientSetting("MissileSiloBaseCost",500)," | requires Grid + 1 Uranium per level","#FF7B7B"); UI.CreateButton(area).SetText("MISSILE COMMAND / TARGETING").SetOnClick(function() ShowMissileCommandMenu(parent,game); end); end
     if GetClientSetting("CyberFacilitiesEnabled",true) then
         UFAddStructureAction(area,parent,game,"CYBER FACILITY","CyberFacility",GetClientSetting("CyberFacilityBaseCost",450)," | requires Grid","#C792EA");
         UI.CreateButton(area).SetText("LAUNCH CYBER DISRUPTION").SetOnClick(function() UFShowTerritorySelector(parent,game,"Launching cyber operation...",{type="hqCyberDisrupt"}); end);
@@ -12422,13 +12448,13 @@ function ShowHowItWorks(parent)
         "#4DD0E1");
 
     Section("MILITARY MAP ASSETS",
-        "Recruiting Stations, Airbases, Forward Airstrips, Missile Silos, Power Grids, Cyber Facilities, Air Wings, and Special Forces have a visible map presence.\n\n" ..
-        "Recruiters, Airbases, Airstrips, Silos, Power Grids and Cyber Facilities use structure-style map assets. Air Wings and Special Forces use visible custom special-unit icons. A structure upgrade replaces its tier rather than creating duplicate icons.\n\n" ..
+        "Recruiting Stations, Airbases, Forward Airstrips and Missile Silos can have a visible map presence. Power Grids and Cyber Facilities are PRIVATE infrastructure: their map icons are suppressed and their locations are revealed only through the Military Infrastructure intelligence screen.\n\n" ..
+        "Recruiters, Airbases, Airstrips and Silos use structure-style map assets. Power Grids and Cyber Facilities are stored privately and do not broadcast standing icons. Air Wings and Special Forces use custom special-unit icons under normal fog. A visible structure upgrade replaces its tier rather than creating duplicate icons.\n\n" ..
         "Military Infrastructure uses My Infrastructure, Neighbors, Ally/Faction, and All Known filters. SHOW highlights a known installation and returns through a small Back control. Air Wings and Special Forces use normal game fog instead of forced global visibility.",
         "#FFB74D");
 
     Section("CYBER FACILITIES",
-        "Cyber Facilities provide offensive cyber capability directly. They require an operational Power Grid and can launch one cyber disruption operation per turn during an active war. Higher facility levels improve offensive capability, while the target's Cyber Facilities provide defensive resistance.\n\n" ..
+        "Cyber Facilities provide offensive cyber capability directly. Their locations are PRIVATE like resources and are not globally exposed as standing icons. They require an operational Power Grid and can launch one cyber disruption operation per turn during an active war. Higher facility levels improve offensive capability, while the target's Cyber Facilities provide defensive resistance.\n\n" ..
         "Cyber Facilities are optional. If the host disables them, Recruiters and the rest of the enabled military systems continue to work normally.",
         "#C792EA");
 
@@ -12455,7 +12481,7 @@ function ShowHowItWorks(parent)
         "#79D279");
 
     Section("MISSILE SILOS",
-        "Missile Silos are visible strategic structures with limited missile inventory and resupply. Conventional missiles damage armies/assets. EMP strikes disable systems and can spread from stronger Silos. Nuclear strikes use Low/Medium/High yield (limited by Silo level) and can damage armies, cities/territories, resource facilities, and strategic assets across the target and nearby territories.\n\n" ..
+        "Missile Silos are strategic structures with limited missile inventory and resupply. Building or upgrading a Silo consumes 1 Uranium per level, and each Nuclear missile resupply consumes 1 additional Uranium. Conventional missiles damage armies/assets. EMP strikes disable systems and can spread from stronger Silos. Nuclear strikes use Low/Medium/High yield (limited by Silo level) and can damage armies, cities/territories, resource facilities, and strategic assets across the target and nearby territories.\n\n" ..
         "A Silo's visible location does not automatically expose every sensitive detail about its level, inventory, readiness or strategic capability; those details can be intelligence-sensitive.",
         "#FF7B7B");
 

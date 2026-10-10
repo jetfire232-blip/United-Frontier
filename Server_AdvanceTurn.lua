@@ -17347,8 +17347,10 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     end
     if atWar and GetSetting("MissileSilosEnabled",true)==true and UFHasPowerGrid(state) and next(state.missileSilos)==nil and spendable-spent>=500 then
         local tid=UFPickAITerritory(game,standing,playerID,true,nil); local cost=math.max(25,math.floor(tonumber(GetSetting("MissileSiloBaseCost",500)) or 500));
-        if tid and canSpend(cost) then
-            spend(cost); state.missileSilos[tid]=1; state.missileInventory=state.missileInventory or {}; state.missileInventory[tid]={Conventional=1,EMP=0,Nuclear=0};
+        nation.resourceStockpile=nation.resourceStockpile or {};
+        local uranium=tonumber(nation.resourceStockpile.Uranium) or 0;
+        if tid and canSpend(cost) and uranium>=1 then
+            spend(cost); nation.resourceStockpile.Uranium=uranium-1; state.missileSilos[tid]=1; state.missileInventory=state.missileInventory or {}; state.missileInventory[tid]={Conventional=1,EMP=0,Nuclear=0};
         end
     end
 
@@ -17420,7 +17422,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
         local safety=0;
         while (spendable-spent)>=50 and safety<8 do
             safety=safety+1; local did=false;
-            if GetSetting("MissileSilosEnabled",true)==true then did=upgradeOne(state.missileSilos,"MissileSiloBaseCost",500,"MissileSiloMaxLevel",3); end
+            if GetSetting("MissileSilosEnabled",true)==true then did=upgradeOne(state.missileSilos,"MissileSiloBaseCost",500,"MissileSiloMaxLevel",3,true); end
             if not did and GetSetting("AirWingsEnabled",true)==true and GetSetting("AirbasesEnabled",true)==true then did=upgradeOne(state.airbases,"AirbaseBaseCost",350,"AirbaseMaxLevel",3); end
             if not did and GetSetting("CyberFacilitiesEnabled",true)==true then did=upgradeOne(state.cyberFacilities,"CyberFacilityBaseCost",450,"CyberFacilityMaxLevel",3); end
             if not did and aiNeedsGrid then did=upgradeOne(state.powerGrids,"PowerGridBaseCost",300,nil,3); end
@@ -19316,18 +19318,9 @@ local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
                 if terr and terr.OwnerPlayerID==ownerID then UFAddWantedStructure(wanted,ntid,"MissileSilo",lvl); end
             end
         end
-        if GetSetting("PowerGridEnabled",true) == true then
-            for tid,lvl in pairs(state.powerGrids or {}) do
-                local ntid=tonumber(tid) or tid; local terr=standing.Territories[ntid];
-                if terr and terr.OwnerPlayerID==ownerID then UFAddWantedStructure(wanted,ntid,"PowerGrid",lvl); end
-            end
-        end
-        if GetSetting("CyberFacilitiesEnabled",true) == true then
-            for tid,lvl in pairs(state.cyberFacilities or {}) do
-                local ntid=tonumber(tid) or tid; local terr=standing.Territories[ntid];
-                if terr and terr.OwnerPlayerID==ownerID then UFAddWantedStructure(wanted,ntid,"CyberFacility",lvl); end
-            end
-        end
+        -- Power Grids and Cyber Facilities are private intelligence assets.
+        -- Do NOT publish them as standing custom-structure icons; UFIsVisibleMilitaryStructure
+        -- still strips any legacy icons that may exist from an older build.
     end
 
     local mods = {};

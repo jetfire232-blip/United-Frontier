@@ -11985,6 +11985,13 @@ end
         local base=math.max(25,math.floor(tonumber(GetSetting(cfg.baseCost,cfg.defaultCost)) or cfg.defaultCost));
         local cost=base*newLevel;
         if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for "..UFMilitaryDisplayName(kind).." level "..tostring(newLevel).."."}); return; end
+        local siloNation=nil;
+        if kind=="MissileSilo" then
+            siloNation=EnsureNation(data,game,playerID); siloNation.resourceStockpile=siloNation.resourceStockpile or {};
+            local uranium=tonumber(siloNation.resourceStockpile.Uranium) or 0;
+            if uranium<1 then setReturn({success=false,message="Missile Silo construction/upgrades require 1 Uranium per level. Your national stockpile has "..tostring(uranium).."."}); return; end
+            siloNation.resourceStockpile.Uranium=uranium-1;
+        end
         RemoveGold(game,playerID,cost);
         tbl[territoryID]=newLevel;
         state.assetCondition=state.assetCondition or {};
@@ -11996,7 +12003,9 @@ end
             state.missileInventory[territoryID].Conventional=(tonumber(state.missileInventory[territoryID].Conventional) or 0)+1;
         end
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        setReturn({success=true,message=UFMilitaryDisplayName(kind).." level "..tostring(newLevel).." established. "..tostring(cost).." Commerce deducted. The map icon updates when the turn advances."}); return;
+        local resourceText = kind=="MissileSilo" and " + 1 Uranium consumed." or "";
+        local visibilityText = (kind=="PowerGrid" or kind=="CyberFacility") and " Location remains private and is shown through Military Infrastructure intelligence." or " The map icon updates when the turn advances.";
+        setReturn({success=true,message=UFMilitaryDisplayName(kind).." level "..tostring(newLevel).." established. "..tostring(cost).." Commerce deducted."..resourceText..visibilityText}); return;
     end
 
 

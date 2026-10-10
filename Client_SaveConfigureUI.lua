@@ -451,10 +451,14 @@ function Client_SaveConfigureUI(
     local nationalSetupDeadlineTurn = ReadNumber("NationalSetupDeadlineTurn");
     local factionExerciseDurationTurns = ReadNumber("FactionExerciseDurationTurns");
     local factionExerciseCooldownTurns = ReadNumber("FactionExerciseCooldownTurns");
-    local factionExerciseTier1Cost=ReadNumber("FactionExerciseTier1Cost"); local factionExerciseTier1Bonus=ReadNumber("FactionExerciseTier1Bonus");
-    local factionExerciseTier2Cost=ReadNumber("FactionExerciseTier2Cost"); local factionExerciseTier2Bonus=ReadNumber("FactionExerciseTier2Bonus");
-    local factionExerciseTier3Cost=ReadNumber("FactionExerciseTier3Cost"); local factionExerciseTier3Bonus=ReadNumber("FactionExerciseTier3Bonus");
-    local factionExerciseTier4Cost=ReadNumber("FactionExerciseTier4Cost"); local factionExerciseTier4Bonus=ReadNumber("FactionExerciseTier4Bonus");
+    local factionExerciseTier1Cost = ReadNumber("FactionExerciseTier1Cost");
+    local factionExerciseTier1Bonus = ReadNumber("FactionExerciseTier1Bonus");
+    local factionExerciseTier2Cost = ReadNumber("FactionExerciseTier2Cost");
+    local factionExerciseTier2Bonus = ReadNumber("FactionExerciseTier2Bonus");
+    local factionExerciseTier3Cost = ReadNumber("FactionExerciseTier3Cost");
+    local factionExerciseTier3Bonus = ReadNumber("FactionExerciseTier3Bonus");
+    local factionExerciseTier4Cost = ReadNumber("FactionExerciseTier4Cost");
+    local factionExerciseTier4Bonus = ReadNumber("FactionExerciseTier4Bonus");
 
     local armyRecruitersEnabled = ReadBool("ArmyRecruitersEnabled");
     local armyRecruiterBaseCost = ReadNumber("ArmyRecruiterBaseCost");
@@ -475,11 +479,19 @@ function Client_SaveConfigureUI(
     local airbasesEnabled = ReadBool("AirbasesEnabled");
     local airbaseBaseCost = ReadNumber("AirbaseBaseCost");
     local airbaseMaxLevel = ReadNumber("AirbaseMaxLevel");
+    local airbaseOilPerLevel = ReadNumber("AirbaseOilPerLevel");
+    local airbaseIronPerLevel = ReadNumber("AirbaseIronPerLevel");
     local forwardAirstripsEnabled = ReadBool("ForwardAirstripsEnabled");
     local forwardAirstripBaseCost = ReadNumber("ForwardAirstripBaseCost");
+    local forwardAirstripMaxLevel = ReadNumber("ForwardAirstripMaxLevel");
+    local forwardAirstripOilPerLevel = ReadNumber("ForwardAirstripOilPerLevel");
     local missileSilosEnabled = ReadBool("MissileSilosEnabled");
     local missileSiloBaseCost = ReadNumber("MissileSiloBaseCost");
     local missileSiloMaxLevel = ReadNumber("MissileSiloMaxLevel");
+    local missileInterceptorCost = ReadNumber("MissileInterceptorCost");
+    local missileDefenseConventionalChance = ReadNumber("MissileDefenseConventionalChance");
+    local missileDefenseEMPChance = ReadNumber("MissileDefenseEMPChance");
+    local missileDefenseNuclearChance = ReadNumber("MissileDefenseNuclearChance");
     local conventionalMissileArmyDamagePercent = ReadNumber("ConventionalMissileArmyDamagePercent");
     local conventionalMissileStructureDamagePercent = ReadNumber("ConventionalMissileStructureDamagePercent");
     local conventionalMissileCityDamagePercent = ReadNumber("ConventionalMissileCityDamagePercent");
@@ -493,6 +505,7 @@ function Client_SaveConfigureUI(
     local nuclearResourceLevelDamage = ReadNumber("NuclearResourceLevelDamage");
     local powerGridEnabled = ReadBool("PowerGridEnabled");
     local powerGridBaseCost = ReadNumber("PowerGridBaseCost");
+    local powerGridMaxLevel = ReadNumber("PowerGridMaxLevel");
     local airWingsEnabled = ReadBool("AirWingsEnabled");
     local airWingBaseCost = ReadNumber("AirWingBaseCost");
     local aircraftPerAirWing = ReadNumber("AircraftPerAirWing");
@@ -973,7 +986,7 @@ function Client_SaveConfigureUI(
     if unCeasefireMaxTurns < unCeasefireMinTurns then alert("Ceasefire Maximum Duration cannot be lower than the minimum."); return; end
 
     if (airbasesEnabled or missileSilosEnabled or cyberFacilitiesEnabled or airWingsEnabled) and not powerGridEnabled then
-        alert("Power Grid must be enabled when Airbases, Missile Silos, Intelligence Agencies, or Air Wings are enabled."); return;
+        alert("Power Grid must be enabled when Airbases, Missile Command sites, Intelligence Agencies, or Air Wings are enabled."); return;
     end
     if airWingsEnabled and not airbasesEnabled then
         alert("Air Wings require Airbases. Enable Airbases or disable Air Wings."); return;
@@ -1327,10 +1340,14 @@ function Client_SaveConfigureUI(
     Mod.Settings.NationalSetupDeadlineTurn = math.max(1, math.min(10, nationalSetupDeadlineTurn or 1));
     Mod.Settings.FactionExerciseDurationTurns = math.max(1, math.min(10, factionExerciseDurationTurns or 3));
     Mod.Settings.FactionExerciseCooldownTurns = math.max(1, math.min(20, factionExerciseCooldownTurns or 5));
-    Mod.Settings.FactionExerciseTier1Cost=math.max(0,math.min(10000,factionExerciseTier1Cost or 50)); Mod.Settings.FactionExerciseTier1Bonus=math.max(0,math.min(200,factionExerciseTier1Bonus or 10));
-    Mod.Settings.FactionExerciseTier2Cost=math.max(0,math.min(10000,factionExerciseTier2Cost or 100)); Mod.Settings.FactionExerciseTier2Bonus=math.max(0,math.min(200,factionExerciseTier2Bonus or 20));
-    Mod.Settings.FactionExerciseTier3Cost=math.max(0,math.min(10000,factionExerciseTier3Cost or 200)); Mod.Settings.FactionExerciseTier3Bonus=math.max(0,math.min(200,factionExerciseTier3Bonus or 40));
-    Mod.Settings.FactionExerciseTier4Cost=math.max(0,math.min(10000,factionExerciseTier4Cost or 300)); Mod.Settings.FactionExerciseTier4Bonus=math.max(0,math.min(200,factionExerciseTier4Bonus or 60));
+    Mod.Settings.FactionExerciseTier1Cost = math.max(0, math.min(5000, factionExerciseTier1Cost or 50));
+    Mod.Settings.FactionExerciseTier1Bonus = math.max(0, math.min(200, factionExerciseTier1Bonus or 10));
+    Mod.Settings.FactionExerciseTier2Cost = math.max(0, math.min(5000, factionExerciseTier2Cost or 100));
+    Mod.Settings.FactionExerciseTier2Bonus = math.max(0, math.min(200, factionExerciseTier2Bonus or 20));
+    Mod.Settings.FactionExerciseTier3Cost = math.max(0, math.min(5000, factionExerciseTier3Cost or 200));
+    Mod.Settings.FactionExerciseTier3Bonus = math.max(0, math.min(200, factionExerciseTier3Bonus or 40));
+    Mod.Settings.FactionExerciseTier4Cost = math.max(0, math.min(5000, factionExerciseTier4Cost or 300));
+    Mod.Settings.FactionExerciseTier4Bonus = math.max(0, math.min(200, factionExerciseTier4Bonus or 60));
 
     Mod.Settings.ArmyRecruitersEnabled = armyRecruitersEnabled;
     Mod.Settings.ArmyRecruiterBaseCost = math.max(25, math.min(2000, armyRecruiterBaseCost or 250));
@@ -1349,17 +1366,25 @@ function Client_SaveConfigureUI(
     Mod.Settings.HeadquartersEnabled = false;
     Mod.Settings.CyberFacilitiesEnabled = cyberFacilitiesEnabled;
     Mod.Settings.CyberFacilityBaseCost = math.max(25, math.min(5000, cyberFacilityBaseCost or 450));
-    Mod.Settings.CyberFacilityMaxLevel = math.max(1, math.min(5, cyberFacilityMaxLevel or 3));
+    Mod.Settings.CyberFacilityMaxLevel = math.max(1, math.min(5, cyberFacilityMaxLevel or 4));
     Mod.Settings.AirbasesEnabled = airbasesEnabled;
     Mod.Settings.AirbaseBaseCost = math.max(25, math.min(5000, airbaseBaseCost or 350));
     Mod.Settings.AirbaseMaxLevel = math.max(1, math.min(5, airbaseMaxLevel or 4));
+    Mod.Settings.AirbaseOilPerLevel = math.max(0, math.min(20, airbaseOilPerLevel or 1));
+    Mod.Settings.AirbaseIronPerLevel = math.max(0, math.min(20, airbaseIronPerLevel or 1));
     Mod.Settings.ForwardAirstripsEnabled = forwardAirstripsEnabled;
     Mod.Settings.ForwardAirstripBaseCost = math.max(25, math.min(3000, forwardAirstripBaseCost or 175));
+    Mod.Settings.ForwardAirstripMaxLevel = math.max(1, math.min(5, forwardAirstripMaxLevel or 3));
+    Mod.Settings.ForwardAirstripOilPerLevel = math.max(0, math.min(20, forwardAirstripOilPerLevel or 1));
     -- SAM Sites retired in the full patch.
     Mod.Settings.SAMSitesEnabled = false;
     Mod.Settings.MissileSilosEnabled = missileSilosEnabled;
     Mod.Settings.MissileSiloBaseCost = math.max(50, math.min(10000, missileSiloBaseCost or 500));
     Mod.Settings.MissileSiloMaxLevel = math.max(1, math.min(5, missileSiloMaxLevel or 4));
+    Mod.Settings.MissileInterceptorCost = math.max(10, math.min(5000, missileInterceptorCost or 125));
+    Mod.Settings.MissileDefenseConventionalChance = math.max(0, math.min(100, missileDefenseConventionalChance or 70));
+    Mod.Settings.MissileDefenseEMPChance = math.max(0, math.min(100, missileDefenseEMPChance or 55));
+    Mod.Settings.MissileDefenseNuclearChance = math.max(0, math.min(100, missileDefenseNuclearChance or 40));
     Mod.Settings.ConventionalMissileArmyDamagePercent = math.max(0, math.min(100, conventionalMissileArmyDamagePercent or 20));
     Mod.Settings.ConventionalMissileStructureDamagePercent = math.max(0, math.min(100, conventionalMissileStructureDamagePercent or 30));
     Mod.Settings.ConventionalMissileCityDamagePercent = math.max(0, math.min(100, conventionalMissileCityDamagePercent or 15));
@@ -1373,6 +1398,7 @@ function Client_SaveConfigureUI(
     Mod.Settings.NuclearResourceLevelDamage = math.max(0, math.min(5, nuclearResourceLevelDamage or 2));
     Mod.Settings.PowerGridEnabled = powerGridEnabled;
     Mod.Settings.PowerGridBaseCost = math.max(25, math.min(5000, powerGridBaseCost or 300));
+    Mod.Settings.PowerGridMaxLevel = math.max(1, math.min(5, powerGridMaxLevel or 4));
     Mod.Settings.AirWingsEnabled = airWingsEnabled;
     Mod.Settings.AirWingBaseCost = math.max(25, math.min(5000, airWingBaseCost or 200));
     Mod.Settings.AircraftPerAirWing = math.max(1, math.min(500, aircraftPerAirWing or 25));

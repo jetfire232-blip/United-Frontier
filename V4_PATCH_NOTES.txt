@@ -1,0 +1,21 @@
+UNITED FRONTIER V4 — STRATEGY / USABILITY PASS
+
+Major additions in this build:
+- Infrastructure HP scales by level: 10 / 20 / 30 / 40 max HP.
+- Upgrades preserve existing damage and refresh one structure icon only; no duplicate airport/silo icon is intended.
+- Airbase resource cost: host-configured Oil + Iron per level (defaults 1 + 1).
+- Forward Airstrip resource cost: host-configured Oil per level (default 1).
+- Human + AI Airlift Cards require enabled airport infrastructure at both endpoints when Airbase/Airstrip systems are enabled. If both are disabled, normal War.app airlift rules apply.
+- Intelligence Agency replaces Cyber Facility wording. One physical Agency per nation; rebuild is allowed after loss/capture.
+- Intelligence Operations Lv.1–3, Cyber Lv.1–2, Counterintelligence Lv.1–2.
+- Financial Espionage at Intelligence Lv.3.
+- Detected covert operations create same-turn COUNTER / TRACE / IGNORE choices. AI defenders can spend Commerce on the same active countermeasure.
+- Faction intelligence report sharing.
+- Missile Command & Defense quantity buying/launching, Interceptor stockpile, host-configurable interception chances, Lv.3 intelligence missile warnings.
+- Faction directory, join requests, chat, leader faction-war declarations, alerts, ideology-aware AI faction creation/join logic.
+- Host-configurable Faction Exercise contribution tiers and bonuses with hard troop-output previews.
+- AI Manager recurring + one-time extra budget and simplified screen.
+- Central Military Reports screen.
+- How It Works rewritten for the current systems.
+
+Build basis: United-Frontier-Full-Overhaul-v3-Faction-PrivateGridCyber-UraniumSilos.zip

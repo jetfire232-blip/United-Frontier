@@ -578,31 +578,48 @@ end
 
 end
 
+
 -- =========================================================
--- ADVANCE MISSILE WARNING (INTELLIGENCE OPERATIONS LV.3)
+-- FACTION / INTELLIGENCE / STRATEGIC NOTIFICATIONS
 -- =========================================================
-local missileAlerts=(Mod.PlayerGameData or {}).incomingMissileAlerts or {};
-for _,alert in ipairs(missileAlerts) do
-    if alert.resolved~=true then
-        local key="missilewarning:"..tostring(alert.id or "?");
-        if not DiplomacyNotificationsShown[key] then
-            DiplomacyNotificationsShown[key]=true;
-            UI.Alert("STRATEGIC LAUNCH DETECTED\n\nYour Intelligence Agency Lv.3 detected "..tostring(alert.count or 1).." incoming "..tostring(alert.weapon or "missile").." missile(s).\n\nOpen Military > Missile Command & Defense to review your interceptor stockpile.");
+local factionAlerts = (diplomacy.factionAlerts or {})[ourID] or {};
+for _, alert in ipairs(factionAlerts) do
+    if alert ~= nil and alert.seen ~= true then
+        local notificationKey = "factionAlert:" .. tostring(alert.id or "?");
+        if not DiplomacyNotificationsShown[notificationKey] then
+            DiplomacyNotificationsShown[notificationKey] = true;
+            UI.Alert(
+                tostring(alert.kind or "FACTION NOTICE") .. "\n\n" ..
+                tostring(alert.text or "New Faction event.") ..
+                "\n\nOpen the Factions screen to review and acknowledge it."
+            );
         end
     end
 end
 
--- =========================================================
--- COUNTERINTELLIGENCE NOTIFICATIONS
--- =========================================================
-local counterAlerts=(Mod.PlayerGameData or {}).counterIntelAlerts or {};
-for _,alert in ipairs(counterAlerts) do
-    if alert.resolved~=true then
-        local key="counterintel:"..tostring(alert.id or "?");
-        if not DiplomacyNotificationsShown[key] then
-            DiplomacyNotificationsShown[key]=true;
-            UI.Alert("FOREIGN OPERATION DETECTED\n\n"..tostring(alert.operation or "Intelligence activity").." targeting your nation.\nAttacker: "..tostring(alert.attackerName or "UNKNOWN").."\n\nOpen Military > Intelligence Agency this turn to COUNTER, TRACE (Lv.2), or IGNORE. If you do nothing, the operation proceeds.");
+local ownMilitary = (Mod.PlayerGameData or {}).ownMilitary or {};
+for _, alert in ipairs(ownMilitary.counterIntelAlerts or {}) do
+    if alert ~= nil and tostring(alert.status or "") == "PENDING" then
+        local notificationKey = "counterIntel:" .. tostring(alert.opID or "?");
+        if not DiplomacyNotificationsShown[notificationKey] then
+            DiplomacyNotificationsShown[notificationKey] = true;
+            UI.Alert(
+                "FOREIGN OPERATION DETECTED\n\n" ..
+                "Your Counterintelligence detected a possible " .. tostring(alert.kind or "foreign") .. " operation.\n" ..
+                "Attacker: Unknown\n\nOpen Military > Intelligence Agency before the turn advances to COUNTER, TRACE (Lv.2), or IGNORE it."
+            );
         end
+    end
+end
+
+for index, warning in ipairs(ownMilitary.strategicWarnings or {}) do
+    local notificationKey = "strategicWarning:" .. tostring(warning.turn or "?") .. ":" .. tostring(index) .. ":" .. tostring(warning.text or "");
+    if not DiplomacyNotificationsShown[notificationKey] then
+        DiplomacyNotificationsShown[notificationKey] = true;
+        UI.Alert(
+            "STRATEGIC MISSILE WARNING\n\n" .. tostring(warning.text or "Incoming strategic threat detected.") ..
+            "\n\nOpen Military > Missile Command & Defense for status and reports."
+        );
     end
 end
 

@@ -670,10 +670,14 @@ function Client_PresentConfigureUI(rootParent)
     -- a temporary, clearly displayed Recruiter production boost.
     local factionExerciseDurationTurns = GetNumberSetting(settings, "FactionExerciseDurationTurns", 3);
     local factionExerciseCooldownTurns = GetNumberSetting(settings, "FactionExerciseCooldownTurns", 5);
-    local factionExerciseTier1Cost=GetNumberSetting(settings,"FactionExerciseTier1Cost",50); local factionExerciseTier1Bonus=GetNumberSetting(settings,"FactionExerciseTier1Bonus",10);
-    local factionExerciseTier2Cost=GetNumberSetting(settings,"FactionExerciseTier2Cost",100); local factionExerciseTier2Bonus=GetNumberSetting(settings,"FactionExerciseTier2Bonus",20);
-    local factionExerciseTier3Cost=GetNumberSetting(settings,"FactionExerciseTier3Cost",200); local factionExerciseTier3Bonus=GetNumberSetting(settings,"FactionExerciseTier3Bonus",40);
-    local factionExerciseTier4Cost=GetNumberSetting(settings,"FactionExerciseTier4Cost",300); local factionExerciseTier4Bonus=GetNumberSetting(settings,"FactionExerciseTier4Bonus",60);
+    local factionExerciseTier1Cost = GetNumberSetting(settings, "FactionExerciseTier1Cost", 50);
+    local factionExerciseTier1Bonus = GetNumberSetting(settings, "FactionExerciseTier1Bonus", 10);
+    local factionExerciseTier2Cost = GetNumberSetting(settings, "FactionExerciseTier2Cost", 100);
+    local factionExerciseTier2Bonus = GetNumberSetting(settings, "FactionExerciseTier2Bonus", 20);
+    local factionExerciseTier3Cost = GetNumberSetting(settings, "FactionExerciseTier3Cost", 200);
+    local factionExerciseTier3Bonus = GetNumberSetting(settings, "FactionExerciseTier3Bonus", 40);
+    local factionExerciseTier4Cost = GetNumberSetting(settings, "FactionExerciseTier4Cost", 300);
+    local factionExerciseTier4Bonus = GetNumberSetting(settings, "FactionExerciseTier4Bonus", 60);
 
     local armyRecruitersEnabled = GetBoolSetting(settings, "ArmyRecruitersEnabled", true);
     local armyRecruiterBaseCost = GetNumberSetting(settings, "ArmyRecruiterBaseCost", 250);
@@ -693,20 +697,28 @@ function Client_PresentConfigureUI(rootParent)
     -- settings are intentionally not exposed; legacy state is purged safely.
     local cyberFacilitiesEnabled = GetBoolSetting(settings, "CyberFacilitiesEnabled", true);
     local cyberFacilityBaseCost = GetNumberSetting(settings, "CyberFacilityBaseCost", 450);
-    local cyberFacilityMaxLevel = GetNumberSetting(settings, "CyberFacilityMaxLevel", 3);
+    local cyberFacilityMaxLevel = GetNumberSetting(settings, "CyberFacilityMaxLevel", 4);
 
     local airbasesEnabled = GetBoolSetting(settings, "AirbasesEnabled", true);
     local airbaseBaseCost = GetNumberSetting(settings, "AirbaseBaseCost", 350);
     local airbaseMaxLevel = GetNumberSetting(settings, "AirbaseMaxLevel", 4);
+    local airbaseOilPerLevel = GetNumberSetting(settings, "AirbaseOilPerLevel", 1);
+    local airbaseIronPerLevel = GetNumberSetting(settings, "AirbaseIronPerLevel", 1);
 
     local forwardAirstripsEnabled = GetBoolSetting(settings, "ForwardAirstripsEnabled", true);
     local forwardAirstripBaseCost = GetNumberSetting(settings, "ForwardAirstripBaseCost", 175);
+    local forwardAirstripMaxLevel = GetNumberSetting(settings, "ForwardAirstripMaxLevel", 3);
+    local forwardAirstripOilPerLevel = GetNumberSetting(settings, "ForwardAirstripOilPerLevel", 1);
 
     -- SAM Sites removed from United Frontier military infrastructure.
 
     local missileSilosEnabled = GetBoolSetting(settings, "MissileSilosEnabled", true);
     local missileSiloBaseCost = GetNumberSetting(settings, "MissileSiloBaseCost", 500);
     local missileSiloMaxLevel = GetNumberSetting(settings, "MissileSiloMaxLevel", 4);
+    local missileInterceptorCost = GetNumberSetting(settings, "MissileInterceptorCost", 125);
+    local missileDefenseConventionalChance = GetNumberSetting(settings, "MissileDefenseConventionalChance", 70);
+    local missileDefenseEMPChance = GetNumberSetting(settings, "MissileDefenseEMPChance", 55);
+    local missileDefenseNuclearChance = GetNumberSetting(settings, "MissileDefenseNuclearChance", 40);
     local conventionalMissileArmyDamagePercent = GetNumberSetting(settings, "ConventionalMissileArmyDamagePercent", 20);
     local conventionalMissileStructureDamagePercent = GetNumberSetting(settings, "ConventionalMissileStructureDamagePercent", 30);
     local conventionalMissileCityDamagePercent = GetNumberSetting(settings, "ConventionalMissileCityDamagePercent", 15);
@@ -721,6 +733,7 @@ function Client_PresentConfigureUI(rootParent)
 
     local powerGridEnabled = GetBoolSetting(settings, "PowerGridEnabled", true);
     local powerGridBaseCost = GetNumberSetting(settings, "PowerGridBaseCost", 300);
+    local powerGridMaxLevel = GetNumberSetting(settings, "PowerGridMaxLevel", 4);
 
     local airWingsEnabled = GetBoolSetting(settings, "AirWingsEnabled", true);
     local airWingBaseCost = GetNumberSetting(settings, "AirWingBaseCost", 200);
@@ -1485,10 +1498,14 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ArmyRecruiterArmiesPerTurn", "Base Armies per Recruiter Level / Turn", armyRecruiterArmiesPerTurn, 1, 25, "Actual output is multiplied by Military Readiness.");
     AddNumberInput(root, "FactionExerciseDurationTurns", "Faction Military Exercise Duration (turns)", factionExerciseDurationTurns, 1, 10, "Members who contribute Commerce receive their exact Recruiter production boost for this many turns.");
     AddNumberInput(root, "FactionExerciseCooldownTurns", "Faction Military Exercise Cooldown (turns)", factionExerciseCooldownTurns, 1, 20, "Starts when an exercise ends. The faction leader cannot begin another exercise until the cooldown expires.");
-    AddNumberInput(root,"FactionExerciseTier1Cost","Exercise Tier 1 Cost",factionExerciseTier1Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier1Bonus","Exercise Tier 1 Recruiter Bonus (%)",factionExerciseTier1Bonus,0,200,"Recruiter output bonus.");
-    AddNumberInput(root,"FactionExerciseTier2Cost","Exercise Tier 2 Cost",factionExerciseTier2Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier2Bonus","Exercise Tier 2 Recruiter Bonus (%)",factionExerciseTier2Bonus,0,200,"Recruiter output bonus.");
-    AddNumberInput(root,"FactionExerciseTier3Cost","Exercise Tier 3 Cost",factionExerciseTier3Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier3Bonus","Exercise Tier 3 Recruiter Bonus (%)",factionExerciseTier3Bonus,0,200,"Recruiter output bonus.");
-    AddNumberInput(root,"FactionExerciseTier4Cost","Exercise Tier 4 Cost",factionExerciseTier4Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier4Bonus","Exercise Tier 4 Recruiter Bonus (%)",factionExerciseTier4Bonus,0,200,"Recruiter output bonus.");
+    AddNumberInput(root, "FactionExerciseTier1Cost", "Exercise Tier 1 Commerce", factionExerciseTier1Cost, 0, 5000, "Member contribution cost for Tier 1.");
+    AddNumberInput(root, "FactionExerciseTier1Bonus", "Exercise Tier 1 Recruiter Bonus (%)", factionExerciseTier1Bonus, 0, 200, "Exact troop output is shown to each member before they contribute.");
+    AddNumberInput(root, "FactionExerciseTier2Cost", "Exercise Tier 2 Commerce", factionExerciseTier2Cost, 0, 5000, "Member contribution cost for Tier 2.");
+    AddNumberInput(root, "FactionExerciseTier2Bonus", "Exercise Tier 2 Recruiter Bonus (%)", factionExerciseTier2Bonus, 0, 200, "Exact troop output is shown to each member before they contribute.");
+    AddNumberInput(root, "FactionExerciseTier3Cost", "Exercise Tier 3 Commerce", factionExerciseTier3Cost, 0, 5000, "Member contribution cost for Tier 3.");
+    AddNumberInput(root, "FactionExerciseTier3Bonus", "Exercise Tier 3 Recruiter Bonus (%)", factionExerciseTier3Bonus, 0, 200, "Exact troop output is shown to each member before they contribute.");
+    AddNumberInput(root, "FactionExerciseTier4Cost", "Exercise Tier 4 Commerce", factionExerciseTier4Cost, 0, 5000, "Member contribution cost for Tier 4.");
+    AddNumberInput(root, "FactionExerciseTier4Bonus", "Exercise Tier 4 Recruiter Bonus (%)", factionExerciseTier4Bonus, 0, 200, "Exact troop output is shown to each member before they contribute.");
     AddNumberInput(root, "ArmyRecruiterMaxLevel", "Maximum Recruiter Level", armyRecruiterMaxLevel, 1, 5, "Upgrades increase army output and strategic resource maintenance demand.");
 
 
@@ -1496,22 +1513,30 @@ function Client_PresentConfigureUI(rootParent)
 
     AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
     AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Protect Military Asset Details Behind Intelligence", hiddenMilitaryInfrastructureEnabled);
-    AddCheckBox(root, "CyberFacilitiesEnabled", "Enable Intelligence Agencies", cyberFacilitiesEnabled);
-    AddNumberInput(root, "CyberFacilityBaseCost", "Intelligence Agency Base Cost (Commerce)", cyberFacilityBaseCost, 25, 5000, "Requires an operational Power Grid. Higher levels strengthen cyber operations.");
-    AddNumberInput(root, "CyberFacilityMaxLevel", "Intelligence Agency Maximum Level", cyberFacilityMaxLevel, 1, 5, "Higher levels improve cyber-operation success and duration.");
+    AddCheckBox(root, "CyberFacilitiesEnabled", "Enable Intelligence Agency", cyberFacilitiesEnabled);
+    AddNumberInput(root, "CyberFacilityBaseCost", "Intelligence Agency Facility Base Cost (Commerce)", cyberFacilityBaseCost, 25, 5000, "One hidden agency per nation. Facility level increases maximum HP by 10 per level.");
+    AddNumberInput(root, "CyberFacilityMaxLevel", "Intelligence Agency Facility Maximum Level", cyberFacilityMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP. Intelligence/Cyber/Counterintelligence capability levels are upgraded separately in-game.");
 
     AddCheckBox(root, "AirbasesEnabled", "Enable Airbases", airbasesEnabled);
-    AddNumberInput(root, "AirbaseBaseCost", "Airbase Base Cost (Commerce)", airbaseBaseCost, 25, 5000, "One icon per territory. Upgrading changes the same structure rather than adding another icon.");
-    AddNumberInput(root, "AirbaseMaxLevel", "Airbase Maximum Level", airbaseMaxLevel, 1, 5, "Default 4 gameplay levels; the same map icon is reused above the available visual tier.");
+    AddNumberInput(root, "AirbaseBaseCost", "Airbase Base Cost (Commerce)", airbaseBaseCost, 25, 5000, "One icon per territory. Upgrading strengthens the same Airbase and raises its maximum HP.");
+    AddNumberInput(root, "AirbaseMaxLevel", "Airbase Maximum Level", airbaseMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP.");
+    AddNumberInput(root, "AirbaseOilPerLevel", "Airbase Oil Required per Build/Upgrade", airbaseOilPerLevel, 0, 20, "Consumed from the national stockpile each time an Airbase gains a level.");
+    AddNumberInput(root, "AirbaseIronPerLevel", "Airbase Iron Required per Build/Upgrade", airbaseIronPerLevel, 0, 20, "Consumed from the national stockpile each time an Airbase gains a level.");
 
     AddCheckBox(root, "ForwardAirstripsEnabled", "Enable Forward Airstrips", forwardAirstripsEnabled);
     AddNumberInput(root, "ForwardAirstripBaseCost", "Forward Airstrip Cost (Commerce)", forwardAirstripBaseCost, 25, 3000, "Cheaper limited-capacity airfield intended for forward areas.");
+    AddNumberInput(root, "ForwardAirstripMaxLevel", "Forward Airstrip Maximum Level", forwardAirstripMaxLevel, 1, 5, "Upgrading strengthens the same icon and raises maximum HP by 10 per level.");
+    AddNumberInput(root, "ForwardAirstripOilPerLevel", "Forward Airstrip Oil Required per Build/Upgrade", forwardAirstripOilPerLevel, 0, 20, "Consumed from the national stockpile each time the Airstrip gains a level.");
 
-    AddCheckBox(root, "MissileSilosEnabled", "Enable Missile Silos", missileSilosEnabled);
-    AddNumberInput(root, "MissileSiloBaseCost", "Missile Silo Base Cost (Commerce)", missileSiloBaseCost, 50, 10000, "Missile Silos are visible strategic assets designed for limited missile inventory, reloads, and strategic strike orders.");
-    AddNumberInput(root, "MissileSiloMaxLevel", "Missile Silo Maximum Level", missileSiloMaxLevel, 1, 5, "Recommended default: 3 visual levels.");
+    AddCheckBox(root, "MissileSilosEnabled", "Enable Missile Command sites", missileSilosEnabled);
+    AddNumberInput(root, "MissileSiloBaseCost", "Missile Command Base Cost (Commerce)", missileSiloBaseCost, 50, 10000, "Missile Command sites are visible strategic assets designed for limited missile inventory, reloads, and strategic strike orders.");
+    AddNumberInput(root, "MissileSiloMaxLevel", "Missile Command Maximum Level", missileSiloMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP. The same map icon is upgraded rather than duplicated.");
+    AddNumberInput(root, "MissileInterceptorCost", "Interceptor Missile Cost (Commerce)", missileInterceptorCost, 10, 5000, "Interceptors are stored nationally and consumed one per interception attempt.");
+    AddNumberInput(root, "MissileDefenseConventionalChance", "Conventional Missile Interception Chance (%)", missileDefenseConventionalChance, 0, 100, "Chance per incoming missile when an interceptor is available.");
+    AddNumberInput(root, "MissileDefenseEMPChance", "EMP Missile Interception Chance (%)", missileDefenseEMPChance, 0, 100, "Chance per incoming missile when an interceptor is available.");
+    AddNumberInput(root, "MissileDefenseNuclearChance", "Nuclear Missile Interception Chance (%)", missileDefenseNuclearChance, 0, 100, "Chance per incoming missile when an interceptor is available.");
 
-    AddSection(root, "MISSILE DAMAGE & EFFECTS", "Host controls for how destructive Missile Silo strikes are. Percent values are applied to the target and are reduced on nuclear splash territories.");
+    AddSection(root, "MISSILE DAMAGE & EFFECTS", "Host controls for how destructive Missile Command strikes are. Percent values are applied to the target and are reduced on nuclear splash territories.");
     AddNumberInput(root, "ConventionalMissileArmyDamagePercent", "Conventional Missile Army Damage (%)", conventionalMissileArmyDamagePercent, 0, 100, "Percent of armies removed on the primary target before splash scaling.");
     AddNumberInput(root, "ConventionalMissileStructureDamagePercent", "Conventional Infrastructure Damage (%)", conventionalMissileStructureDamagePercent, 0, 100, "Damage applied to strategic structures on a successful conventional strike.");
     AddNumberInput(root, "ConventionalMissileCityDamagePercent", "Conventional City / Territory Damage (%)", conventionalMissileCityDamagePercent, 0, 100, "Adds persistent city/territory damage to the struck territory.");
@@ -1525,7 +1550,8 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "NuclearResourceLevelDamage", "Nuclear Resource Level Damage", nuclearResourceLevelDamage, 0, 5, "Base resource-facility level loss. High yield can remove an additional level.");
 
     AddCheckBox(root, "PowerGridEnabled", "Enable Power Grid", powerGridEnabled);
-    AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid is the prerequisite for Airbases, Missile Silos, and Intelligence Agencies. Infrastructure details use private intelligence filters.");
+    AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid is the prerequisite for Airbases, Missile Command, and the Intelligence Agency. Its location stays private.");
+    AddNumberInput(root, "PowerGridMaxLevel", "Power Grid Maximum Level", powerGridMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP.");
 
     AddCheckBox(root, "AirWingsEnabled", "Enable Air Wings", airWingsEnabled);
     AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings use normal fog visibility rather than global visibility. Purchasing requires capacity at an owned Airbase and an operational Power Grid.");

@@ -853,13 +853,16 @@ end
 
 function ShowDiplomacyMenu(
     parent,
-    game
+    game,
+    focusPlayerID
 )
 
-    local area =
-        CreateContentArea(
-            parent
-        );
+    local area;
+    if focusPlayerID then
+        area = UI.CreateVerticalLayoutGroup(parent);
+    else
+        area = CreateContentArea(parent);
+    end
 
 
     local data =
@@ -886,10 +889,10 @@ local playerSearchResultsHost =
     nil;
 
     local selectedDiplomacyPlayerID =
-    nil;
+    focusPlayerID;
 
 local selectedDiplomacyPlayerName =
-    nil;
+    focusPlayerID and GetPlayerName(game, focusPlayerID) or nil;
 
     local selectedDiplomacyPlayerLabel =
     nil;
@@ -1405,7 +1408,7 @@ local function RefreshPlayerSearchResults()
         in ipairs(matches)
     do
 
-        if (index - 1) % 3 == 0 then
+        if (index - 1) % 6 == 0 then
 
             row =
                 UI.CreateHorizontalLayoutGroup(
@@ -1451,33 +1454,12 @@ local function RefreshPlayerSearchResults()
 
         playerButton.SetOnClick(function()
 
-            selectedDiplomacyPlayerID =
-                targetID;
-
-            selectedDiplomacyPlayerName =
-                targetName;
-
-            if selectedDiplomacyPlayerLabel ~= nil then
-
-                selectedDiplomacyPlayerLabel.SetText(
-                    "Selected Player: " ..
-                    tostring(
-                        selectedDiplomacyPlayerName
-                    )
-                );
-
-                selectedDiplomacyPlayerLabel.SetColor(
-                    GetPlayerUIColor(
-                        game,
-                        targetID,
-                        "#FFFFFF"
-                    )
-                );
-
-            end
-
-            RefreshSelectedDiplomacyOverview();
-            RefreshPlayerSearchResults();
+            game.CreateDialog(function(root, setMaxSize, setScrollable, dialogGame, closeDialog)
+                setMaxSize(850, 650);
+                setScrollable(true);
+                ShowDiplomacyMenu(root, dialogGame, targetID);
+                UI.CreateButton(root).SetText("CLOSE").SetOnClick(closeDialog);
+            end);
 
         end);
 
@@ -1485,6 +1467,7 @@ local function RefreshPlayerSearchResults()
 
 end
 
+    if not focusPlayerID then
     UI.CreateLabel(area)
         .SetText(
             "DIPLOMACY"
@@ -1534,9 +1517,13 @@ end
             selectedDiplomacyOverviewHost
         );
 
+    else
+        selectedDiplomacyOverviewHost = UI.CreateVerticalLayoutGroup(area);
+    end
     RefreshPlayerSearchResults();
     RefreshSelectedDiplomacyOverview();
 
+    if not focusPlayerID then
     UI.CreateLabel(area)
         .SetText(
             "----------------------------------------"
@@ -1774,7 +1761,7 @@ end
                             {type="joinWar", conflictID=joinConflictID, side="A"},
                             function(result)
                                 if result and result.message then UI.Alert(result.message); end
-                                ShowDiplomacyMenu(parent, game);
+                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
                             end
                         );
                     end);
@@ -1787,7 +1774,7 @@ end
                             {type="joinWar", conflictID=joinConflictID, side="B"},
                             function(result)
                                 if result and result.message then UI.Alert(result.message); end
-                                ShowDiplomacyMenu(parent, game);
+                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
                             end
                         );
                     end);
@@ -1963,7 +1950,7 @@ end
                         if result ~= nil and result.message ~= nil then
                             UI.Alert(result.message);
                         end
-                        ShowDiplomacyMenu(parent, game);
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
                     end
                 );
             end);
@@ -1991,7 +1978,7 @@ end
                         if result ~= nil and result.message ~= nil then
                             UI.Alert(result.message);
                         end
-                        ShowDiplomacyMenu(parent, game);
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
                     end
                 );
             end);
@@ -2017,7 +2004,7 @@ end
                         if result ~= nil and result.message ~= nil then
                             UI.Alert(result.message);
                         end
-                        ShowDiplomacyMenu(parent, game);
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
                     end
                 );
             end);
@@ -2043,6 +2030,7 @@ end
         );
 
 
+    end
     -- =====================================================
     -- RELATIONS
     -- =====================================================
@@ -2065,6 +2053,7 @@ end
 
         if playerID
             ~= ourID
+            and focusPlayerID ~= nil and playerID == focusPlayerID
             and player.State
             == WL.GamePlayerState.Playing then
 
@@ -2235,6 +2224,7 @@ end
             );
 
 
+            row = UI.CreateHorizontalLayoutGroup(row);
             -- =================================================
             -- PEACE ACTIONS
             -- =================================================
@@ -2292,10 +2282,7 @@ if activeNAP == nil
                                     result
                                 )
 
-                                    ShowDiplomacyMenu(
-                                        parent,
-                                        game
-                                    );
+                                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                                 end
                             );
@@ -2322,10 +2309,7 @@ UI.CreateButton(row)
                 result
             )
 
-                ShowDiplomacyMenu(
-                    parent,
-                    game
-                );
+                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
             end
         );
@@ -2351,7 +2335,7 @@ if isAllied then
                 type="requestHeadquartersSharing", targetPlayerID=alliedPlayerID, shareType="SharedIntelligence"
             }, function(result)
                 if result and result.message then UI.Alert(result.message); end
-                ShowDiplomacyMenu(parent, game);
+                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
             end);
         end);
     end
@@ -2362,7 +2346,7 @@ if isAllied then
                 type="requestHeadquartersSharing", targetPlayerID=alliedPlayerID, shareType="JointStrategicWarning"
             }, function(result)
                 if result and result.message then UI.Alert(result.message); end
-                ShowDiplomacyMenu(parent, game);
+                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
             end);
         end);
     end
@@ -2396,10 +2380,7 @@ if isAllied then
                     end
 
 
-                    ShowDiplomacyMenu(
-                        parent,
-                        game
-                    );
+                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                 end
             );
@@ -2446,10 +2427,7 @@ if ourFaction ~= nil
                     end
 
 
-                    ShowDiplomacyMenu(
-                        parent,
-                        game
-                    );
+                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                 end
             );
@@ -2487,10 +2465,7 @@ end
                                 result
                             )
 
-                                ShowDiplomacyMenu(
-                                    parent,
-                                    game
-                                );
+                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                             end
                         );
@@ -2514,10 +2489,12 @@ end
 
         UI.CreateLabel(area)
             .SetText(
-                "No other active nations found."
+                focusPlayerID and "This player is no longer active." or "Click a player above to open their overview and actions."
             );
     end
 
+
+    if focusPlayerID then return; end
 
     -- =====================================================
     -- INCOMING PEACE OFFERS
@@ -2605,10 +2582,7 @@ local fromName =
                             result
                         )
 
-                            ShowDiplomacyMenu(
-                                parent,
-                                game
-                            );
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2638,10 +2612,7 @@ local fromName =
                             result
                         )
 
-                            ShowDiplomacyMenu(
-                                parent,
-                                game
-                            );
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2754,10 +2725,7 @@ UI.CreateLabel(group)
                             result
                         )
 
-                            ShowDiplomacyMenu(
-                                parent,
-                                game
-                            );
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2787,10 +2755,7 @@ UI.CreateLabel(group)
                             result
                         )
 
-                            ShowDiplomacyMenu(
-                                parent,
-                                game
-                            );
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2899,10 +2864,7 @@ for _, offer
                         end
 
 
-                        ShowDiplomacyMenu(
-                            parent,
-                            game
-                        );
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                     end
                 );
@@ -2940,10 +2902,7 @@ for _, offer
                         end
 
 
-                        ShowDiplomacyMenu(
-                            parent,
-                            game
-                        );
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
 
                     end
                 );
@@ -3109,6 +3068,25 @@ function ShowMarketsMenu(
             "----------------------------------------"
         );
 
+    UI.CreateLabel(area).SetText("WHAT WOULD YOU LIKE TO DO?").SetColor("#FFD166");
+    UI.CreateLabel(area).SetText("Buy Shares: choose a company and quantity. My Portfolio: review or sell holdings. ETF: buy a fund covering the global market.").SetColor("#BBBBBB");
+    local marketActions = {
+        {"BUY SHARES", ShowStockMarket}, {"MY PORTFOLIO", ShowStockPortfolio},
+        {"MARKET OVERVIEW", ShowMarketOverview}, {"MARKET NEWS", ShowMarketNews},
+        {"GLOBAL ETF", ShowMarketETF}, {"TRADE AGREEMENTS", ShowTradeAgreementsMenu},
+        {"INVESTMENTS", ShowInvestments}, {"AI MANAGER", ShowAIManagerMenu},
+        {"GLOBAL ECONOMY", function(p,g) ShowGlobalEconomy(p,g,"all"); end}
+    };
+    local shortcutRow;
+    for index, entry in ipairs(marketActions) do
+        if (index-1)%3 == 0 then shortcutRow = UI.CreateHorizontalLayoutGroup(area); end
+        local action = entry[2];
+        UI.CreateButton(shortcutRow).SetText(entry[1]).SetFlexibleWidth(1).SetOnClick(function() action(parent,game); end);
+    end
+    UI.CreateLabel(area).SetText("New to Markets? Open How It Works for examples of purchases, profits, losses, and resource shortages.").SetColor("#BBBBBB");
+    UI.CreateButton(area).SetText("HOW IT WORKS / EXAMPLES").SetOnClick(function() ShowHowItWorks(parent,game); end);
+
+
     -- WORLD TRENDS: compact public rankings.  Military and Commerce lists intentionally
     -- show rank/name only, not exact opponent values.
     local trendData = Mod.PublicGameData or {};
@@ -3202,97 +3180,6 @@ function ShowMarketsMenu(
         UI.CreateLabel(area).SetText("----------------------------------------");
     end
 
-    UI.CreateButton(area)
-        .SetText(
-            "BUY OTHER PLAYERS’ FLAGSHIP SHARES / STOCK MARKET"
-        )
-        .SetOnClick(function()
-
-            ShowStockMarket(
-                parent,
-                game
-            );
-
-        end);
-    UI.CreateLabel(area).SetText("Select any publicly traded player flagship, open VIEW / TRADE COMPANY, then choose how many shares to buy. Dividend companies emphasize recurring payouts; Growth companies emphasize price appreciation.").SetColor("#BBBBBB");
-
-    UI.CreateButton(area)
-        .SetText(
-            "MY PORTFOLIO"
-        )
-        .SetOnClick(function()
-
-            ShowStockPortfolio(
-                parent,
-                game
-            );
-
-        end);
-
-    UI.CreateButton(area)
-        .SetText(
-            "MARKET OVERVIEW"
-        )
-        .SetOnClick(function()
-
-            ShowMarketOverview(
-                parent,
-                game
-            );
-
-        end);
-
-    UI.CreateButton(area)
-    .SetText(
-        "MARKET NEWS"
-    )
-    .SetOnClick(function()
-
-        ShowMarketNews(
-            parent,
-            game
-        );
-
-    end);
-    
-UI.CreateButton(area)
-    .SetText(
-        "GLOBAL MARKET ETF"
-    )
-    .SetOnClick(function()
-
-        ShowMarketETF(
-            parent,
-            game
-        );
-
-    end);
-
-    UI.CreateLabel(area).SetText("----------------------------------------");
-
-    UI.CreateButton(area)
-        .SetText("TRADE AGREEMENTS")
-        .SetOnClick(function()
-            ShowTradeAgreementsMenu(parent, game);
-        end);
-
-    UI.CreateButton(area)
-        .SetText("INVESTMENTS")
-        .SetOnClick(function()
-            ShowInvestments(parent, game);
-        end);
-
-    UI.CreateButton(area)
-        .SetText("AI MANAGER")
-        .SetOnClick(function()
-            ShowAIManagerMenu(parent, game);
-        end);
-
-    UI.CreateButton(area)
-        .SetText("GLOBAL ECONOMY")
-        .SetOnClick(function()
-            ShowGlobalEconomy(parent, game, "all");
-        end);
 
 end
 
@@ -12418,6 +12305,12 @@ function ShowHowItWorks(parent)
         "6. Diplomacy contains alliances, Factions, Current Wars, Join War, peace, shared intelligence, and Faction Military Exercises.",
         "#FFFFFF");
 
+    Section("WORKED EXAMPLES — ILLUSTRATIVE NUMBERS",
+        "Stocks: At 20 Commerce per share, 5 shares cost 100 before any applicable fees. At a later price of 24, those shares are worth 120; at 16, they are worth 80. A displayed gain becomes realized when you sell. Dividends depend on the company and game settings; they are not guaranteed.\n\n" ..
+        "ETF: Buy units of the global fund instead of choosing a single flagship. Its value can rise or fall with the market. Review the displayed price and total before confirming.\n\n" ..
+        "Resources: With production 4 and need 7, the deficit is 3. A stockpile of 5 covers this turn and leaves 2. If the same deficit continues next turn, 1 remains uncovered. Build production or arrange a resource contract.\n\n" ..
+        "Diplomacy: Click a player name to open their overview and available actions. At peace, you may see Declare War, Propose NAP, or Propose Alliance. An active pact or alliance can restrict war. At war, Offer Peace becomes available.", "#FFD166");
+
     Section("COMMERCE & MARKETS",
         "Commerce is the mod's usable national economic power. It pays for investments, market activity, resource facilities, military infrastructure, Air Wings, Special Forces, Recruiters, and other strategic development.\n\n" ..
         "Flagship companies may follow Growth, Balanced, or Dividend strategies. Stocks, ETF holdings, dividends, Investment Projects, and optional flagship acquisitions are managed under Markets. Owners can turn acquisition offers on or off. If an acquisition is accepted, target shareholders receive a buyout payout, the buyer's flagship receives a market boost, and the acquired nation may establish a replacement flagship after the host-defined cooldown.",
@@ -14138,6 +14031,10 @@ function ShowHowItWorks(parent)
     end
     UI.CreateLabel(area).SetText("HOW UNITED FRONTIER WORKS").SetColor("#67D5FF");
     UI.CreateLabel(area).SetText("Deep strategy, simple controls: every action shows its cost, effect, and result.").SetColor("#FFFFFF");
+    Section("MARKETS — START HERE", "BUY SHARES opens the company list. Choose a flagship, open VIEW / TRADE COMPANY, choose a quantity, and review the total before buying. MY PORTFOLIO shows your holdings and selling options. GLOBAL ETF buys a fund rather than one company. INVESTMENTS funds projects; check their cost, deadline and risk.", "#67D5FF");
+    Section("EXAMPLE: SHARE PURCHASE", "Illustrative prices: 5 shares at 20 Commerce cost 100 before any applicable fees. If the price later reaches 24, the holding is worth 120. If it falls to 16, it is worth 80. You realize the gain or loss by selling; dividends depend on the company and game settings.", "#79D279");
+    Section("EXAMPLE: RESOURCE SHORTAGE", "Production 4 minus need 7 leaves a deficit of 3. A stockpile of 5 covers this turn and leaves 2. Next turn, the same deficit would leave 1 uncovered. Increase production or arrange a resource contract before the reserve runs out.", "#FFD166");
+    Section("EXAMPLE: PLAYER ACTIONS", "Click a player name in Diplomacy. Their overview opens in a separate window with actions for that player. At peace, you may propose a pact or alliance; at war, you may offer peace. Existing pacts and alliances can restrict Declare War.", "#C792EA");
     Section("1. GETTING STARTED","Complete National Setup. Your ideology, economic strategy, taxes, and company strategy show hard numerical effects before you confirm. If setup is left incomplete through the host deadline, missing choices are assigned automatically. An unfinished target is never immune from war.","#FFD166");
     Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence directly affects flagship market movement. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
     Section("3. RESOURCES","Resource locations are private. You learn them through ownership, borders, faction/alliance intelligence, or successful intelligence operations. Oil and Iron are used by Airbases; Oil by Forward Airstrips; Uranium is required to develop Missile Command and to buy Nuclear missiles.","#67D5FF");

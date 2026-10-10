@@ -1,0 +1,10 @@
+United Frontier v5 — Turn crash and player interface
+
+Fixed a reproduced nil UFAIAtWar call during AI acquisition decisions by forward-declaring the shared local helper.
+Markets: horizontal shortcut rows at the top, shorter labels, task descriptions, guide shortcut.
+Diplomacy: six player buttons per row; clicking opens a separate overview dialog with only that player's eligible actions. Action buttons run across the screen; the repeated all-player action list is removed.
+How It Works: stock purchase/profit/loss, ETF, resource-shortage and diplomacy examples.
+
+Validation: all seven Lua files compile in Lua 5.4; original AI acquisition failure reproduced and patched path passed; empty-world start hook and focused diplomacy UI render passed with mocks. Live War.app validation is still required, especially turn advancement with 40 players and layout on mobile.
+
+GitHub assets folder is StructureImages (exact case), as included in this archive.

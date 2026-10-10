@@ -1,3 +1,6 @@
+-- Forward declarations: turn hooks and earlier helpers share these local functions.
+local UFAIAtWar;
+
 -- =========================================================
 -- GLOBAL ECONOMY, TRADE, INVESTMENTS & DIPLOMACY
 -- SERVER ADVANCE TURN
@@ -17205,7 +17208,7 @@ local function UFPickAITerritory(game, standing, ownerID, wantInterior, excluded
     return best;
 end
 
-local function UFAIAtWar(data, playerID)
+UFAIAtWar = function(data, playerID)
     local diplomacy=data.globalEconomy and data.globalEconomy.diplomacy or {};
     for _,relationship in pairs(diplomacy.relationships or {}) do
         if relationship and relationship.status=="war" and (relationship.player1==playerID or relationship.player2==playerID) then return true; end

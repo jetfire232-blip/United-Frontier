@@ -12606,7 +12606,8 @@ function ShowNationalSetup(
         UI.CreateLabel(area)
             .SetText(
                 "ECONOMIC REFORM IN PROGRESS"
-            );
+            )
+            .SetColor("#FFD166");
 
 
         UI.CreateLabel(area)
@@ -12744,7 +12745,8 @@ function ShowNationalSetup(
         UI.CreateLabel(area)
             .SetText(
                 "NATIONAL POLICY & ECONOMIC REFORM"
-            );
+            )
+            .SetColor("#FFD166");
 
 
         UI.CreateLabel(area)
@@ -12777,7 +12779,8 @@ function ShowNationalSetup(
         UI.CreateLabel(area)
             .SetText(
                 "NATIONAL ECONOMIC SETUP"
-            );
+            )
+            .SetColor("#67D5FF");
 
 
         UI.CreateLabel(area)
@@ -12843,25 +12846,25 @@ function ShowNationalSetup(
     local ideologyLabel =
         UI.CreateLabel(
             area
-        );
+        ).SetColor("#C792EA");
 
 
     local economicStrategyLabel =
         UI.CreateLabel(
             area
-        );
+        ).SetColor("#67D5FF");
 
 
     local taxLabel =
         UI.CreateLabel(
             area
-        );
+        ).SetColor("#FFD166");
 
 
     local companyStrategyLabel =
         UI.CreateLabel(
             area
-        );
+        ).SetColor("#79D279");
 
 local function GetIdeologyEffectsText(
     ideology
@@ -12968,7 +12971,8 @@ end
     UI.CreateLabel(area)
         .SetText(
             "1. IDEOLOGY"
-        );
+        )
+        .SetColor("#C792EA");
 
 
     local ideologyRow1 =
@@ -13109,7 +13113,8 @@ end
             "Communist | Commerce +7% | Market -9% | Investment -2% | Confidence +0\n" ..
             "Fascist | Commerce +3% | Market -2% | Investment +1% | Confidence +3\n" ..
             "Nationalist | Commerce +2% | Market -1% | Investment +0% | Confidence +2"
-        );
+        )
+        .SetColor("#D8C7FF");
 
 
     UI.CreateLabel(area)
@@ -13125,7 +13130,8 @@ end
     UI.CreateLabel(area)
         .SetText(
             "2. ECONOMIC STRATEGY"
-        );
+        )
+        .SetColor("#67D5FF");
 
 
     local strategyRow =
@@ -13193,7 +13199,8 @@ end
             "Growth | Commerce +5% | Market +4% | Investment +5% | Confidence +2\n" ..
             "Balanced | Commerce 0% | Market 0% | Investment 0% | Confidence +0\n" ..
             "Conservative | Commerce -3% | Market -2% | Investment -3% | Confidence +4"
-        );
+        )
+        .SetColor("#A9E4FF");
 
 
     UI.CreateLabel(area)
@@ -13209,7 +13216,8 @@ end
     UI.CreateLabel(area)
         .SetText(
             "3. TAX POLICY"
-        );
+        )
+        .SetColor("#FFD166");
 
 
     local taxRow =
@@ -13282,10 +13290,11 @@ UI.CreateLabel(area)
 
         "High Tax\n" ..
         "Commerce: +10% | Market: -10% | Investment: -10% | Company Confidence: -5"
-    );
+    )
+    .SetColor("#FFE49A");
 
 ideologyEffectsLabel =
-    UI.CreateLabel(area);
+    UI.CreateLabel(area).SetColor("#C792EA");
 
 ideologyEffectsLabel.SetText(
     GetIdeologyEffectsText(
@@ -13294,7 +13303,7 @@ ideologyEffectsLabel.SetText(
 );
 
 policyPreviewLabel =
-    UI.CreateLabel(area);
+    UI.CreateLabel(area).SetColor("#8FD694");
 
 policyPreviewLabel.SetText(
     GetPolicyPreviewText(
@@ -13305,6 +13314,24 @@ policyPreviewLabel.SetText(
         selectedCompanyStrategy
     )
 );
+
+UI.CreateLabel(area)
+    .SetText("WHAT CONFIDENCE & UNREST ACTUALLY DO")
+    .SetColor("#FFD166");
+UI.CreateLabel(area)
+    .SetText(
+        "Company Confidence directly changes flagship stock-price movement each turn around a neutral 50 baseline: " ..
+        "40 = -0.6 percentage points | 50 = 0.0 | 60 = +0.6 | 75 = +1.5 | 100 = +3.0. " ..
+        "The confidence component is capped at -3.0 to +3.0 percentage points per turn."
+    )
+    .SetColor("#79D279");
+UI.CreateLabel(area)
+    .SetText(
+        "Unrest penalties: 0-19 = no penalty | 20-39 = Commerce -3%, Recruiters -5% | " ..
+        "40-59 = Commerce -7%, Recruiters -10% | 60-79 = Commerce -12%, Recruiters -20% | " ..
+        "80-100 = Commerce -20%, Recruiters -35%. Overview always shows your current Unrest and exact active penalties."
+    )
+    .SetColor("#FFB366");
 
 UI.CreateLabel(area)
     .SetText(
@@ -13318,7 +13345,8 @@ UI.CreateLabel(area)
     UI.CreateLabel(area)
         .SetText(
             "4. FLAGSHIP COMPANY"
-        );
+        )
+        .SetColor("#79D279");
 
 
     if isReform then
@@ -13373,7 +13401,8 @@ UI.CreateLabel(area)
     UI.CreateLabel(area)
         .SetText(
             "5. COMPANY STRATEGY"
-        );
+        )
+        .SetColor("#8FD694");
 
 
     local companyStrategyRow =
@@ -13441,7 +13470,8 @@ UI.CreateLabel(area)
             "Growth Company | Price fundamentals x1.35 | Dividend pool 1% of owner income | Random volatility scale 30%\n" ..
             "Balanced Company | Price fundamentals x1.00 | Dividend pool 2% of owner income | Random volatility scale 25%\n" ..
             "Dividend Company | Price fundamentals x0.45 | Dividend pool 4%-6% of owner income | Random volatility scale 15%"
-        );
+        )
+        .SetColor("#B9F6CA");
 
 
     UI.CreateLabel(area)

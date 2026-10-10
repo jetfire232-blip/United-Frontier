@@ -370,6 +370,9 @@ function Client_SaveConfigureUI(
     local unSanctionMaxTurns = ReadNumber("UNSanctionMaxTurns");
     local unCeasefireMinTurns = ReadNumber("UNCeasefireMinTurns");
     local unCeasefireMaxTurns = ReadNumber("UNCeasefireMaxTurns");
+    local unAidMinimumCommerce = ReadNumber("UNAidMinimumCommerce");
+    local unAidMaximumCommerce = ReadNumber("UNAidMaximumCommerce");
+    local unAidStepCommerce = ReadNumber("UNAidStepCommerce");
 
     local aiCanProposeUNResolutions =
         ReadBool(
@@ -445,6 +448,10 @@ function Client_SaveConfigureUI(
             "ResourceMapIconsEnabled"
         );
 
+    local nationalSetupDeadlineTurn = ReadNumber("NationalSetupDeadlineTurn");
+    local factionExerciseDurationTurns = ReadNumber("FactionExerciseDurationTurns");
+    local factionExerciseCooldownTurns = ReadNumber("FactionExerciseCooldownTurns");
+
     local armyRecruitersEnabled = ReadBool("ArmyRecruitersEnabled");
     local armyRecruiterBaseCost = ReadNumber("ArmyRecruiterBaseCost");
     local armyRecruiterMaxPerPlayer = ReadNumber("ArmyRecruiterMaxPerPlayer");
@@ -458,17 +465,14 @@ function Client_SaveConfigureUI(
 
     local militaryExpansionEnabled = ReadBool("MilitaryExpansionEnabled");
     local hiddenMilitaryInfrastructureEnabled = ReadBool("HiddenMilitaryInfrastructureEnabled");
-    local headquartersEnabled = ReadBool("HeadquartersEnabled");
-    local headquartersBaseCost = ReadNumber("HeadquartersBaseCost");
-    local headquartersMaxBranchLevel = ReadNumber("HeadquartersMaxBranchLevel");
+    local cyberFacilitiesEnabled = ReadBool("CyberFacilitiesEnabled");
+    local cyberFacilityBaseCost = ReadNumber("CyberFacilityBaseCost");
+    local cyberFacilityMaxLevel = ReadNumber("CyberFacilityMaxLevel");
     local airbasesEnabled = ReadBool("AirbasesEnabled");
     local airbaseBaseCost = ReadNumber("AirbaseBaseCost");
     local airbaseMaxLevel = ReadNumber("AirbaseMaxLevel");
     local forwardAirstripsEnabled = ReadBool("ForwardAirstripsEnabled");
     local forwardAirstripBaseCost = ReadNumber("ForwardAirstripBaseCost");
-    local samSitesEnabled = ReadBool("SAMSitesEnabled");
-    local samSiteBaseCost = ReadNumber("SAMSiteBaseCost");
-    local samSiteMaxLevel = ReadNumber("SAMSiteMaxLevel");
     local missileSilosEnabled = ReadBool("MissileSilosEnabled");
     local missileSiloBaseCost = ReadNumber("MissileSiloBaseCost");
     local missileSiloMaxLevel = ReadNumber("MissileSiloMaxLevel");
@@ -964,6 +968,13 @@ function Client_SaveConfigureUI(
     if not ValidateRange(alert, unCeasefireMaxTurns, 1, 20, "Ceasefire Maximum Duration must be between 1 and 20 turns.") then return; end
     if unCeasefireMaxTurns < unCeasefireMinTurns then alert("Ceasefire Maximum Duration cannot be lower than the minimum."); return; end
 
+    if (airbasesEnabled or missileSilosEnabled or cyberFacilitiesEnabled or airWingsEnabled) and not powerGridEnabled then
+        alert("Power Grid must be enabled when Airbases, Missile Silos, Cyber Facilities, or Air Wings are enabled."); return;
+    end
+    if airWingsEnabled and not airbasesEnabled then
+        alert("Air Wings require Airbases. Enable Airbases or disable Air Wings."); return;
+    end
+
     if not ValidateRange(alert, unPermanentSeatCount, 1, 10, "Permanent UN seats must be between 1 and 10.") then return; end
     if not ValidateRange(alert, unRotatingSeatCount, 0, 50, "Rotating UN seats must be between 0 and 50.") then return; end
     if not ValidateRange(alert, unReplacementMode, 1, 3, "UN replacement mode must be 1, 2, or 3.") then return; end
@@ -1255,6 +1266,9 @@ function Client_SaveConfigureUI(
     Mod.Settings.UNSanctionMaxTurns = unSanctionMaxTurns;
     Mod.Settings.UNCeasefireMinTurns = unCeasefireMinTurns;
     Mod.Settings.UNCeasefireMaxTurns = unCeasefireMaxTurns;
+    Mod.Settings.UNAidMinimumCommerce = math.max(1, math.min(10000, unAidMinimumCommerce or 50));
+    Mod.Settings.UNAidMaximumCommerce = math.max(Mod.Settings.UNAidMinimumCommerce, math.min(50000, unAidMaximumCommerce or 1000));
+    Mod.Settings.UNAidStepCommerce = math.max(1, math.min(5000, unAidStepCommerce or 50));
 
     Mod.Settings.AICanProposeUNResolutions =
         aiCanProposeUNResolutions;
@@ -1306,6 +1320,10 @@ function Client_SaveConfigureUI(
     Mod.Settings.ResourceMapIconsEnabled =
         resourceMapIconsEnabled;
 
+    Mod.Settings.NationalSetupDeadlineTurn = math.max(1, math.min(10, nationalSetupDeadlineTurn or 1));
+    Mod.Settings.FactionExerciseDurationTurns = math.max(1, math.min(10, factionExerciseDurationTurns or 3));
+    Mod.Settings.FactionExerciseCooldownTurns = math.max(1, math.min(20, factionExerciseCooldownTurns or 5));
+
     Mod.Settings.ArmyRecruitersEnabled = armyRecruitersEnabled;
     Mod.Settings.ArmyRecruiterBaseCost = math.max(25, math.min(2000, armyRecruiterBaseCost or 250));
     Mod.Settings.ArmyRecruiterMaxPerPlayer = math.max(1, math.min(10, armyRecruiterMaxPerPlayer or 3));
@@ -1319,17 +1337,18 @@ function Client_SaveConfigureUI(
 
     Mod.Settings.MilitaryExpansionEnabled = militaryExpansionEnabled;
     Mod.Settings.HiddenMilitaryInfrastructureEnabled = hiddenMilitaryInfrastructureEnabled;
-    Mod.Settings.HeadquartersEnabled = headquartersEnabled;
-    Mod.Settings.HeadquartersBaseCost = math.max(50, math.min(5000, headquartersBaseCost or 500));
-    Mod.Settings.HeadquartersMaxBranchLevel = math.max(1, math.min(5, headquartersMaxBranchLevel or 5));
+    -- Headquarters retired. Keep the legacy toggle forced off for old saves.
+    Mod.Settings.HeadquartersEnabled = false;
+    Mod.Settings.CyberFacilitiesEnabled = cyberFacilitiesEnabled;
+    Mod.Settings.CyberFacilityBaseCost = math.max(25, math.min(5000, cyberFacilityBaseCost or 450));
+    Mod.Settings.CyberFacilityMaxLevel = math.max(1, math.min(5, cyberFacilityMaxLevel or 3));
     Mod.Settings.AirbasesEnabled = airbasesEnabled;
     Mod.Settings.AirbaseBaseCost = math.max(25, math.min(5000, airbaseBaseCost or 350));
     Mod.Settings.AirbaseMaxLevel = math.max(1, math.min(5, airbaseMaxLevel or 3));
     Mod.Settings.ForwardAirstripsEnabled = forwardAirstripsEnabled;
     Mod.Settings.ForwardAirstripBaseCost = math.max(25, math.min(3000, forwardAirstripBaseCost or 175));
-    Mod.Settings.SAMSitesEnabled = samSitesEnabled;
-    Mod.Settings.SAMSiteBaseCost = math.max(25, math.min(5000, samSiteBaseCost or 300));
-    Mod.Settings.SAMSiteMaxLevel = math.max(1, math.min(5, samSiteMaxLevel or 3));
+    -- SAM Sites retired in the full patch.
+    Mod.Settings.SAMSitesEnabled = false;
     Mod.Settings.MissileSilosEnabled = missileSilosEnabled;
     Mod.Settings.MissileSiloBaseCost = math.max(50, math.min(10000, missileSiloBaseCost or 500));
     Mod.Settings.MissileSiloMaxLevel = math.max(1, math.min(5, missileSiloMaxLevel or 3));

@@ -1,0 +1,100 @@
+UNITED FRONTIER - FULL GAMEPLAY PATCH
+Build date: 2026-10-10
+Baseline: user-uploaded United-Frontier-master.zip
+
+IMPLEMENTED
+===========
+
+NATIONAL SETUP
+- National Setup remains mandatory for normal player access.
+- Host setting: auto-assignment deadline (default end of Turn 1).
+- Active nations still incomplete at the deadline are assigned a valid ideology,
+  economic strategy, tax policy, company strategy, and generated flagship name.
+- An attacker who completed setup may declare war on a nation that has not yet
+  completed setup; unfinished setup is not war immunity.
+- Setup screen now shows hard numerical policy effects and a live combined
+  Commerce/Market/Investment/Confidence projection.
+- Company strategy displays its actual fundamentals/dividend/volatility values.
+
+ECONOMY / STABILITY
+- Economic Strategy now has implemented numerical modifiers:
+  Growth: Commerce +5%, Market +4%, Investment +5%, Confidence +2
+  Balanced: 0 / 0 / 0 / 0
+  Conservative: Commerce -3%, Market -2%, Investment -3%, Confidence +4
+- Company Confidence now contributes directly to stock-price movement, capped
+  at +/-3 percentage points per turn from the confidence component.
+- Unrest now has real penalties and is shown on Overview:
+  0-19: Commerce 0%, Recruiters 0%
+  20-39: Commerce -3%, Recruiters -5%
+  40-59: Commerce -7%, Recruiters -10%
+  60-79: Commerce -12%, Recruiters -20%
+  80-100: Commerce -20%, Recruiters -35%
+
+TRADE AGREEMENTS
+- Search box added.
+- Filters: ALL, PLAYERS, AI, AVAILABLE, EXISTING.
+- Each candidate shows current Commerce income, projected trade bonus, and
+  agreement/cooldown status.
+
+UNITED NATIONS
+- Aid is no longer locked to the old 10% / minimum-50 result.
+- Proposers choose the aid package in exact Commerce values.
+- Host settings: minimum, maximum and step size (defaults 50 / 1000 / 50).
+- Proposal screen shows the exact amount before submission.
+
+MILITARY FOUNDATION
+- Headquarters removed from player gameplay and UI. Legacy settings/actions are
+  forced off/rejected for compatibility.
+- SAM Sites removed from player gameplay, UI, images, AI planning and missile
+  interception. Legacy SAM state is cleared/rejected for compatibility.
+- Cyber Facilities replace HQ-based cyber capability.
+- Power Grid is required for Airbases, Missile Silos and Cyber Facilities.
+- Air Wings require enabled Airbases and operational Grid support.
+- Recruiters remain the core military system and continue to work when optional
+  Air Wings, Special Forces, Cyber, Airbases, Silos, etc. are disabled.
+- Smart AI ignores disabled optional systems and no longer requires HQ/SAM.
+
+MILITARY VISIBILITY / INFRASTRUCTURE
+- Air Wings and Special Forces no longer force global visibility; their custom
+  special units use normal War.app visibility/fog behavior.
+- Military Infrastructure screen follows the Resources-style workflow:
+  MY INFRASTRUCTURE / NEIGHBORS / ALLY-FACTION / ALL KNOWN.
+- Foreign infrastructure detail is shared by border contact, faction/shared
+  intelligence, or previous strategic discovery.
+- SHOW closes the main menu, highlights the territory, and provides a small
+  BACK control to return to Military.
+- Strategic installations display 10-point health (10/10 to 0/10).
+- Strategic attack damage is quantized to that 10 HP model; repair restores an
+  surviving installation to 10/10. EMP may disable without HP loss.
+- Cyber Facility structure tiers/images added. HQ and SAM structure images removed.
+
+FACTIONS
+- Existing create/invite/join/leave/remove/disband controls retained.
+- Faction leader can transfer/promote leadership to another member.
+- Faction Military Exercises added.
+- Leader starts an exercise; each member chooses one contribution tier:
+    50 Commerce  = +10% Recruiter production
+    100 Commerce = +20% Recruiter production
+    200 Commerce = +40% Recruiter production
+    300 Commerce = +60% Recruiter production
+- Default exercise duration: 3 turns. Default cooldown: 5 turns. Both host-configurable.
+- The boost modifies Recruiter output; it does not create free armies instantly.
+- UI shows hard troop numbers for the member's current Recruiter network,
+  including Readiness and Unrest, e.g. 8 -> 10 troops/turn (+2).
+
+VALIDATION PERFORMED
+====================
+- All root Lua files successfully parsed with the system Lua 5.4 parser.
+- No Air Wing / Special Forces builder remains with IsVisibleToAllPlayers=true.
+- StructureImages contains PNG files only and remains below the 100-image limit.
+- SpecialUnitImages contains PNG files only; AirWing.png and SpecialForces.png
+  are both 60x60.
+- CyberFacility1/2/3 images are present.
+- Headquarters and SAMSite structure images are absent.
+
+IMPORTANT
+=========
+This build has been statically validated, but it cannot be executed inside the
+War.app game engine in this environment. Run a fresh test lobby before treating
+it as a production release, especially for UI callback behavior, custom-unit fog
+behavior, and turn-advance interactions.

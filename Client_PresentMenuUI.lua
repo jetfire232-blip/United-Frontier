@@ -221,7 +221,8 @@ ActiveMainTab = ActiveMainTab or "overview";
 MainTabsArea = nil;
 UFMenuClose = UFMenuClose or nil;
 ResourceIntelFilter = ResourceIntelFilter or "My Resources";
-MilitaryIntelFilter = MilitaryIntelFilter or "My Assets";
+MilitaryIntelFilter = MilitaryIntelFilter or "My Infrastructure";
+TradePartnerFilter = TradePartnerFilter or "ALL";
 
 
 function MainTabText(key, label)
@@ -1830,12 +1831,12 @@ if isAllied then
     local intelShared = activeAlliance.sharedIntelligence == true;
     local warningShared = activeAlliance.jointStrategicWarning == true;
     UI.CreateLabel(row)
-        .SetText("HQ Sharing | Intelligence: " .. (intelShared and "ON" or "OFF") .. " | Strategic Warning: " .. (warningShared and "ON" or "OFF"))
+        .SetText("Alliance Intel | Shared Intelligence: " .. (intelShared and "ON" or "OFF") .. " | Strategic Warning: " .. (warningShared and "ON" or "OFF"))
         .SetColor("#9CCBFF");
 
     if not intelShared then
         UI.CreateButton(row).SetText("REQUEST SHARED INTELLIGENCE").SetOnClick(function()
-            SafeSendGameCustomMessage(game, "Sending Headquarters sharing request...", {
+            SafeSendGameCustomMessage(game, "Sending alliance intelligence-sharing request...", {
                 type="requestHeadquartersSharing", targetPlayerID=alliedPlayerID, shareType="SharedIntelligence"
             }, function(result)
                 if result and result.message then UI.Alert(result.message); end
@@ -1846,7 +1847,7 @@ if isAllied then
 
     if not warningShared then
         UI.CreateButton(row).SetText("REQUEST JOINT STRATEGIC WARNING").SetOnClick(function()
-            SafeSendGameCustomMessage(game, "Sending Headquarters sharing request...", {
+            SafeSendGameCustomMessage(game, "Sending alliance intelligence-sharing request...", {
                 type="requestHeadquartersSharing", targetPlayerID=alliedPlayerID, shareType="JointStrategicWarning"
             }, function(result)
                 if result and result.message then UI.Alert(result.message); end
@@ -2462,42 +2463,7 @@ UI.CreateLabel(area)
     );
 
 
--- =========================================================
--- INCOMING HEADQUARTERS SHARING REQUESTS
--- =========================================================
-
-UI.CreateLabel(area).SetText("HEADQUARTERS SHARING REQUESTS").SetColor("#9CCBFF");
-local foundHQShareRequest = false;
-for _, request in ipairs(pendingHeadquartersShareRequests or {}) do
-    if request.toPlayerID == ourID then
-        foundHQShareRequest = true;
-        local requestFrom = request.fromPlayerID;
-        local requestType = request.shareType;
-        local requestLabel = requestType == "SharedIntelligence" and "Shared Intelligence" or "Joint Strategic Warning";
-        local requestRow = UI.CreateVerticalLayoutGroup(area);
-        UI.CreateLabel(requestRow).SetText(GetPlayerName(game, requestFrom) .. " requests " .. requestLabel .. ".");
-        local buttons = UI.CreateHorizontalLayoutGroup(requestRow);
-        UI.CreateButton(buttons).SetText("ACCEPT").SetOnClick(function()
-            SafeSendGameCustomMessage(game, "Accepting Headquarters sharing...", {
-                type="respondHeadquartersSharing", fromPlayerID=requestFrom, shareType=requestType, accept=true
-            }, function(result)
-                if result and result.message then UI.Alert(result.message); end
-                ShowDiplomacyMenu(parent, game);
-            end);
-        end);
-        UI.CreateButton(buttons).SetText("DECLINE").SetOnClick(function()
-            SafeSendGameCustomMessage(game, "Declining Headquarters sharing...", {
-                type="respondHeadquartersSharing", fromPlayerID=requestFrom, shareType=requestType, accept=false
-            }, function(result)
-                if result and result.message then UI.Alert(result.message); end
-                ShowDiplomacyMenu(parent, game);
-            end);
-        end);
-    end
-end
-if not foundHQShareRequest then
-    UI.CreateLabel(area).SetText("No incoming Headquarters sharing requests.").SetColor("#888888");
-end
+UI.CreateLabel(area).SetText("Factions share discovered strategic intelligence automatically; Faction and alliance intelligence sharing is managed here.").SetColor("#9CCBFF");
 
 if ourFaction == nil then
 
@@ -2643,6 +2609,10 @@ else
                     memberID;
 
 
+                UI.CreateButton(memberGroup).SetText("PROMOTE TO LEADER").SetOnClick(function()
+                    SafeSendGameCustomMessage(game,"Transferring Faction leadership...",{type="promoteFactionLeader",targetPlayerID=removableID},function(result) if result and result.message then UI.Alert(result.message); end; ShowDiplomacyMenu(parent,game); end);
+                end);
+
                 UI.CreateButton(memberGroup)
                     .SetText(
                         "REMOVE"
@@ -2689,6 +2659,29 @@ else
 
     end
 
+
+    UI.CreateLabel(area).SetText("FACTION MILITARY EXERCISE").SetColor("#D4AF37");
+    local function ExerciseTroopsPerTurn(memberID, bonusPercent)
+        local memberNation=(economy.nations or {})[memberID] or {}; local readiness=math.max(0,math.min(100,tonumber(memberNation.resourceMilitaryReadiness) or 100)); local unrest=math.max(0,math.min(100,tonumber(memberNation.resourceUnrest) or 0));
+        local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local total=0;
+        local recruiters=((economy.armyRecruiters or {}).territories or {}); local standing=game.LatestStanding;
+        for tid,lvl in pairs(recruiters) do local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid] or nil; if terr and terr.OwnerPlayerID==memberID then local mult=math.max(0,100-penalty+(tonumber(bonusPercent) or 0)); total=total+math.max(0,math.floor(base*(tonumber(lvl) or 0)*readiness/100*mult/100+0.5)); end end
+        return total;
+    end
+    local ex=ourFaction.militaryExercise or {}; local turn=tonumber((economy or {}).currentEconomyTurn or (Mod.PublicGameData or {}).tradeTurn) or 0;
+    if ex.active==true and turn<=tonumber(ex.endTurn or 0) then
+        UI.CreateLabel(area).SetText("ACTIVE | Ends Turn "..tostring(ex.endTurn).." | Recruiter boosts apply only to members who contribute.").SetColor("#79D279");
+        local mine=(ex.contributions or {})[ourID];
+        if mine then local normal=ExerciseTroopsPerTurn(ourID,0); local boosted=ExerciseTroopsPerTurn(ourID,mine.bonusPercent); UI.CreateLabel(area).SetText("Your contribution: "..tostring(mine.commerce).." Commerce | +"..tostring(mine.bonusPercent).."% | CURRENT Recruiter output "..tostring(normal).." -> "..tostring(boosted).." troops/turn (+"..tostring(math.max(0,boosted-normal))..")").SetColor("#8FD694");
+        else
+            UI.CreateLabel(area).SetText("Choose once per exercise. Buttons show your CURRENT exact Recruiter output after Readiness and Unrest.").SetColor("#FFFFFF");
+            local cr=UI.CreateVerticalLayoutGroup(area); for _,tier in ipairs({{50,10},{100,20},{200,40},{300,60}}) do local a=tier[1]; local pct=tier[2]; local normal=ExerciseTroopsPerTurn(ourID,0); local boosted=ExerciseTroopsPerTurn(ourID,pct); UI.CreateButton(cr).SetText(tostring(a).." Commerce | +"..tostring(pct).."% | "..tostring(normal).." -> "..tostring(boosted).." troops/turn (+"..tostring(math.max(0,boosted-normal))..")").SetOnClick(function() SafeSendGameCustomMessage(game,"Contributing to Faction exercise...",{type="contributeFactionExercise",amount=a},function(r) if r and r.message then UI.Alert(r.message); end; ShowDiplomacyMenu(parent,game); end); end); end
+        end
+        UI.CreateLabel(area).SetText("MEMBER PARTICIPATION").SetColor("#FFD166");
+        for memberID,isMember in pairs(ourFaction.members or {}) do if isMember then local c=(ex.contributions or {})[memberID]; local normal=ExerciseTroopsPerTurn(memberID,0); local boosted=c and ExerciseTroopsPerTurn(memberID,c.bonusPercent) or normal; UI.CreateLabel(area).SetText(GetPlayerName(game,memberID).." | "..(c and (tostring(c.commerce).." Commerce | +"..tostring(c.bonusPercent).."% | "..tostring(normal).." -> "..tostring(boosted).." troops/turn") or ("No contribution | Current "..tostring(normal).." troops/turn"))).SetColor(c and "#8FD694" or "#AAAAAA"); end end
+    else
+        local cd=tonumber(ex.cooldownUntilTurn or 0); if cd>turn then UI.CreateLabel(area).SetText("COOLDOWN | Next exercise available Turn "..tostring(cd)).SetColor("#FFB366"); elseif ourFaction.leaderPlayerID==ourID then UI.CreateButton(area).SetText("START MILITARY EXERCISE").SetOnClick(function() SafeSendGameCustomMessage(game,"Starting Faction military exercise...",{type="startFactionExercise"},function(r) if r and r.message then UI.Alert(r.message); end; ShowDiplomacyMenu(parent,game); end); end); else UI.CreateLabel(area).SetText("No active exercise. The Faction leader may start one when cooldown is ready.").SetColor("#888888"); end
+    end
 
     if ourFaction.leaderPlayerID
         ~= ourID then
@@ -3283,173 +3276,32 @@ end
 -- SHARED TAX / IDEOLOGY PREVIEW
 -- =========================================================
 
-function GetPolicyPreviewText(
-    game,
-    taxPolicy,
-    ideology
-)
-
-    local taxCommerce = 0;
-    local taxMarket = 0;
-    local taxInvestment = 0;
-    local taxConfidence = 0;
-
-    if taxPolicy == "Low" then
-
-        taxCommerce = -10;
-        taxMarket = 10;
-        taxInvestment = 10;
-        taxConfidence = 5;
-
-    elseif taxPolicy == "High" then
-
-        taxCommerce = 10;
-        taxMarket = -10;
-        taxInvestment = -10;
-        taxConfidence = -5;
-
-    end
-
-    local ideologyCommerce = 0;
-    local ideologyMarket = 0;
-    local ideologyInvestment = 0;
-    local ideologyConfidence = 0;
-
-    if ideology == "Free Market" then
-
-        ideologyCommerce = -3;
-        ideologyMarket = 8;
-        ideologyInvestment = 6;
-        ideologyConfidence = 2;
-
-    elseif ideology == "Capitalist" then
-
-        ideologyCommerce = -2;
-        ideologyMarket = 6;
-        ideologyInvestment = 5;
-        ideologyConfidence = 3;
-
-    elseif ideology == "Social Democratic" then
-
-        ideologyCommerce = 2;
-        ideologyMarket = 2;
-        ideologyInvestment = 3;
-        ideologyConfidence = 2;
-
-    elseif ideology == "State Capitalist" then
-
-        ideologyCommerce = 4;
-        ideologyMarket = 1;
-        ideologyInvestment = 5;
-        ideologyConfidence = 4;
-
-    elseif ideology == "Socialist" then
-
-        ideologyCommerce = 5;
-        ideologyMarket = -5;
-        ideologyInvestment = 1;
-        ideologyConfidence = 1;
-
-    elseif ideology == "Communist" then
-
-        ideologyCommerce = 7;
-        ideologyMarket = -9;
-        ideologyInvestment = -2;
-        ideologyConfidence = 0;
-
-    elseif ideology == "Fascist" then
-
-        ideologyCommerce = 3;
-        ideologyMarket = -2;
-        ideologyInvestment = 1;
-        ideologyConfidence = 3;
-
-    elseif ideology == "Nationalist" then
-
-        ideologyCommerce = 2;
-        ideologyMarket = -1;
-        ideologyInvestment = 0;
-        ideologyConfidence = 2;
-
-    end
-
-    local totalCommerce =
-        taxCommerce
-        + ideologyCommerce;
-
-    local totalMarket =
-        taxMarket
-        + ideologyMarket;
-
-    local totalInvestment =
-        taxInvestment
-        + ideologyInvestment;
-
-    local totalConfidence =
-        taxConfidence
-        + ideologyConfidence;
-
-    local currentCommerce =
-        0;
-
-    if game ~= nil
-        and game.Us ~= nil
-    then
-
-        currentCommerce =
-            GetPlayerIncome(
-                game,
-                GetLocalPlayerID(game)
-            )
-            or 0;
-
-    end
-
-    local projectedCommerce =
-        math.floor(
-            currentCommerce
-            * (
-                1
-                + totalCommerce / 100
-            )
-            + 0.5
-        );
-
-    local function SignedNumber(
-        value,
-        suffix
-    )
-
-        if value > 0 then
-
-            return
-                "+"
-                .. tostring(value)
-                .. suffix;
-
-        end
-
-        return
-            tostring(value)
-            .. suffix;
-
-    end
-
-    return
-        "Combined Policy Impact\n" ..
-        "Commerce: " ..
-        SignedNumber(totalCommerce, "%") ..
-        " | Market: " ..
-        SignedNumber(totalMarket, "%") ..
-        " | Investment: " ..
-        SignedNumber(totalInvestment, "%") ..
-        " | Company Confidence: " ..
-        SignedNumber(totalConfidence, "") ..
-        "\nEstimated Commerce/Turn: " ..
-        tostring(currentCommerce) ..
-        " -> ~" ..
-        tostring(projectedCommerce);
-
+function GetPolicyPreviewText(game, taxPolicy, ideology, economicStrategy, companyStrategy)
+    local taxCommerce,taxMarket,taxInvestment,taxConfidence=0,0,0,0;
+    if taxPolicy=="Low" then taxCommerce=-10; taxMarket=10; taxInvestment=10; taxConfidence=5;
+    elseif taxPolicy=="High" then taxCommerce=10; taxMarket=-10; taxInvestment=-10; taxConfidence=-5; end
+    local ideologyEffects={
+        ["Free Market"]={-3,8,6,2}, ["Capitalist"]={-2,6,5,3}, ["Social Democratic"]={2,2,3,2},
+        ["State Capitalist"]={4,1,5,4}, ["Socialist"]={5,-5,1,1}, ["Communist"]={7,-9,-2,0},
+        ["Fascist"]={3,-2,1,3}, ["Nationalist"]={2,-1,0,2}
+    };
+    local ie=ideologyEffects[ideology] or {0,0,0,0};
+    local strategyEffects={Growth={5,4,5,2},Balanced={0,0,0,0},Conservative={-3,-2,-3,4}};
+    local se=strategyEffects[economicStrategy] or {0,0,0,0};
+    local commerce=taxCommerce+ie[1]+se[1]; local market=taxMarket+ie[2]+se[2]; local investment=taxInvestment+ie[3]+se[3]; local confidence=taxConfidence+ie[4]+se[4];
+    local currentCommerce=0; if game and game.Us then currentCommerce=GetPlayerIncome(game,GetLocalPlayerID(game)) or 0; end
+    local projected=math.floor(currentCommerce*(1+commerce/100)+0.5);
+    local function sg(v,suf) return (v>0 and "+" or "")..tostring(v)..(suf or ""); end
+    local companyText="Select a company strategy";
+    if companyStrategy=="Growth" then companyText="Growth Company: price fundamentals x1.35 | dividend pool 1% of owner income | random volatility scale 30%";
+    elseif companyStrategy=="Balanced" then companyText="Balanced Company: price fundamentals x1.00 | dividend pool 2% of owner income | random volatility scale 25%";
+    elseif companyStrategy=="Dividend" then companyText="Dividend Company: price fundamentals x0.45 | dividend pool 4%-6% of owner income | random volatility scale 15%"; end
+    return "LIVE NUMERICAL PREVIEW\n"..
+        "Base Commerce/Turn: "..tostring(currentCommerce).."\n"..
+        "Policy Commerce Modifier: "..sg(commerce,"%").." => ~"..tostring(projected).." Commerce/turn\n"..
+        "Market Modifier: "..sg(market,"%").." | Investment Return Modifier: "..sg(investment,"%").." | Company Confidence: "..sg(confidence,"").."\n"..
+        "Economic Strategy: "..tostring(economicStrategy or "None").." => Commerce "..sg(se[1],"%")..", Market "..sg(se[2],"%")..", Investment "..sg(se[3],"%")..", Confidence "..sg(se[4],"").."\n"..
+        companyText;
 end
 
 function ShowTaxationMenu(
@@ -3519,7 +3371,9 @@ function ShowTaxationMenu(
                 nation.taxPolicy
                     or "Standard",
                 nation.ideology
-                    or "Social Democratic"
+                    or "Social Democratic",
+                nation.economicStrategy or "Balanced",
+                nation.companyStrategy or "Balanced"
             )
         );
 
@@ -3992,6 +3846,10 @@ function ShowUnitedNationsMenu(parent, game)
     local ceasefireMinTurns = math.max(1, math.floor(tonumber(GetClientSetting("UNCeasefireMinTurns", 2)) or 2));
     local ceasefireMaxTurns = math.max(ceasefireMinTurns, math.floor(tonumber(GetClientSetting("UNCeasefireMaxTurns", 6)) or 6));
     local selectedEffectDuration = sanctionMinTurns;
+    local aidMin=math.max(1,math.floor(tonumber(GetClientSetting("UNAidMinimumCommerce",50)) or 50));
+    local aidMax=math.max(aidMin,math.floor(tonumber(GetClientSetting("UNAidMaximumCommerce",1000)) or 1000));
+    local aidStep=math.max(1,math.floor(tonumber(GetClientSetting("UNAidStepCommerce",50)) or 50));
+    local selectedAidAmount=aidMin;
 
     local function UNResolutionEffectText(resolutionType)
         if resolutionType == "sanctions" then
@@ -3999,7 +3857,7 @@ function ShowUnitedNationsMenu(parent, game)
         elseif resolutionType == "embargo" then
             return "RESULT IF PASSED: Trade Agreement income and Resource Trade deliveries involving the target are paused for 3 turns.";
         elseif resolutionType == "aid" then
-            return "RESULT IF PASSED: Target immediately receives economic aid equal to 10% of its Commerce income, minimum 50 Commerce.";
+            return "RESULT IF PASSED: Target immediately receives "..tostring(selectedAidAmount).." Commerce.";
         elseif resolutionType == "condemnation" then
             return "RESULT IF PASSED: Target is formally condemned for 3 turns and gains +5 Unrest when the unrest system is active.";
         elseif resolutionType == "ceasefire" then
@@ -4013,6 +3871,8 @@ function ShowUnitedNationsMenu(parent, game)
         local durationText = "";
         if selectedType == "sanctions" or selectedType == "ceasefire" then
             durationText = " | Duration: " .. tostring(selectedEffectDuration) .. " turn(s)";
+        elseif selectedType == "aid" then
+            durationText = " | Aid: "..tostring(selectedAidAmount).." Commerce";
         end
         proposalLabel.SetText(
             "Type: "
@@ -4123,6 +3983,11 @@ function ShowUnitedNationsMenu(parent, game)
         "Host limits | Sanctions: " .. tostring(sanctionMinTurns) .. "-" .. tostring(sanctionMaxTurns)
         .. " turns | Ceasefire: " .. tostring(ceasefireMinTurns) .. "-" .. tostring(ceasefireMaxTurns) .. " turns"
     ).SetColor("#B0BEC5");
+    UI.CreateLabel(area).SetText("AID AMOUNT").SetColor("#79D279");
+    local aidRow=UI.CreateHorizontalLayoutGroup(area);
+    UI.CreateButton(aidRow).SetText("-"..tostring(aidStep)).SetOnClick(function() selectedAidAmount=math.max(aidMin,selectedAidAmount-aidStep); RefreshProposalLabel(); end);
+    UI.CreateButton(aidRow).SetText("+"..tostring(aidStep)).SetOnClick(function() selectedAidAmount=math.min(aidMax,selectedAidAmount+aidStep); RefreshProposalLabel(); end);
+    UI.CreateLabel(area).SetText("Host limits | Aid: "..tostring(aidMin).."-"..tostring(aidMax).." Commerce | Step: "..tostring(aidStep)).SetColor("#B0BEC5");
 
     UI.CreateLabel(area)
         .SetText(
@@ -4312,7 +4177,10 @@ function ShowUnitedNationsMenu(parent, game)
                             selectedTargetID,
 
                         durationTurns =
-                            selectedEffectDuration
+                            selectedEffectDuration,
+
+                        aidAmount =
+                            selectedAidAmount
                     },
                     function(result)
 
@@ -4547,14 +4415,13 @@ function ShowResourcesMenu(parent, game)
     local strategicIntel = privateView.strategicIntel or {};
     local knownResources = strategicIntel.knownResources or {};
     UI.CreateLabel(area).SetText("PRIVATE RESOURCE INTELLIGENCE").SetColor("#FFD166");
-    UI.CreateLabel(area).SetText("Resource locations are private. You know your own deposits, deposits directly bordering your nation, shared ally/faction intelligence, and Headquarters Intelligence discoveries.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Resource locations are private. You know your own deposits, deposits directly bordering your nation, and intelligence shared by allies or your Faction.").SetColor("#BBBBBB");
 
     local filterRow = UI.CreateHorizontalLayoutGroup(area);
     local resourceFilters = {
         {"My Resources", "MY RESOURCES"},
         {"Neighboring", "NEIGHBORS"},
         {"Shared Intel", "ALLY / FACTION"},
-        {"HQ Intel", "HQ INTEL"},
         {"All Known", "ALL KNOWN"}
     };
     for _,filterDef in ipairs(resourceFilters) do
@@ -4568,20 +4435,20 @@ function ShowResourcesMenu(parent, game)
         if reason == "Owned" or reason == "Your Resource" then return "My Resources"; end
         if reason == "Border" or reason == "Neighboring Resource" then return "Neighboring"; end
         if reason == "Shared Intelligence" or reason == "Ally Intel" or reason == "Faction Intel" then return "Shared Intel"; end
-        if reason == "HQ Intelligence" then return "HQ Intel"; end
+        if reason == "Strategic Intelligence" then return "All Known"; end
         return "All Known";
     end
     local reasonText = {
         ["Owned"]="Your Resource", ["Your Resource"]="Your Resource",
         ["Border"]="Neighboring Resource", ["Neighboring Resource"]="Neighboring Resource",
         ["Shared Intelligence"]="Shared Intel", ["Ally Intel"]="Ally Intel", ["Faction Intel"]="Faction Intel",
-        ["HQ Intelligence"]="HQ Intel"
+        ["Strategic Intelligence"]="Strategic Intel"
     };
     local reasonColor = {
         ["Owned"]="#8FD694", ["Your Resource"]="#8FD694",
         ["Border"]="#FFD166", ["Neighboring Resource"]="#FFD166",
         ["Shared Intelligence"]="#62B6FF", ["Ally Intel"]="#62B6FF", ["Faction Intel"]="#62B6FF",
-        ["HQ Intelligence"]="#C792EA"
+        ["Strategic Intelligence"]="#C792EA"
     };
 
     local knownIDs = {};
@@ -5042,7 +4909,7 @@ end
 
 function UFPrivateMilitaryState()
     return (Mod.PlayerGameData or {}).ownMilitary or {
-        headquarters=nil, airbases={}, forwardAirstrips={}, samSites={}, missileSilos={}, powerGrids={}, airWings={}, specialForces={}
+        airbases={}, forwardAirstrips={}, missileSilos={}, powerGrids={}, cyberFacilities={}, airWings={}, specialForces={}, assetCondition={}
     };
 end
 
@@ -5064,27 +4931,22 @@ local function UFShowTerritorySelector(parent, game, waitText, payloadBase)
             local title="MILITARY DEVELOPMENT";
             local state=UFPrivateMilitaryState();
             local detail="";
-            if actionType=="buildHeadquarters" then title="HEADQUARTERS"; detail="Construct Headquarters";
-            elseif actionType=="buildArmyRecruiter" then title="RECRUITING STATION"; detail="Build / upgrade Recruiting Station";
+            if actionType=="buildArmyRecruiter" then title="RECRUITING STATION"; detail="Build / upgrade Recruiting Station";
             elseif actionType=="purchaseAirWing" then title="AIR WING"; detail="Station an Air Wing at this Airbase";
             elseif actionType=="purchaseSpecialForces" then title="SPECIAL FORCES"; detail="Train Special Forces here";
             elseif actionType=="launchMissile" then title="MISSILE TARGET"; detail="Confirm strategic strike target";
             elseif actionType=="specialForcesMission" then title="SPECIAL FORCES OPERATION"; detail="Confirm covert mission target";
             elseif actionType=="airWingMission" then title="AIR WING MISSION"; detail="Confirm air-operation target";
             elseif actionType=="buildStrategicMilitary" then
-                local names={Airbase="AIRBASE",ForwardAirstrip="FORWARD AIRSTRIP",SAMSite="SAM SITE",MissileSilo="MISSILE SILO",PowerGrid="POWER GRID"};
+                local names={Airbase="AIRBASE",ForwardAirstrip="FORWARD AIRSTRIP",MissileSilo="MISSILE SILO",PowerGrid="POWER GRID",CyberFacility="CYBER FACILITY"};
                 title=names[kind] or "MILITARY STRUCTURE"; detail="Build / upgrade "..string.lower(title);
             end
             UI.CreateLabel(box).SetText(title.." — "..territoryName).SetColor(kind=="PowerGrid" and "#FFE066" or "#8FBF6F");
             UI.CreateLabel(box).SetText(detail).SetColor("#BBBBBB");
-            if kind=="PowerGrid" then
-                UI.CreateLabel(box).SetText("Visibility: PUBLIC — all players can see the electrical grid.").SetColor("#FFE066");
-            else
-                UI.CreateLabel(box).SetText("Visibility: VISIBLE MAP ASSET — the installation appears on the map; Headquarters Intelligence reveals deeper details.").SetColor("#62B6FF");
-            end
+            UI.CreateLabel(box).SetText("Military infrastructure details are tracked in Military > Infrastructure. Border contact and ally/Faction intelligence determine foreign detail access.").SetColor("#62B6FF");
             local current=0;
             if actionType=="buildStrategicMilitary" then
-                local map={Airbase="airbases",ForwardAirstrip="forwardAirstrips",SAMSite="samSites",MissileSilo="missileSilos",PowerGrid="powerGrids"};
+                local map={Airbase="airbases",ForwardAirstrip="forwardAirstrips",MissileSilo="missileSilos",PowerGrid="powerGrids",CyberFacility="cyberFacilities"};
                 current=tonumber((state[map[kind] or ""] or {})[territoryID]) or 0;
                 UI.CreateLabel(box).SetText("Current Level: "..tostring(current).." | Next Level: "..tostring(current+1));
             elseif actionType=="purchaseAirWing" then
@@ -5099,6 +4961,7 @@ local function UFShowTerritorySelector(parent, game, waitText, payloadBase)
                 UI.CreateLabel(box).SetText("Mission: "..tostring((payloadBase or {}).mission or "Recon").." | Target: "..territoryName).SetColor("#62B6FF");
                 UI.CreateLabel(box).SetText("SAM coverage can INTERCEPT the mission. Results resolve on turn advancement.").SetColor("#BBBBBB");
             elseif actionType=="hqCyberDisrupt" then
+                title="CYBER FACILITY OPERATION";
                 UI.CreateLabel(box).SetText("Cyber Target: "..territoryName).SetColor("#D995FF");
                 UI.CreateLabel(box).SetText("Result will report NO DAMAGE, DISABLED, or FAILED after confirmation.").SetColor("#BBBBBB");
             end
@@ -5113,189 +4976,6 @@ local function UFShowTerritorySelector(parent, game, waitText, payloadBase)
         end);
     end);
     if UFMenuClose ~= nil then UFMenuClose(); end
-end
-
-function ShowHeadquartersMenu(parent, game)
-    local area=CreateContentArea(parent);
-    local state=UFPrivateMilitaryState();
-    UI.CreateLabel(area).SetText("HEADQUARTERS").SetColor("#7FB3FF");
-    UI.CreateLabel(area).SetText("Four command branches. Detailed mechanics are in How It Works.").SetColor("#BBBBBB");
-    local hasPowerGrid = UFCountTableEntries(state.powerGrids or {}) > 0;
-    if state.headquarters == nil then
-        UI.CreateLabel(area).SetText("Status: NOT CONSTRUCTED").SetColor("#FFB366");
-        UI.CreateLabel(area).SetText("Requirement: At least 1 operational Power Grid").SetColor(hasPowerGrid and "#79D279" or "#FF7B7B");
-        UI.CreateLabel(area).SetText("Cost: "..tostring(GetClientSetting("HeadquartersBaseCost",500)).." Commerce");
-        UI.CreateButton(area).SetText("SELECT TERRITORY & BUILD HQ").SetOnClick(function()
-            UFShowTerritorySelector(parent,game,"Constructing Headquarters...",{type="buildHeadquarters"});
-        end);
-    else
-        local tid=state.headquarters.territoryID;
-        local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
-        local hqStatus = hasPowerGrid and tostring(state.headquarters.status or "Operational") or "Power Disrupted";
-        UI.CreateLabel(area).SetText("Status: "..hqStatus.." | "..(td and td.Name or tostring(tid))).SetColor(hasPowerGrid and "#79D279" or "#FF7B7B");
-        if not hasPowerGrid then UI.CreateLabel(area).SetText("Headquarters systems are offline until your nation controls an operational Power Grid.").SetColor("#FFB366"); end
-        UI.CreateButton(area).SetText("SHOW HQ ON MAP").SetOnClick(function()
-            if UFMenuClose ~= nil then UFMenuClose(); end
-            game.HighlightTerritories({tid});
-            game.CreateDialog(function(backRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
-                setMaxSize(340,160); setScrollable(false);
-                UI.CreateLabel(backRoot).SetText("HQ location highlighted on the map.").SetColor("#7FB3FF");
-                UI.CreateButton(backRoot).SetText("← BACK TO HQ").SetOnClick(function()
-                    closeDialog();
-                    dialogGame.CreateDialog(function(hqRoot,sm,ss,hqGame,closeHQ)
-                        sm(900,760); ss(true);
-                        local oldClose=UFMenuClose; UFMenuClose=closeHQ;
-                        ShowHeadquartersMenu(hqRoot,hqGame);
-                        UFMenuClose=oldClose;
-                    end);
-                end);
-            end);
-        end);
-        local branches=state.headquarters.branches or {};
-        local defs={
-            {"Intelligence","INTELLIGENCE","#62B6FF",{
-                "Resource reconnaissance", "Improved resource discovery", "Exact military-asset scans", "Reveal asset level/status", "Advanced multi-location intelligence"}},
-            {"Security","SECURITY","#79D279",{
-                "Basic counterintelligence", "Improved spy resistance", "Strategic strike warning", "Cyber/EMP hardening", "Maximum warning and counterintel"}},
-            {"CyberWarfare","CYBER WARFARE","#D995FF",{
-                "Basic cyber disruption", "Resource/communications disruption", "Infrastructure targeting", "Stronger multi-turn disruption", "Advanced strategic cyber operations"}},
-            {"JointCommand","JOINT COMMAND","#FFD166",{
-                "Basic allied coordination", "Shared Intelligence support", "Allied military-access benefits", "Faction/airbase coordination", "Advanced joint command and warnings"}}
-        };
-        for _,d in ipairs(defs) do
-            local lvl=tonumber(branches[d[1]]) or 0;
-            local row=UI.CreateVerticalLayoutGroup(area);
-            UI.CreateLabel(row).SetText(d[2].." | L"..tostring(lvl)).SetColor(d[3]);
-            local maxBranchLevel=math.min(5,tonumber(GetClientSetting("HeadquartersMaxBranchLevel",5)) or 5);
-            local filled=string.rep("#",math.max(0,math.min(maxBranchLevel,lvl)));
-            local empty=string.rep("-",math.max(0,maxBranchLevel-lvl));
-            UI.CreateLabel(row).SetText("Progress ["..filled..empty.."]  "..tostring(lvl).."/"..tostring(maxBranchLevel)).SetColor(d[3]);
-            local currentEffect = lvl > 0 and d[4][math.min(lvl,#d[4])] or "Not yet upgraded";
-            UI.CreateLabel(row).SetText("Current: "..currentEffect).SetColor("#BBBBBB");
-            if lvl > 0 then
-                local unlocked={};
-                for ui=1,math.min(lvl,#d[4]) do table.insert(unlocked,"L"..tostring(ui).." "..tostring(d[4][ui])); end
-                UI.CreateLabel(row).SetText("Unlocked: "..table.concat(unlocked," • ")).SetColor("#9CCBFF");
-            end
-            if lvl < maxBranchLevel then
-                local branchKey=d[1];
-                local nextLevel=lvl+1;
-                local base=math.max(25,math.floor((tonumber(GetClientSetting("HeadquartersBaseCost",500)) or 500)*0.35));
-                local nextCost=base*nextLevel;
-                UI.CreateLabel(row).SetText("Next L"..tostring(nextLevel)..": "..tostring(d[4][math.min(nextLevel,#d[4])]).." | Cost: "..tostring(nextCost).." Commerce").SetColor("#FFD166");
-                UI.CreateButton(row).SetText("UPGRADE TO L"..tostring(nextLevel).." — "..tostring(nextCost).." COMMERCE").SetOnClick(function()
-                    SafeSendGameCustomMessage(game,"Upgrading HQ...",{type="upgradeHeadquartersBranch",branch=branchKey},function(result)
-                        if result and result.message then UI.Alert(result.message); end; ShowHeadquartersMenu(parent,game);
-                    end);
-                end);
-            end
-        end
-
-        UI.CreateLabel(area).SetText("----------------------------------------");
-        UI.CreateLabel(area).SetText("HQ ACTIONS").SetColor("#FFFFFF");
-
-        local securityLevel = tonumber(branches.Security) or 0;
-        UI.CreateLabel(area).SetText("SECURITY — WHAT IT DOES: Passive protection. Reduces enemy intelligence/cyber success and, at higher levels, improves strategic-strike warning and hardening.").SetColor("#9BD59B");
-        if securityLevel >= 1 then
-            local counterBonus = math.min(60, 10 + securityLevel * 10);
-            local warningBonus = securityLevel >= 3 and math.min(80, 20 + securityLevel * 12) or 0;
-            UI.CreateLabel(area)
-                .SetText("SECURITY STATUS | Counterintelligence +"..tostring(counterBonus).."% | Strategic Warning +"..tostring(warningBonus).."%")
-                .SetColor("#79D279");
-            UI.CreateButton(area).SetText("VIEW SECURITY REPORT").SetOnClick(function()
-                local status = "HQ SECURITY REPORT\nCounterintelligence Protection: +"..tostring(counterBonus).."%\nStrategic Warning: +"..tostring(warningBonus).."%\nPower: "..(hasPowerGrid and "ONLINE" or "DISRUPTED").."\nRecent HQ reports are listed below on the Headquarters screen.";
-                UI.Alert(status);
-            end);
-        else
-            UI.CreateLabel(area).SetText("SECURITY | Upgrade to L1 to activate counterintelligence.").SetColor("#777777");
-        end
-
-        local cyberLevel = tonumber(branches.CyberWarfare) or 0;
-        UI.CreateLabel(area).SetText("CYBER WARFARE — WHAT IT DOES: Select an enemy territory during an active war. A successful operation temporarily disables strategic systems there; enemy Security lowers the success chance. One cyber operation per turn.").SetColor("#D9A7FF");
-        if cyberLevel >= 1 then
-            UI.CreateButton(area).SetText("LAUNCH CYBER DISRUPTION").SetOnClick(function()
-                UFShowTerritorySelector(parent,game,"Launching cyber operation...",{type="hqCyberDisrupt"});
-            end);
-        else
-            UI.CreateLabel(area).SetText("CYBER WARFARE | Upgrade to L1 to unlock cyber operations.").SetColor("#777777");
-        end
-
-        local jointLevel = tonumber(branches.JointCommand) or 0;
-        UI.CreateLabel(area).SetText("JOINT COMMAND — WHAT IT DOES: Manages allied/faction coordination. Levels unlock shared-intelligence support, military-access benefits, airbase/faction coordination, and stronger shared warnings.").SetColor("#FFD166");
-        if jointLevel >= 1 then
-            local jointRow = UI.CreateHorizontalLayoutGroup(area);
-            UI.CreateButton(jointRow).SetText("ALLIANCE / FACTION COMMAND").SetOnClick(function() ShowDiplomacyMenu(parent,game); end);
-            if jointLevel >= 2 then
-                UI.CreateLabel(area).SetText("Shared Intelligence support is unlocked. Use Diplomacy to request or review sharing agreements.").SetColor("#FFD166");
-            end
-        else
-            UI.CreateLabel(area).SetText("JOINT COMMAND | Upgrade to L1 to unlock allied command controls.").SetColor("#777777");
-        end
-
-        local recent = state.hqRecentResults or {};
-        if #recent > 0 then
-            UI.CreateLabel(area).SetText("RECENT HQ RESULTS").SetColor("#FFFFFF");
-            for i=math.max(1,#recent-4),#recent do
-                local r=recent[i];
-                if r then
-                    local resultText=tostring(r.result or "RESULT");
-                    local resultColor = resultText=="SUCCESS" and "#79D279" or (resultText=="DESTROYED" and "#FF5A5A" or (resultText=="DAMAGED" or resultText=="DISABLED") and "#FFB366" or "#BBBBBB");
-                    UI.CreateLabel(area).SetText(tostring(r.action or "HQ").." | "..resultText.." | "..tostring(r.detail or "No additional effect")).SetColor(resultColor);
-                end
-            end
-        end
-
-        local intelligenceLevel=tonumber(branches.Intelligence) or 0;
-        if intelligenceLevel>=1 then
-            UI.CreateLabel(area).SetText("----------------------------------------");
-            UI.CreateLabel(area).SetText("INTELLIGENCE OPERATIONS").SetColor("#62B6FF");
-            UI.CreateLabel(area).SetText("WHAT IT DOES: Privately discovers another nation's resources and, from L3, military infrastructure details. Enemy Security reduces how many new locations/details are uncovered. Successful discoveries are shared with eligible faction members and Shared-Intelligence allies.").SetColor("#9CCBFF");
-            UI.CreateLabel(area).SetText("Select a nation. Resource scans are available at Intelligence L1; military-detail scans unlock at L3. One of each scan type may be used per turn.").SetColor("#BBBBBB");
-            local intelTarget=nil;
-            local targetLabel=UI.CreateLabel(area).SetText("Target: None").SetColor("#FFD166");
-            local searchInput=CreateWideTextInput(area);
-            local resultsHost=UI.CreateVerticalLayoutGroup(area);
-            local function RefreshIntelTargets()
-                if not UI.IsDestroyed(resultsHost) then UI.Destroy(resultsHost); end
-                resultsHost=UI.CreateVerticalLayoutGroup(area);
-                local query=string.lower(searchInput.GetText() or "");
-                local items={};
-                for pid,player in pairs(game.Game.Players or {}) do
-                    if pid~=GetLocalPlayerID(game) and player~=nil and not player.Surrendered then
-                        local name=GetPlayerName(game,pid);
-                        if query=="" or string.find(string.lower(name),query,1,true)~=nil then table.insert(items,{id=pid,name=name}); end
-                    end
-                end
-                table.sort(items,function(a,b) return a.name<b.name; end);
-                local prow=nil;
-                for index,item in ipairs(items) do
-                    if index>24 then break; end
-                    if (index-1)%3==0 then prow=UI.CreateHorizontalLayoutGroup(resultsHost); end
-                    local cid=item.id; local cname=item.name;
-                    UI.CreateButton(prow).SetText(cname).SetTextColor(GetPlayerUIColor(game,cid,"#FFFFFF")).SetOnClick(function()
-                        intelTarget=cid; targetLabel.SetText("Target: "..cname);
-                    end);
-                end
-            end
-            searchInput.SetOnValueChanged(function() RefreshIntelTargets(); end); RefreshIntelTargets();
-            local scanRow=UI.CreateHorizontalLayoutGroup(area);
-            UI.CreateButton(scanRow).SetText("SCAN RESOURCES").SetOnClick(function()
-                if intelTarget==nil then UI.Alert("Select a target nation first."); return; end
-                SafeSendGameCustomMessage(game,"Running resource intelligence scan...",{type="hqResourceScan",targetPlayerID=intelTarget},function(result)
-                    if result and result.message then UI.Alert(result.message); end; ShowHeadquartersMenu(parent,game);
-                end);
-            end);
-            if intelligenceLevel>=3 then
-                UI.CreateButton(scanRow).SetText("SCAN MILITARY DETAILS").SetOnClick(function()
-                    if intelTarget==nil then UI.Alert("Select a target nation first."); return; end
-                    SafeSendGameCustomMessage(game,"Running military intelligence scan...",{type="hqMilitaryScan",targetPlayerID=intelTarget},function(result)
-                        if result and result.message then UI.Alert(result.message); end; ShowHeadquartersMenu(parent,game);
-                    end);
-                end);
-            end
-        end
-    end
-    UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
 end
 
 function ShowArmyRecruitersMenu(parent, game)
@@ -5381,7 +5061,7 @@ function ShowMissileCommandMenu(parent, game)
     UI.CreateLabel(area).SetText("HOST DAMAGE SETTINGS").SetColor("#FFD166");
     UI.CreateLabel(area).SetText("Conventional: "..tostring(GetClientSetting("ConventionalMissileArmyDamagePercent",20)).."% armies | "..tostring(GetClientSetting("ConventionalMissileStructureDamagePercent",30)).."% infrastructure | "..tostring(GetClientSetting("ConventionalMissileCityDamagePercent",15)).."% city/territory").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("Nuclear armies: Low "..tostring(GetClientSetting("NuclearLowDamagePercent",35)).."% | Medium "..tostring(GetClientSetting("NuclearMediumDamagePercent",55)).."% | High "..tostring(GetClientSetting("NuclearHighDamagePercent",75)).."% | Infrastructure "..tostring(GetClientSetting("NuclearStructureDamagePercent",70)).."%").SetColor("#BBBBBB");
-    UI.CreateLabel(area).SetText("EMP base disable: "..tostring(GetClientSetting("EMPBaseDisableTurns",3)).." turn(s). SAM Sites can intercept strategic missiles. Strike reports list troop, city/territory, resource, Recruiter, and strategic-asset effects.").SetColor("#AAAAAA");
+    UI.CreateLabel(area).SetText("EMP base disable: "..tostring(GetClientSetting("EMPBaseDisableTurns",3)).." turn(s). Strike reports list troop, city/territory, resource, Recruiter, and strategic-infrastructure effects.").SetColor("#AAAAAA");
     local recent=state.hqRecentResults or {}; local shown=0;
     for i=math.max(1,#recent-7),#recent do
         local r=recent[i];
@@ -5399,149 +5079,72 @@ end
 function ShowMilitaryRepairsMenu(parent, game)
     local area=CreateContentArea(parent); local state=UFPrivateMilitaryState(); local turn=(((Mod.PublicGameData or {}).globalEconomy or {}).currentEconomyTurn) or 1;
     UI.CreateLabel(area).SetText("DAMAGE & REPAIRS").SetColor("#FFD166");
-    UI.CreateLabel(area).SetText("Operational < Damaged < Disabled < Destroyed. Destroyed assets must be rebuilt; damaged/disabled assets can be repaired with Commerce.").SetColor("#BBBBBB");
-    local mapping={Headquarters=nil,Airbase=state.airbases,ForwardAirstrip=state.forwardAirstrips,SAMSite=state.samSites,MissileSilo=state.missileSilos,PowerGrid=state.powerGrids}; local shown=0;
+    UI.CreateLabel(area).SetText("Every strategic installation has 10 HP. 10/10 = full health; 0/10 = destroyed. EMP can temporarily disable an installation without removing HP.").SetColor("#BBBBBB");
+    local mapping={Airbase=state.airbases,ForwardAirstrip=state.forwardAirstrips,MissileSilo=state.missileSilos,PowerGrid=state.powerGrids,CyberFacility=state.cyberFacilities}; local shown=0;
     local function row(kind,tid,lvl)
-        local c=(state.assetCondition or {})[tostring(kind)..":"..tostring(tid)] or {}; local damage=tonumber(c.damage) or 0; local disabled=(tonumber(c.disabledUntil) or 0)>turn; if damage<=0 and not disabled then return; end; shown=shown+1;
-        local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; local status=disabled and "DISABLED" or (damage>=100 and "DESTROYED" or "DAMAGED"); local color=disabled and "#FFB366" or "#FF7B7B";
-        local g=UI.CreateHorizontalLayoutGroup(area); UI.CreateLabel(g).SetText(kind.." | "..(td and td.Name or tostring(tid)).." | "..status.." | "..tostring(math.floor(damage)).."% damage").SetColor(color).SetFlexibleWidth(1);
-        if damage<100 then UI.CreateButton(g).SetText("REPAIR").SetOnClick(function() SafeSendGameCustomMessage(game,"Repairing asset...",{type="repairMilitaryAsset",kind=kind,territoryID=tid},function(r) if r and r.message then UI.Alert(r.message); end; ShowMilitaryRepairsMenu(parent,game); end); end); end
+        local c=(state.assetCondition or {})[tostring(kind)..":"..tostring(tid)] or {}; local damage=tonumber(c.damage) or 0; local health=math.max(0,10-math.ceil(damage/10)); local disabled=(tonumber(c.disabledUntil) or 0)>turn; if damage<=0 and not disabled then return; end; shown=shown+1;
+        local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; local status=disabled and "DISABLED" or (health<=0 and "DESTROYED" or "DAMAGED"); local color=disabled and "#FFB366" or "#FF7B7B";
+        local g=UI.CreateHorizontalLayoutGroup(area); UI.CreateLabel(g).SetText(kind.." | "..(td and td.Name or tostring(tid)).." | "..status.." | "..tostring(health).."/10 HP").SetColor(color).SetFlexibleWidth(1);
+        if health>0 then UI.CreateButton(g).SetText("REPAIR TO 10/10").SetOnClick(function() SafeSendGameCustomMessage(game,"Repairing asset...",{type="repairMilitaryAsset",kind=kind,territoryID=tid},function(r) if r and r.message then UI.Alert(r.message); end; ShowMilitaryRepairsMenu(parent,game); end); end); end
     end
-    if state.headquarters then row("Headquarters",state.headquarters.territoryID,1); end; for kind,tbl in pairs(mapping) do if tbl then for tid,lvl in pairs(tbl) do row(kind,tonumber(tid) or tid,lvl); end end end
-    if shown==0 then UI.CreateLabel(area).SetText("No damaged or disabled strategic assets currently need repairs.").SetColor("#79D279"); end
+    for kind,tbl in pairs(mapping) do for tid,lvl in pairs(tbl or {}) do row(kind,tonumber(tid) or tid,lvl); end end
+    if shown==0 then UI.CreateLabel(area).SetText("All strategic infrastructure is currently 10/10 HP and operational.").SetColor("#79D279"); end
     UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
 end
 
 function ShowMilitaryMenu(parent, game)
-    local area=CreateContentArea(parent);
-    local state=UFPrivateMilitaryState();
-    local intel=(Mod.PlayerGameData or {}).strategicIntel or {};
-    local data=Mod.PublicGameData or {};
-    local economy=data.globalEconomy or {};
-    local ourID=GetLocalPlayerID(game);
-
-    UI.CreateLabel(area).SetText("MILITARY COMMAND").SetColor("#8FBF6F");
-    UI.CreateLabel(area).SetText("Military installations are visible map assets. Headquarters Intelligence, alliances and factions reveal deeper strategic details. Resources remain private intelligence.").SetColor("#BBBBBB");
-
-    local frow=UI.CreateHorizontalLayoutGroup(area);
-    local militaryFilters={{"My Assets","MY ASSETS"},{"Shared Intel","ALLY / FACTION"},{"HQ Intel","HQ INTEL"},{"Public","PUBLIC"},{"All Known","ALL KNOWN"}};
-    for _,fd in ipairs(militaryFilters) do local key=fd[1]; local label=fd[2];
-        UI.CreateButton(frow).SetText((MilitaryIntelFilter==key and "▶ " or "")..label).SetOnClick(function() MilitaryIntelFilter=key; ShowMilitaryMenu(parent,game); end);
+    local area=CreateContentArea(parent); local state=UFPrivateMilitaryState(); local intel=(Mod.PlayerGameData or {}).strategicIntel or {};
+    local data=Mod.PublicGameData or {}; local economy=data.globalEconomy or {}; local ourID=GetLocalPlayerID(game); local standing=game.LatestStanding;
+    UI.CreateLabel(area).SetText("MILITARY INFRASTRUCTURE").SetColor("#8FBF6F");
+    UI.CreateLabel(area).SetText("Infrastructure details follow the same private-intelligence model as Resources. Enemy Air Wings and Special Forces use normal fog visibility and are no longer globally visible.").SetColor("#BBBBBB");
+    local filterRow=UI.CreateHorizontalLayoutGroup(area); local filters={{"My Infrastructure","MY INFRASTRUCTURE"},{"Neighbors","NEIGHBORS"},{"Shared Intel","ALLY / FACTION"},{"All Known","ALL KNOWN"}};
+    for _,fd in ipairs(filters) do local key,label=fd[1],fd[2]; UI.CreateButton(filterRow).SetText((MilitaryIntelFilter==key and "▶ " or "")..label).SetOnClick(function() MilitaryIntelFilter=key; ShowMilitaryMenu(parent,game); end); end
+    local function hp(kind,tid)
+        local c=(state.assetCondition or {})[tostring(kind)..":"..tostring(tid)] or {}; return math.max(0,10-math.ceil((tonumber(c.damage) or 0)/10));
     end
-
-    local function addAssetRow(kind,tid,level,count,color,note,upgradeSpec)
-        local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil;
-        local row=UI.CreateHorizontalLayoutGroup(area);
-        local suffix=""; if level then suffix=suffix.." | Lv."..tostring(level); end; if count and count>1 then suffix=suffix.." | x"..tostring(count); end;
-        UI.CreateLabel(row).SetText(kind.." | "..(td and td.Name or tostring(tid))..suffix..(note and (" | "..note) or "")).SetColor(color or "#DDEEFF");
-        local captured=tid; UI.CreateButton(row).SetText("SHOW").SetOnClick(function()
-            if UFMenuClose ~= nil then UFMenuClose(); end
-            game.HighlightTerritories({captured});
-            game.CreateDialog(function(backRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
-                setMaxSize(340,160); setScrollable(false);
-                UI.CreateLabel(backRoot).SetText("Asset location highlighted on the map.").SetColor("#8FD694");
-                UI.CreateButton(backRoot).SetText("← BACK TO MILITARY").SetOnClick(function()
-                    closeDialog();
-                    dialogGame.CreateDialog(function(milRoot,sm,ss,milGame,closeMil)
-                        sm(900,760); ss(true);
-                        local oldClose=UFMenuClose; UFMenuClose=closeMil;
-                        ShowMilitaryMenu(milRoot,milGame);
-                        UFMenuClose=oldClose;
-                    end);
-                end);
+    local function addRow(kind,tid,level,count,color,note,upgradeSpec,ownerState,healthOverride)
+        local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; local row=UI.CreateHorizontalLayoutGroup(area); local useState=ownerState or state;
+        local c=(useState.assetCondition or {})[tostring(kind)..":"..tostring(tid)] or {}; local health=healthOverride~=nil and tonumber(healthOverride) or math.max(0,10-math.ceil((tonumber(c.damage) or 0)/10));
+        local txt=(td and td.Name or tostring(tid)).." | "..kind..(level and (" Lv."..tostring(level)) or "")..(count and count>1 and (" x"..tostring(count)) or "").." | "..tostring(health).."/10 HP"..(note and (" | "..note) or "");
+        UI.CreateLabel(row).SetText(txt).SetColor(color or "#DDEEFF"); local captured=tid;
+        UI.CreateButton(row).SetText("SHOW").SetOnClick(function()
+            if UFMenuClose then UFMenuClose(); end; game.HighlightTerritories({captured}); game.CreateDialog(function(backRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
+                setMaxSize(330,130); setScrollable(false); UI.CreateLabel(backRoot).SetText("Location highlighted."); UI.CreateButton(backRoot).SetText("← BACK").SetOnClick(function() closeDialog(); dialogGame.CreateDialog(function(r,sm,ss,g,c) sm(900,760); ss(true); local old=UFMenuClose; UFMenuClose=c; ShowMilitaryMenu(r,g); UFMenuClose=old; end); end);
             end);
         end);
-
-        if upgradeSpec~=nil then
-            if upgradeSpec.mode=="hq" then
-                UI.CreateButton(row).SetText("OPEN / UPGRADE").SetOnClick(function() ShowHeadquartersMenu(parent,game); end);
-            elseif upgradeSpec.maxed==true then
-                UI.CreateLabel(row).SetText("MAX").SetColor("#79D279");
-            elseif upgradeSpec.mode=="recruiter" then
-                local newLevel=(tonumber(level) or 0)+1;
-                local cost=(tonumber(upgradeSpec.baseCost) or 250)*newLevel;
-                UI.CreateButton(row).SetText("UPGRADE L"..tostring(newLevel).." — "..tostring(cost)).SetOnClick(function()
-                    SafeSendGameCustomMessage(game,"Upgrading Recruiting Station...",{type="buildArmyRecruiter",territoryID=captured},function(r)
-                        if r and r.message then UI.Alert(r.message); end; ShowMilitaryMenu(parent,game);
-                    end);
-                end);
-            elseif upgradeSpec.mode=="structure" then
-                local newLevel=(tonumber(level) or 0)+1;
-                local cost=(tonumber(upgradeSpec.baseCost) or 250)*newLevel;
-                UI.CreateButton(row).SetText("UPGRADE L"..tostring(newLevel).." — "..tostring(cost)).SetOnClick(function()
-                    SafeSendGameCustomMessage(game,"Upgrading "..kind.."...",{type="buildStrategicMilitary",kind=upgradeSpec.kind,territoryID=captured},function(r)
-                        if r and r.message then UI.Alert(r.message); end; ShowMilitaryMenu(parent,game);
-                    end);
-                end);
-            end
-        end
+        if upgradeSpec then if upgradeSpec.maxed then UI.CreateLabel(row).SetText("MAX").SetColor("#79D279"); else local nl=(tonumber(level) or 0)+1; local cost=(tonumber(upgradeSpec.baseCost) or 250)*nl; UI.CreateButton(row).SetText("UPGRADE L"..tostring(nl).." — "..tostring(cost)).SetOnClick(function() SafeSendGameCustomMessage(game,"Upgrading "..kind.."...",{type="buildStrategicMilitary",kind=upgradeSpec.kind,territoryID=captured},function(r) if r and r.message then UI.Alert(r.message); end; ShowMilitaryMenu(parent,game); end); end); end end
+        if health<10 and ownerState==nil then UI.CreateButton(row).SetText("REPAIR TO 10/10").SetOnClick(function() SafeSendGameCustomMessage(game,"Repairing asset...",{type="repairMilitaryAsset",kind=kind,territoryID=captured},function(r) if r and r.message then UI.Alert(r.message); end; ShowMilitaryMenu(parent,game); end); end); end
     end
-
-    if MilitaryIntelFilter=="My Assets" or MilitaryIntelFilter=="All Known" then
-        UI.CreateLabel(area).SetText("YOUR MILITARY ASSETS").SetColor("#8FD694");
-        local ownShown=0;
-        if state.headquarters then
-            addAssetRow("Headquarters",state.headquarters.territoryID,1,nil,"#7FB3FF",state.headquarters.status or "Operational",{mode="hq"}); ownShown=ownShown+1;
-        end
-        local airbaseMax=math.max(1,math.floor(tonumber(GetClientSetting("AirbaseMaxLevel",3)) or 3));
-        local samMax=math.max(1,math.floor(tonumber(GetClientSetting("SAMSiteMaxLevel",3)) or 3));
-        local siloMax=math.max(1,math.floor(tonumber(GetClientSetting("MissileSiloMaxLevel",3)) or 3));
-        for tid,lvl in pairs(state.airbases or {}) do addAssetRow("Airbase",tonumber(tid) or tid,lvl,nil,"#62B6FF","Visible",{mode="structure",kind="Airbase",baseCost=GetClientSetting("AirbaseBaseCost",350),maxed=(tonumber(lvl) or 0)>=airbaseMax}); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.forwardAirstrips or {}) do addAssetRow("Forward Airstrip",tonumber(tid) or tid,lvl,nil,"#82CFFF","Visible",{mode="structure",kind="ForwardAirstrip",baseCost=GetClientSetting("ForwardAirstripBaseCost",175),maxed=(tonumber(lvl) or 0)>=1}); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.samSites or {}) do addAssetRow("SAM Site",tonumber(tid) or tid,lvl,nil,"#79D279","Visible",{mode="structure",kind="SAMSite",baseCost=GetClientSetting("SAMSiteBaseCost",300),maxed=(tonumber(lvl) or 0)>=samMax}); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.missileSilos or {}) do addAssetRow("Missile Silo",tonumber(tid) or tid,lvl,nil,"#FF7B7B","Visible",{mode="structure",kind="MissileSilo",baseCost=GetClientSetting("MissileSiloBaseCost",500),maxed=(tonumber(lvl) or 0)>=siloMax}); ownShown=ownShown+1; end
-        for tid,lvl in pairs(state.powerGrids or {}) do addAssetRow("Power Grid",tonumber(tid) or tid,lvl,nil,"#FFE066","PUBLIC",{mode="structure",kind="PowerGrid",baseCost=GetClientSetting("PowerGridBaseCost",300),maxed=(tonumber(lvl) or 0)>=3}); ownShown=ownShown+1; end
-        for tid,cnt in pairs(state.airWings or {}) do addAssetRow("Air Wing",tonumber(tid) or tid,nil,tonumber(cnt) or 1,"#62B6FF","Visible Unit"); ownShown=ownShown+1; end
-        for tid,cnt in pairs(state.specialForces or {}) do addAssetRow("Special Forces",tonumber(tid) or tid,nil,tonumber(cnt) or 1,"#D995FF","Visible Unit"); ownShown=ownShown+1; end
-        local recruiters=((economy.armyRecruiters or {}).territories or {});
-        local recruiterMax=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterMaxLevel",3)) or 3));
-        local standing=game.LatestStanding;
-        for tid,lvl in pairs(recruiters) do
-            local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid];
-            if terr and terr.OwnerPlayerID==ourID and (tonumber(lvl) or 0)>0 then
-                addAssetRow("Recruiting Station",ntid,lvl,nil,"#D4AF37","Visible",{mode="recruiter",baseCost=GetClientSetting("ArmyRecruiterBaseCost",250),maxed=(tonumber(lvl) or 0)>=recruiterMax}); ownShown=ownShown+1;
-            end
-        end
-        if ownShown==0 then UI.CreateLabel(area).SetText("No military assets constructed yet.").SetColor("#888888"); end
+    local maxes={Airbase=GetClientSetting("AirbaseMaxLevel",3),ForwardAirstrip=1,MissileSilo=GetClientSetting("MissileSiloMaxLevel",3),PowerGrid=3,CyberFacility=GetClientSetting("CyberFacilityMaxLevel",3)};
+    local costs={Airbase=GetClientSetting("AirbaseBaseCost",350),ForwardAirstrip=GetClientSetting("ForwardAirstripBaseCost",175),MissileSilo=GetClientSetting("MissileSiloBaseCost",500),PowerGrid=GetClientSetting("PowerGridBaseCost",300),CyberFacility=GetClientSetting("CyberFacilityBaseCost",450)};
+    if MilitaryIntelFilter=="My Infrastructure" or MilitaryIntelFilter=="All Known" then
+        UI.CreateLabel(area).SetText("YOUR INFRASTRUCTURE").SetColor("#8FD694"); local shown=0;
+        for kind,mapname in pairs({Airbase="airbases",ForwardAirstrip="forwardAirstrips",MissileSilo="missileSilos",PowerGrid="powerGrids",CyberFacility="cyberFacilities"}) do for tid,lvl in pairs(state[mapname] or {}) do shown=shown+1; addRow(kind,tonumber(tid) or tid,lvl,nil,kind=="PowerGrid" and "#FFE066" or "#8FD694",nil,{kind=kind,baseCost=costs[kind],maxed=(tonumber(lvl) or 0)>=(tonumber(maxes[kind]) or 1)}); end end
+        if shown==0 then UI.CreateLabel(area).SetText("No strategic infrastructure constructed yet.").SetColor("#888888"); end
     end
-
-    if MilitaryIntelFilter~="My Assets" then
-        UI.CreateLabel(area).SetText("KNOWN FOREIGN INFRASTRUCTURE").SetColor("#FFD166");
-        local known=intel.knownMilitary or {}; local shown=0;
-        for _,item in pairs(known) do
+    if MilitaryIntelFilter~="My Infrastructure" then
+        UI.CreateLabel(area).SetText("KNOWN FOREIGN INFRASTRUCTURE").SetColor("#FFD166"); local shown=0;
+        for _,item in pairs(intel.knownMilitary or {}) do
             local reason=tostring(item.reason or "Known");
-            local group=(reason=="HQ Intelligence" and "HQ Intel") or (reason=="Public" and "Public") or "Shared Intel";
-            if MilitaryIntelFilter=="All Known" or MilitaryIntelFilter==group then
-                shown=shown+1; addAssetRow(tostring(item.kind),item.territoryID,item.level,item.count,(group=="HQ Intel" and "#C792EA" or (group=="Public" and "#FFE066" or "#62B6FF")),reason);
-            end
+            local group=(reason=="Shared Intelligence" and "Shared Intel") or (reason=="Border" and "Neighbors") or "All Known";
+            local include=(MilitaryIntelFilter=="All Known") or (MilitaryIntelFilter==group);
+            if include then shown=shown+1; addRow(tostring(item.kind),item.territoryID,item.level,item.count,"#62B6FF",reason,nil,{},item.health); end
         end
-        if shown==0 then UI.CreateLabel(area).SetText("No foreign assets match this filter.").SetColor("#888888"); end
+        if shown==0 then UI.CreateLabel(area).SetText("No foreign infrastructure matches this filter.").SetColor("#888888"); end
     end
-
-    UI.CreateLabel(area).SetText("----------------------------------------");
-    UI.CreateLabel(area).SetText("BUILD & MANAGE").SetColor("#FFFFFF");
-    UI.CreateButton(area).SetText("HEADQUARTERS").SetOnClick(function() ShowHeadquartersMenu(parent,game); end);
-    UI.CreateLabel(area).SetText("Headquarters limit: ONE per nation. If it is destroyed or the HQ territory is lost, you may rebuild it after restoring an operational Power Grid.").SetColor("#7FB3FF");
+    UI.CreateLabel(area).SetText("----------------------------------------"); UI.CreateLabel(area).SetText("BUILD & MANAGE").SetColor("#FFFFFF");
     UI.CreateButton(area).SetText("RECRUITING STATIONS").SetOnClick(function() ShowArmyRecruitersMenu(parent,game); end);
-    UI.CreateLabel(area).SetText("AIR OPERATIONS").SetColor("#62B6FF");
-    UI.CreateLabel(area).SetText("Airbases: "..UFCountTableEntries(state.airbases).." | Airstrips: "..UFCountTableEntries(state.forwardAirstrips).." | Air Wings: "..tostring((function() local n=0 for _,v in pairs(state.airWings or {}) do n=n+(tonumber(v) or 0) end return n end)()));
-    UFAddStructureAction(area,parent,game,"AIRBASE","Airbase",GetClientSetting("AirbaseBaseCost",350)," | max L"..tostring(GetClientSetting("AirbaseMaxLevel",3)),"#62B6FF");
-    UFAddStructureAction(area,parent,game,"FORWARD AIRSTRIP","ForwardAirstrip",GetClientSetting("ForwardAirstripBaseCost",175),"","#82CFFF");
-    UI.CreateButton(area).SetText("PURCHASE AIR WING").SetOnClick(function() UFShowTerritorySelector(parent,game,"Purchasing Air Wing...",{type="purchaseAirWing"}); end);
-    UI.CreateLabel(area).SetText("1 Air Wing = "..tostring(GetClientSetting("AircraftPerAirWing",25)).." aircraft (host configured).").SetColor("#BBBBBB");
-    UI.CreateLabel(area).SetText("STRATEGIC DEFENSE & INFRASTRUCTURE").SetColor("#79D279");
-    UFAddStructureAction(area,parent,game,"SAM SITE","SAMSite",GetClientSetting("SAMSiteBaseCost",300)," | max L"..tostring(GetClientSetting("SAMSiteMaxLevel",3)),"#79D279");
-    UFAddStructureAction(area,parent,game,"POWER / ELECTRICAL GRID (PUBLIC)","PowerGrid",GetClientSetting("PowerGridBaseCost",300)," | visible to all players","#FFE066");
-    UI.CreateLabel(area).SetText("Power Grid is public. HQ, Recruiters, Airbases, Airstrips, SAMs and Silos also appear as map assets; intelligence controls deeper details.").SetColor("#FFE066");
-    UI.CreateLabel(area).SetText("STRATEGIC STRIKE").SetColor("#FF7B7B");
-    UFAddStructureAction(area,parent,game,"MISSILE SILO","MissileSilo",GetClientSetting("MissileSiloBaseCost",500)," | max L"..tostring(GetClientSetting("MissileSiloMaxLevel",3)),"#FF7B7B");
-    UI.CreateButton(area).SetText("MISSILE COMMAND / TARGETING").SetOnClick(function() ShowMissileCommandMenu(parent,game); end);
-    UI.CreateLabel(area).SetText("AIRLIFT RULE: when the host enables Airlift Cards, troop airlifts must originate and land on an Airbase or Forward Airstrip. Ordinary territories are rejected by United Frontier.").SetColor("#82CFFF");
-    UI.CreateLabel(area).SetText("SPECIAL OPERATIONS").SetColor("#D995FF");
-    UI.CreateButton(area).SetText("TRAIN SPECIAL FORCES").SetOnClick(function() UFShowTerritorySelector(parent,game,"Training Special Forces...",{type="purchaseSpecialForces"}); end);
-    UI.CreateLabel(area).SetText("1 Special Forces unit = "..tostring(GetClientSetting("SpecialForcesCombatStrength",5)).." army combat strength (host configured).").SetColor("#D995FF");
-    UI.CreateButton(area).SetText("DAMAGE & REPAIRS").SetOnClick(function() ShowMilitaryRepairsMenu(parent,game); end);
-    UI.CreateLabel(area).SetText("Air Wings and Special Forces remain visible purchasable custom units. Dedicated Air Wing and Special Forces operation menus are not part of this release.").SetColor("#AAAAAA");
+    if GetClientSetting("PowerGridEnabled",true) then UFAddStructureAction(area,parent,game,"POWER / ELECTRICAL GRID","PowerGrid",GetClientSetting("PowerGridBaseCost",300)," | required for Airbases, Missile Silos & Cyber Facilities","#FFE066"); end
+    if GetClientSetting("AirbasesEnabled",true) then UFAddStructureAction(area,parent,game,"AIRBASE","Airbase",GetClientSetting("AirbaseBaseCost",350)," | requires Grid","#62B6FF"); end
+    if GetClientSetting("ForwardAirstripsEnabled",true) then UFAddStructureAction(area,parent,game,"FORWARD AIRSTRIP","ForwardAirstrip",GetClientSetting("ForwardAirstripBaseCost",175),"","#82CFFF"); end
+    if GetClientSetting("MissileSilosEnabled",true) then UFAddStructureAction(area,parent,game,"MISSILE SILO","MissileSilo",GetClientSetting("MissileSiloBaseCost",500)," | requires Grid","#FF7B7B"); UI.CreateButton(area).SetText("MISSILE COMMAND / TARGETING").SetOnClick(function() ShowMissileCommandMenu(parent,game); end); end
+    if GetClientSetting("CyberFacilitiesEnabled",true) then
+        UFAddStructureAction(area,parent,game,"CYBER FACILITY","CyberFacility",GetClientSetting("CyberFacilityBaseCost",450)," | requires Grid","#C792EA");
+        UI.CreateButton(area).SetText("LAUNCH CYBER DISRUPTION").SetOnClick(function() UFShowTerritorySelector(parent,game,"Launching cyber operation...",{type="hqCyberDisrupt"}); end);
+    end
+    if GetClientSetting("AirWingsEnabled",true) then UI.CreateButton(area).SetText("PURCHASE AIR WING").SetOnClick(function() UFShowTerritorySelector(parent,game,"Purchasing Air Wing...",{type="purchaseAirWing"}); end); end
+    if GetClientSetting("SpecialForcesEnabled",true) then UI.CreateButton(area).SetText("TRAIN SPECIAL FORCES").SetOnClick(function() UFShowTerritorySelector(parent,game,"Training Special Forces...",{type="purchaseSpecialForces"}); end); end
+    UI.CreateLabel(area).SetText("CORE RULE: Recruiters remain fully usable even if Air Wings, Special Forces, Cyber, Airbases, Silos, or other optional systems are disabled by the host.").SetColor("#79D279");
 end
 
 
@@ -6388,7 +5991,11 @@ function ShowOverview(
         local commerce = GetPlayerGold(game, ourID) or 0;
         local income = GetPlayerIncome(game, ourID) or 0;
         local readiness = tonumber(nation.resourceMilitaryReadiness) or 100;
-        UI.CreateLabel(area).SetText("Commerce: "..tostring(commerce).." | Income: +"..tostring(income).." | Military Readiness: "..tostring(math.floor(readiness+0.5)).."%").SetColor("#E0E0E0");
+        local unrest=math.max(0,math.min(100,tonumber(nation.resourceUnrest) or 0));
+        local unrestCommercePenalty=(unrest>=80 and 20) or (unrest>=60 and 12) or (unrest>=40 and 7) or (unrest>=20 and 3) or 0;
+        local unrestRecruiterPenalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0;
+        UI.CreateLabel(area).SetText("Commerce: "..tostring(commerce).." | Income: +"..tostring(income).." | Military Readiness: "..tostring(math.floor(readiness+0.5)).."% | Unrest: "..tostring(unrest).."/100").SetColor("#E0E0E0");
+        UI.CreateLabel(area).SetText("Unrest Effects: Commerce -"..tostring(unrestCommercePenalty).."% | Recruiter Production -"..tostring(unrestRecruiterPenalty).."%").SetColor(unrest>=60 and "#FF7B7B" or (unrest>=20 and "#FFB366" or "#8FD694"));
 
         if nation.aiManagerEnabled == true then
             UI.CreateLabel(area).SetText(
@@ -6448,9 +6055,8 @@ function ShowOverview(
         local airWingCount=0; for _,v in pairs(ownMilitary.airWings or {}) do airWingCount=airWingCount+(tonumber(v) or 0); end
         local sfCount=0; for _,v in pairs(ownMilitary.specialForces or {}) do sfCount=sfCount+(tonumber(v) or 0); end
         UI.CreateLabel(area).SetText(
-            "Military | HQ: "..(ownMilitary.headquarters and "Operational" or "None")..
-            " | Airbases: "..tostring(countMap(ownMilitary.airbases))..
-            " | SAMs: "..tostring(countMap(ownMilitary.samSites))..
+            "Military | Airbases: "..tostring(countMap(ownMilitary.airbases))..
+            " | Cyber: "..tostring(countMap(ownMilitary.cyberFacilities))..
             " | Silos: "..tostring(countMap(ownMilitary.missileSilos))..
             " | Grids: "..tostring(countMap(ownMilitary.powerGrids))..
             " | Air Wings: "..tostring(airWingCount).." | Special Forces: "..tostring(sfCount)
@@ -6643,388 +6249,43 @@ function ShowOverview(
         );
 
 end
-function ShowFindPartners(
-    parent,
-    game
-)
-
-    local area =
-        CreateContentArea(
-            parent
-        );
-
-
-    local data =
-        Mod.PublicGameData or {};
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "FIND TRADE PARTNERS"
-        );
-
-    if IsViewerMode(game) then
-        ShowViewerModeNotice(area, "Find Partners is unavailable in viewer/reviewer mode because no active player is associated with this view.");
-        return;
+function ShowFindPartners(parent, game)
+    local area=CreateContentArea(parent); local data=Mod.PublicGameData or {};
+    UI.CreateLabel(area).SetText("FIND TRADE PARTNERS").SetColor("#64B5F6");
+    if IsViewerMode(game) then ShowViewerModeNotice(area,"Find Partners is unavailable in viewer/reviewer mode."); return; end
+    local ourID=GetLocalPlayerID(game); local ourAgreementCount=CountOurActiveAgreements(data,game);
+    if ourAgreementCount>=ClientMaxAgreements() then UI.CreateLabel(area).SetText("You already have the maximum number of active Trade Agreements.").SetColor("#FFB366"); return; end
+    UI.CreateLabel(area).SetText("Search by nation name. Every result shows exact Commerce income and your projected trade bonus.").SetColor("#BBBBBB");
+    local search=CreateWideTextInput(area,240).SetPlaceholderText("Search nation...");
+    local filters=UI.CreateHorizontalLayoutGroup(area); local host=UI.CreateVerticalLayoutGroup(area);
+    local refresh=nil;
+    for _,fd in ipairs({{"ALL","ALL"},{"PLAYER","PLAYERS"},{"AI","AI"},{"AVAILABLE","AVAILABLE"},{"EXISTING","EXISTING"}}) do
+        local key,label=fd[1],fd[2]; UI.CreateButton(filters).SetText((TradePartnerFilter==key and "▶ " or "")..label).SetOnClick(function() TradePartnerFilter=key; refresh(); end);
     end
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Review active nations and send Trade Agreement proposals."
-        );
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    local ourID =
-        GetLocalPlayerID(game);
-
-
-    local ourAgreementCount =
-        CountOurActiveAgreements(
-            data,
-            game
-        );
-
-
-    if ourAgreementCount
-        >= ClientMaxAgreements() then
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "You already have the maximum number of active Trade Agreements."
-            );
-
-
-        return;
-
+    local function relationState(targetID)
+        local hasAgreement=false; for _,a in pairs(data.activeAgreements or {}) do if (a.player1==ourID and a.player2==targetID) or (a.player1==targetID and a.player2==ourID) then hasAgreement=true; break; end end
+        local pending=false; for _,p in pairs(data.pendingProposals or {}) do if (p.fromPlayerID==ourID and p.toPlayerID==targetID) or (p.fromPlayerID==targetID and p.toPlayerID==ourID) then pending=true; break; end end
+        local count=0; for _,a in pairs(data.activeAgreements or {}) do if a.player1==targetID or a.player2==targetID then count=count+1; end end
+        local cd=GetCooldownTurnsRemaining(data,ourID,targetID);
+        return hasAgreement,pending,count,cd;
     end
-
-
-    local foundAny =
-        false;
-
-
-    for playerID, player
-        in pairs(
-            game.Game.Players
-        ) do
-
-
-        if playerID ~= ourID
-            and not player.Surrendered then
-
-
-            foundAny =
-                true;
-
-
-            local targetID =
-                playerID;
-
-
-            local targetName =
-                GetPlayerName(
-                    game,
-                    targetID
-                );
-
-
-            local targetIncome =
-                GetPlayerIncome(
-                    game,
-                    targetID
-                );
-
-
-            local expectedBonus =
-                CalculateTradeBonus(
-                    targetIncome
-                );
-
-
-            local targetAgreementCount = 0;
-
-
-            for _, agreement
-                in pairs(
-                    data.activeAgreements
-                    or {}
-                ) do
-
-
-                if agreement.player1
-                    == targetID
-
-                    or agreement.player2
-                    == targetID then
-
-
-                    targetAgreementCount =
-                        targetAgreementCount
-                        + 1;
-
-                end
-
-            end
-
-
-            local hasAgreement =
-                false;
-
-
-            for _, agreement
-                in pairs(
-                    data.activeAgreements
-                    or {}
-                ) do
-
-
-                if
-                    (
-                        agreement.player1
-                            == ourID
-
-                        and agreement.player2
-                            == targetID
-                    )
-                    or
-                    (
-                        agreement.player1
-                            == targetID
-
-                        and agreement.player2
-                            == ourID
-                    )
-                then
-
-
-                    hasAgreement =
-                        true;
-
-
-                    break;
-
-                end
-
-            end
-
-
-            local hasPending =
-                false;
-
-
-            for _, proposal
-                in pairs(
-                    data.pendingProposals
-                    or {}
-                ) do
-
-
-                if
-                    (
-                        proposal.fromPlayerID
-                            == ourID
-
-                        and proposal.toPlayerID
-                            == targetID
-                    )
-                    or
-                    (
-                        proposal.fromPlayerID
-                            == targetID
-
-                        and proposal.toPlayerID
-                            == ourID
-                    )
-                then
-
-
-                    hasPending =
-                        true;
-
-
-                    break;
-
-                end
-
-            end
-
-
-            local cooldownRemaining =
-                GetCooldownTurnsRemaining(
-                    data,
-                    ourID,
-                    targetID
-                );
-
-
-            local group =
-                UI.CreateVerticalLayoutGroup(
-                    area
-                );
-
-
-            UI.CreateLabel(group)
-                .SetText(
-                    targetName
-                );
-
-
-            UI.CreateLabel(group)
-                .SetText(
-                    "Commerce Income: " ..
-                    tostring(
-                        targetIncome
-                    )
-                );
-
-
-            UI.CreateLabel(group)
-                .SetText(
-                    "Estimated Trade Bonus: +" ..
-                    tostring(
-                        expectedBonus
-                    ) ..
-                    " Commerce/turn"
-                );
-
-
-            UI.CreateLabel(group)
-                .SetText(
-                    "Active Agreements: " ..
-                    tostring(
-                        targetAgreementCount
-                    ) ..
-                    " / " ..
-                    tostring(
-                        ClientMaxAgreements()
-                    )
-                );
-
-
-            if hasAgreement then
-
-
-                UI.CreateLabel(group)
-                    .SetText(
-                        "Status: ACTIVE TRADE AGREEMENT"
-                    );
-
-
-            elseif hasPending then
-
-
-                UI.CreateLabel(group)
-                    .SetText(
-                        "Status: PROPOSAL ALREADY PENDING"
-                    );
-
-
-            elseif cooldownRemaining > 0 then
-
-
-                UI.CreateLabel(group)
-                    .SetText(
-                        "Status: COOLDOWN - " ..
-                        tostring(
-                            cooldownRemaining
-                        ) ..
-                        " turn(s) remaining"
-                    );
-
-
-            elseif targetAgreementCount
-                >= ClientMaxAgreements() then
-
-
-                UI.CreateLabel(group)
-                    .SetText(
-                        "Status: PARTNER AT AGREEMENT LIMIT"
-                    );
-
-
-            else
-
-
-                UI.CreateButton(group)
-                    .SetText(
-                        "PROPOSE TRADE AGREEMENT"
-                    )
-                    .SetOnClick(function()
-
-
-                        SafeSendGameCustomMessage(game, 
-                            "Sending trade proposal...",
-
-                            {
-
-                                type =
-                                    "proposeTrade",
-
-                                targetPlayerID =
-                                    targetID
-
-                            },
-
-                            function(result)
-
-
-                                UI.Alert(
-                                    result
-                                    and result.message
-                                    or
-                                    "Trade request processed."
-                                );
-
-
-                                if result ~= nil
-                                    and result.success then
-
-
-                                    ShowFindPartners(
-                                        parent,
-                                        game
-                                    );
-
-                                end
-
-                            end
-                        );
-
-                    end);
-
-            end
-
-
-            UI.CreateLabel(group)
-                .SetText(
-                    "----------------------------------------"
-                );
-
+    refresh=function()
+        if host and not UI.IsDestroyed(host) then UI.Destroy(host); end; host=UI.CreateVerticalLayoutGroup(area);
+        local q=string.lower(search.GetText() or ""); local list={};
+        for pid,p in pairs(game.Game.Players or {}) do if pid~=ourID and p.Surrendered~=true then
+            local name=GetPlayerName(game,pid); local ag,pend,count,cd=relationState(pid); local available=(not ag and not pend and cd<=0 and count<ClientMaxAgreements());
+            local f=TradePartnerFilter; local match=(f=="ALL") or (f=="AI" and p.IsAI==true) or (f=="PLAYER" and p.IsAI~=true) or (f=="AVAILABLE" and available) or (f=="EXISTING" and (ag or pend));
+            if match and (q=="" or string.find(string.lower(name),q,1,true)) then table.insert(list,{id=pid,name=name,p=p,ag=ag,pend=pend,count=count,cd=cd,available=available}); end
+        end end
+        table.sort(list,function(a,b) return a.name<b.name; end); if #list==0 then UI.CreateLabel(host).SetText("No nations match this search/filter.").SetColor("#888888"); return; end
+        for _,x in ipairs(list) do local income=GetPlayerIncome(game,x.id) or 0; local bonus=CalculateTradeBonus(income); local g=UI.CreateHorizontalLayoutGroup(host);
+            local status=x.ag and "ACTIVE" or (x.pend and "PENDING" or (x.cd>0 and ("COOLDOWN "..tostring(x.cd)) or (x.count>=ClientMaxAgreements() and "AT LIMIT" or "AVAILABLE")));
+            UI.CreateLabel(g).SetText(x.name.." | "..(x.p.IsAI and "AI" or "Player").." | Income "..tostring(income).." | Your bonus +"..tostring(bonus).."/turn | "..status).SetColor(x.available and "#8FD694" or "#DDDDDD");
+            if x.available then local tid=x.id; UI.CreateButton(g).SetText("PROPOSE").SetOnClick(function() SafeSendGameCustomMessage(game,"Sending trade proposal...",{type="proposeTrade",targetPlayerID=tid},function(r) if r and r.message then UI.Alert(r.message); end; ShowFindPartners(parent,game); end); end); end
         end
-
     end
-
-
-    if not foundAny then
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "No eligible trade partners are currently available."
-            );
-
-    end
-
+    search.SetOnValueChanged(function() refresh(); end); refresh();
 end
-
 
 function ShowMyAgreements(
     parent,
@@ -13115,16 +12376,16 @@ function ShowHowItWorks(parent)
 
     UI.CreateLabel(area).SetText("HOW IT WORKS - UNITED FRONTIER").SetColor("#FFFFFF");
     UI.CreateLabel(area).SetText(
-        "United Frontier combines Commerce, Markets, Resources, Diplomacy, the UN, visible military assets, Headquarters intelligence, Air Wings, Special Forces, and Smart AI. Action screens stay short; this guide holds the deeper rules."
+        "United Frontier combines Commerce, Markets, Resources, Diplomacy, the UN, strategic infrastructure, Air Wings, Special Forces, Cyber Facilities, Factions, and Smart AI. Action screens stay short; this guide holds the deeper rules."
     ).SetColor("#BBBBBB");
 
     Section("QUICK START",
         "1. Complete National Setup.\n\n" ..
-        "2. Use Overview as your command dashboard for Commerce, alerts, allies, war status, resource warnings, Headquarters status, military assets, and AI Manager spending.\n\n" ..
+        "2. Use Overview as your command dashboard for Commerce, Unrest, alerts, allies, war status, resource warnings, military assets, and AI Manager spending.\n\n" ..
         "3. Markets contains stocks, ETF, investments, War Bonds, AI Manager, and Global Economy activity.\n\n" ..
         "4. Resources shows production, need, stockpile, shortages, private resource intelligence, facility development, offers, requests, and contracts.\n\n" ..
-        "5. Military contains Headquarters, Recruiters, Airbases, Forward Airstrips, SAM Sites, Missile Silos, Power Grid, Air Wings, and Special Forces.\n\n" ..
-        "6. Diplomacy contains alliances, factions, Current Wars, Join War, peace, and Headquarters-sharing agreements.",
+        "5. Military contains Recruiters, Power Grids, Airbases, Forward Airstrips, Missile Silos, Cyber Facilities, Air Wings, and Special Forces.\n\n" ..
+        "6. Diplomacy contains alliances, Factions, Current Wars, Join War, peace, shared intelligence, and Faction Military Exercises.",
         "#FFFFFF");
 
     Section("COMMERCE & MARKETS",
@@ -13139,7 +12400,7 @@ function ShowHowItWorks(parent)
 
     Section("STRATEGIC RESOURCES",
         "The nine resources are Oil, Gas, Uranium, Iron, Food, Rare Earths, Coal, Copper, and Lithium.\n\n" ..
-        "Oil supports air operations, logistics and strategic mobility. Gas supports energy and industry. Uranium is the rarest and most expensive strategic resource and supports nuclear capability. Iron supports military construction and infrastructure. Food supports armies and recruitment. Rare Earths support advanced guidance, SAM, aircraft and Headquarters technology. Coal supports industry and backup energy. Copper supports communications, the grid and electronics. Lithium supports advanced batteries, aircraft and missile technology.\n\n" ..
+        "Oil supports air operations, logistics and strategic mobility. Gas supports energy and industry. Uranium is the rarest and most expensive strategic resource and supports nuclear capability. Iron supports military construction and infrastructure. Food supports armies and recruitment. Rare Earths support advanced guidance, aircraft and cyber technology. Coal supports industry and backup energy. Copper supports communications, the grid and electronics. Lithium supports advanced batteries, aircraft and missile technology.\n\n" ..
         "Positive net production is stored in the national stockpile. A later deficit consumes stockpile first; only the uncovered shortage creates penalties. Existing armies are never deleted because of resource shortages.",
         "#7ED957");
 
@@ -13150,9 +12411,9 @@ function ShowHowItWorks(parent)
 
     Section("PRIVATE RESOURCE INTELLIGENCE",
         "Resource locations are NOT globally exposed as normal map structure icons.\n\n" ..
-        "You know: your own resource deposits; foreign resource territories directly bordering your own territory; faction-shared resources; resources from an ally with Shared Intelligence enabled; and discoveries made by Headquarters Intelligence.\n\n" ..
+        "You know: your own resource deposits; foreign resource territories directly bordering your own territory; faction-shared resources; and resources from an ally with Shared Intelligence enabled.\n\n" ..
         "Example: France naturally learns resource territories directly bordering France. A China-Russia border resource does not become visible to France merely because it is on an international border.\n\n" ..
-        "Use the Resources filters: My Resources, Neighbors, Ally/Faction, HQ Intel, and All Known. SHOW highlights the known territory on your map.",
+        "Use the Resources filters: My Resources, Neighbors, Ally/Faction, and All Known. SHOW closes the full menu, highlights the known territory, and leaves a small Back control.",
         "#C792EA");
 
     Section("RESOURCE MARKET & TRADE",
@@ -13161,24 +12422,15 @@ function ShowHowItWorks(parent)
         "#4DD0E1");
 
     Section("MILITARY MAP ASSETS",
-        "Headquarters, Recruiting Stations, Airbases, Forward Airstrips, SAM Sites, Missile Silos, Power Grids, Air Wings, and Special Forces have a visible map presence.\n\n" ..
-        "Headquarters, Recruiters, Airbases, Airstrips, SAMs, Silos and Power Grids use structure-style map assets. Air Wings and Special Forces use visible custom special-unit icons. A structure upgrade replaces its tier rather than creating duplicate icons.\n\n" ..
-        "The existence/location of a military asset is visible. Intelligence controls deeper information such as Headquarters branch levels, strategic capabilities, future missile inventory, advanced defense information, and other sensitive details.",
+        "Recruiting Stations, Airbases, Forward Airstrips, Missile Silos, Power Grids, Cyber Facilities, Air Wings, and Special Forces have a visible map presence.\n\n" ..
+        "Recruiters, Airbases, Airstrips, Silos, Power Grids and Cyber Facilities use structure-style map assets. Air Wings and Special Forces use visible custom special-unit icons. A structure upgrade replaces its tier rather than creating duplicate icons.\n\n" ..
+        "Military Infrastructure uses My Infrastructure, Neighbors, Ally/Faction, and All Known filters. SHOW highlights a known installation and returns through a small Back control. Air Wings and Special Forces use normal game fog instead of forced global visibility.",
         "#FFB74D");
 
-    Section("HEADQUARTERS",
-        "Each nation may construct one Headquarters. Headquarters has only four top-level branches so the menu stays readable:\n\n" ..
-        "INTELLIGENCE: resource and military discovery, reconnaissance, and intelligence sharing.\n" ..
-        "SECURITY: counterintelligence, cyber defense, and strategic warning.\n" ..
-        "CYBER WARFARE: offensive cyber capability and disruption systems.\n" ..
-        "JOINT COMMAND: allied/faction military coordination and shared-command benefits.\n\n" ..
-        "Each branch has five meaningful levels. The Headquarters screen shows the current effect, next-level effect, and exact Commerce cost before you upgrade.",
-        "#7FB3FF");
-
-    Section("HEADQUARTERS INTELLIGENCE",
-        "After Intelligence is upgraded, a player can select another active nation and run intelligence operations. Resource scans can reveal private resource locations. Higher-level military scans can reveal additional military details.\n\n" ..
-        "Target Security reduces intelligence effectiveness. Discoveries are private to the discovering nation, but faction members automatically share strategic intelligence. A normal ally receives discoveries only when both sides have accepted Shared Intelligence.",
-        "#BA68C8");
+    Section("CYBER FACILITIES",
+        "Cyber Facilities provide offensive cyber capability directly. They require an operational Power Grid and can launch one cyber disruption operation per turn during an active war. Higher facility levels improve offensive capability, while the target's Cyber Facilities provide defensive resistance.\n\n" ..
+        "Cyber Facilities are optional. If the host disables them, Recruiters and the rest of the enabled military systems continue to work normally.",
+        "#C792EA");
 
     Section("ALLIANCES, FACTIONS & SHARING",
         "Faction membership automatically enables strategic intelligence sharing among faction members.\n\n" ..
@@ -13197,8 +12449,9 @@ function ShowHowItWorks(parent)
         "When the host enables Airbases or Forward Airstrips, United Frontier restricts War.app Airlift Cards so the origin and destination must contain enabled airport infrastructure. If the host disables BOTH Airbases and Forward Airstrips, this restriction is lifted and Airlift Cards follow normal War.app rules. The mod does not create Airlift Cards itself; the host must enable them in normal game settings. AI nations can use valid Airlift routes to move rear-area armies toward threatened or active fronts. Air Wings remain visible purchasable units; this release does not include a separate Air Wing mission menu.",
         "#62B6FF");
 
-    Section("SAM SITES",
-        "SAM Sites are visible strategic-defense structures. A SAM protects its own territory, and higher-level SAMs extend reduced coverage to adjacent territories. SAMs can intercept strategic missiles; nuclear missiles are harder to intercept than conventional strikes.",
+    Section("INFRASTRUCTURE HEALTH",
+        "Strategic military infrastructure uses a simple 10-point health scale. 10/10 is fully intact and 0/10 is destroyed. Conventional strategic attacks remove health in whole-point steps; repair restores an installation to 10/10. EMP effects can disable systems temporarily without necessarily removing HP.\n\n" ..
+        "SAM Sites are not part of United Frontier. Missile outcomes use the configured strike rules, infrastructure HP, and other enabled strategic systems.",
         "#79D279");
 
     Section("MISSILE SILOS",
@@ -13207,8 +12460,8 @@ function ShowHowItWorks(parent)
         "#FF7B7B");
 
     Section("POWER / ELECTRICAL GRID",
-        "Power Grid infrastructure is deliberately PUBLIC. It represents major national electrical/industrial support and is intended to interact with Commerce, resource production, Headquarters systems, air infrastructure, Recruiters and strategic defense.\n\n" ..
-        "The Grid is an obvious strategic target for future conventional, EMP and cyber disruption. Because it is public, players do not need an intelligence discovery just to know where a Grid exists.",
+        "Power Grids are strategic infrastructure required for Airbases, Missile Silos, and Cyber Facilities. If the Grid is disabled or destroyed, dependent strategic systems cannot operate until power is restored.\n\n" ..
+        "Grid locations follow the same military-infrastructure intelligence rules as other strategic installations: your own, directly bordering, faction/shared-intelligence, or otherwise discovered locations appear in the Military Infrastructure filters.",
         "#FFE066");
 
     Section("SPECIAL FORCES",
@@ -13221,18 +12474,18 @@ function ShowHowItWorks(parent)
         "#FFFFFF");
 
     Section("DAMAGE, DESTRUCTION & REPAIR",
-        "Strategic infrastructure uses Operational, Damaged, Disabled, and Destroyed states. Damaged/Disabled assets can be repaired from Military > Damage & Repairs. A destroyed Headquarters does not eliminate the nation; it can be rebuilt elsewhere according to host rules.\n\n" ..
+        "Every strategic installation has 10 HP. Damaged or EMP-disabled assets can be repaired from Military > Damage & Repairs; 0/10 HP means the installation is destroyed and must be rebuilt.\n\n" ..
         "Capture and strategic attacks can remove or damage assets instead of automatically transferring every military installation intact. Repair costs are intended to scale with damage, structure level, and national economic capacity.",
         "#EF9A9A");
 
     Section("SMART AI",
         "Smart AI uses a national-planning approach rather than isolated random purchases. It evaluates its economy, resources, diplomacy, borders, war status, infrastructure and reserves.\n\n" ..
-        "At peace it should maintain a light border screen, move excess armies toward useful second-line reserves, develop resources, and place Recruiters/infrastructure in safer locations. In serious war it shifts toward War Economy: Recruiters, resources, repairs, SAMs, Airbases, Air Wings, Silos, Headquarters and military spending gain priority while nonessential market/investment spending falls.\n\n" ..
+        "At peace Smart AI maintains reserves, develops resources, and places Recruiters/infrastructure in safer locations. In serious war it shifts toward War Economy: Recruiters, resources, repairs, enabled Air Wings, Silos, Cyber Facilities and military spending gain priority while disabled host systems are ignored.\n\n" ..
         "The AI should not hoard large Commerce balances without a defined goal. It can reserve for a specific purchase, reinforce weak fronts, preserve a reaction reserve, and still attack favorable targets.",
         "#FFCC80");
 
     Section("DIPLOMACY & CURRENT WARS",
-        "Diplomacy contains relations, alliances, factions, Current Wars, Join War, peace, NAPs, Headquarters-sharing requests and other diplomatic actions. Wars remain inside Diplomacy rather than using a separate top-level Wars tab.\n\n" ..
+        "Diplomacy contains relations, alliances, Factions, Current Wars, Join War, peace, NAPs, shared-intelligence requests, Faction leadership controls, and Military Exercises. Wars remain inside Diplomacy rather than using a separate top-level Wars tab.\n\n" ..
         "Current Wars groups coalition conflicts into one entry and preserves the original cause. Join War lets an eligible human choose a side subject to diplomacy safety checks. AI allies and faction partners may also enter an ally's conflict, while AI nations can proactively seek Alliances when trade/NAP relationships and strategic conditions make cooperation useful. Trade Agreements are available to human players from both Markets and Diplomacy.",
         "#FFB74D");
 
@@ -13242,10 +12495,10 @@ function ShowHowItWorks(parent)
         "#90CAF9");
 
     Section("VISIBILITY SUMMARY",
-        "RESOURCES: private. Reveal through ownership, direct border, faction, accepted Shared Intelligence, or Headquarters Intelligence.\n\n" ..
+        "RESOURCES: private. Reveal through ownership, direct border, Faction, or accepted Shared Intelligence.\n\n" ..
         "MILITARY ASSET LOCATIONS: visible map assets.\n\n" ..
-        "MILITARY DETAILS: may require ownership, alliance/faction sharing, or Headquarters Intelligence.\n\n" ..
-        "POWER GRID: public location by design.\n\n" ..
+        "MILITARY INFRASTRUCTURE DETAILS: reveal through ownership, direct border, Faction, or accepted Shared Intelligence.\n\n" ..
+        "POWER GRID: required for Airbases, Missile Silos, and Cyber Facilities.\n\n" ..
         "Hiding a UI tab does not disable the underlying system; host configuration controls system availability.",
         "#FFFFFF");
 end
@@ -13680,7 +12933,9 @@ if policyPreviewLabel ~= nil then
         GetPolicyPreviewText(
             game,
             selectedTaxPolicy,
-            selectedIdeology
+            selectedIdeology,
+            selectedEconomicStrategy,
+            selectedCompanyStrategy
         )
     );
 
@@ -13846,14 +13101,14 @@ end
 
     UI.CreateLabel(area)
         .SetText(
-            "Free Market - private-market growth and investment upside, with greater volatility.\n" ..
-            "Capitalist - strong private companies, investment activity, and shareholder returns.\n" ..
-            "Social Democratic - balanced markets, taxation, public development, and stability.\n" ..
-            "State Capitalist - government-directed development and strategic intervention.\n" ..
-            "Socialist - stronger public development and stability with less private-market upside.\n" ..
-            "Communist - strong state Commerce and public control, with much weaker private-market activity.\n" ..
-            "Fascist - state-directed mobilization and company confidence, with constrained private markets.\n" ..
-            "Nationalist - domestic Commerce and national industry focus with limited foreign-market emphasis."
+            "Free Market | Commerce -3% | Market +8% | Investment +6% | Confidence +2\n" ..
+            "Capitalist | Commerce -2% | Market +6% | Investment +5% | Confidence +3\n" ..
+            "Social Democratic | Commerce +2% | Market +2% | Investment +3% | Confidence +2\n" ..
+            "State Capitalist | Commerce +4% | Market +1% | Investment +5% | Confidence +4\n" ..
+            "Socialist | Commerce +5% | Market -5% | Investment +1% | Confidence +1\n" ..
+            "Communist | Commerce +7% | Market -9% | Investment -2% | Confidence +0\n" ..
+            "Fascist | Commerce +3% | Market -2% | Investment +1% | Confidence +3\n" ..
+            "Nationalist | Commerce +2% | Market -1% | Investment +0% | Confidence +2"
         );
 
 
@@ -13935,9 +13190,9 @@ end
 
     UI.CreateLabel(area)
         .SetText(
-            "Growth - prioritizes expansion and long-term upside.\n" ..
-            "Balanced - mixes expansion, reserves, and financial stability.\n" ..
-            "Conservative - prioritizes reserves and lower financial risk."
+            "Growth | Commerce +5% | Market +4% | Investment +5% | Confidence +2\n" ..
+            "Balanced | Commerce 0% | Market 0% | Investment 0% | Confidence +0\n" ..
+            "Conservative | Commerce -3% | Market -2% | Investment -3% | Confidence +4"
         );
 
 
@@ -14045,7 +13300,9 @@ policyPreviewLabel.SetText(
     GetPolicyPreviewText(
         game,
         selectedTaxPolicy,
-        selectedIdeology
+        selectedIdeology,
+        selectedEconomicStrategy,
+        selectedCompanyStrategy
     )
 );
 
@@ -14181,9 +13438,9 @@ UI.CreateLabel(area)
 
     UI.CreateLabel(area)
         .SetText(
-            "Growth Company - greater appreciation potential with lower dividends and higher volatility.\n" ..
-            "Balanced Company - moderate appreciation, dividends, and volatility.\n" ..
-            "Dividend Company - lower appreciation potential with stronger recurring dividends."
+            "Growth Company | Price fundamentals x1.35 | Dividend pool 1% of owner income | Random volatility scale 30%\n" ..
+            "Balanced Company | Price fundamentals x1.00 | Dividend pool 2% of owner income | Random volatility scale 25%\n" ..
+            "Dividend Company | Price fundamentals x0.45 | Dividend pool 4%-6% of owner income | Random volatility scale 15%"
         );
 
 

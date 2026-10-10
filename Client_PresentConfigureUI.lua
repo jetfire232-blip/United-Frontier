@@ -670,6 +670,10 @@ function Client_PresentConfigureUI(rootParent)
     -- a temporary, clearly displayed Recruiter production boost.
     local factionExerciseDurationTurns = GetNumberSetting(settings, "FactionExerciseDurationTurns", 3);
     local factionExerciseCooldownTurns = GetNumberSetting(settings, "FactionExerciseCooldownTurns", 5);
+    local factionExerciseTier1Cost=GetNumberSetting(settings,"FactionExerciseTier1Cost",50); local factionExerciseTier1Bonus=GetNumberSetting(settings,"FactionExerciseTier1Bonus",10);
+    local factionExerciseTier2Cost=GetNumberSetting(settings,"FactionExerciseTier2Cost",100); local factionExerciseTier2Bonus=GetNumberSetting(settings,"FactionExerciseTier2Bonus",20);
+    local factionExerciseTier3Cost=GetNumberSetting(settings,"FactionExerciseTier3Cost",200); local factionExerciseTier3Bonus=GetNumberSetting(settings,"FactionExerciseTier3Bonus",40);
+    local factionExerciseTier4Cost=GetNumberSetting(settings,"FactionExerciseTier4Cost",300); local factionExerciseTier4Bonus=GetNumberSetting(settings,"FactionExerciseTier4Bonus",60);
 
     local armyRecruitersEnabled = GetBoolSetting(settings, "ArmyRecruitersEnabled", true);
     local armyRecruiterBaseCost = GetNumberSetting(settings, "ArmyRecruiterBaseCost", 250);
@@ -693,7 +697,7 @@ function Client_PresentConfigureUI(rootParent)
 
     local airbasesEnabled = GetBoolSetting(settings, "AirbasesEnabled", true);
     local airbaseBaseCost = GetNumberSetting(settings, "AirbaseBaseCost", 350);
-    local airbaseMaxLevel = GetNumberSetting(settings, "AirbaseMaxLevel", 3);
+    local airbaseMaxLevel = GetNumberSetting(settings, "AirbaseMaxLevel", 4);
 
     local forwardAirstripsEnabled = GetBoolSetting(settings, "ForwardAirstripsEnabled", true);
     local forwardAirstripBaseCost = GetNumberSetting(settings, "ForwardAirstripBaseCost", 175);
@@ -702,7 +706,7 @@ function Client_PresentConfigureUI(rootParent)
 
     local missileSilosEnabled = GetBoolSetting(settings, "MissileSilosEnabled", true);
     local missileSiloBaseCost = GetNumberSetting(settings, "MissileSiloBaseCost", 500);
-    local missileSiloMaxLevel = GetNumberSetting(settings, "MissileSiloMaxLevel", 3);
+    local missileSiloMaxLevel = GetNumberSetting(settings, "MissileSiloMaxLevel", 4);
     local conventionalMissileArmyDamagePercent = GetNumberSetting(settings, "ConventionalMissileArmyDamagePercent", 20);
     local conventionalMissileStructureDamagePercent = GetNumberSetting(settings, "ConventionalMissileStructureDamagePercent", 30);
     local conventionalMissileCityDamagePercent = GetNumberSetting(settings, "ConventionalMissileCityDamagePercent", 15);
@@ -1481,20 +1485,24 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ArmyRecruiterArmiesPerTurn", "Base Armies per Recruiter Level / Turn", armyRecruiterArmiesPerTurn, 1, 25, "Actual output is multiplied by Military Readiness.");
     AddNumberInput(root, "FactionExerciseDurationTurns", "Faction Military Exercise Duration (turns)", factionExerciseDurationTurns, 1, 10, "Members who contribute Commerce receive their exact Recruiter production boost for this many turns.");
     AddNumberInput(root, "FactionExerciseCooldownTurns", "Faction Military Exercise Cooldown (turns)", factionExerciseCooldownTurns, 1, 20, "Starts when an exercise ends. The faction leader cannot begin another exercise until the cooldown expires.");
+    AddNumberInput(root,"FactionExerciseTier1Cost","Exercise Tier 1 Cost",factionExerciseTier1Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier1Bonus","Exercise Tier 1 Recruiter Bonus (%)",factionExerciseTier1Bonus,0,200,"Recruiter output bonus.");
+    AddNumberInput(root,"FactionExerciseTier2Cost","Exercise Tier 2 Cost",factionExerciseTier2Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier2Bonus","Exercise Tier 2 Recruiter Bonus (%)",factionExerciseTier2Bonus,0,200,"Recruiter output bonus.");
+    AddNumberInput(root,"FactionExerciseTier3Cost","Exercise Tier 3 Cost",factionExerciseTier3Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier3Bonus","Exercise Tier 3 Recruiter Bonus (%)",factionExerciseTier3Bonus,0,200,"Recruiter output bonus.");
+    AddNumberInput(root,"FactionExerciseTier4Cost","Exercise Tier 4 Cost",factionExerciseTier4Cost,0,10000,"Commerce contribution."); AddNumberInput(root,"FactionExerciseTier4Bonus","Exercise Tier 4 Recruiter Bonus (%)",factionExerciseTier4Bonus,0,200,"Recruiter output bonus.");
     AddNumberInput(root, "ArmyRecruiterMaxLevel", "Maximum Recruiter Level", armyRecruiterMaxLevel, 1, 5, "Upgrades increase army output and strategic resource maintenance demand.");
 
 
-    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Power Grid dependencies, Air Wings, Special Forces, Cyber Facilities, and strategic readiness.");
+    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Power Grid dependencies, Air Wings, Special Forces, Intelligence Agencies, and strategic readiness.");
 
     AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
     AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Protect Military Asset Details Behind Intelligence", hiddenMilitaryInfrastructureEnabled);
-    AddCheckBox(root, "CyberFacilitiesEnabled", "Enable Cyber Facilities", cyberFacilitiesEnabled);
-    AddNumberInput(root, "CyberFacilityBaseCost", "Cyber Facility Base Cost (Commerce)", cyberFacilityBaseCost, 25, 5000, "Requires an operational Power Grid. Higher levels strengthen cyber operations.");
-    AddNumberInput(root, "CyberFacilityMaxLevel", "Cyber Facility Maximum Level", cyberFacilityMaxLevel, 1, 5, "Higher levels improve cyber-operation success and duration.");
+    AddCheckBox(root, "CyberFacilitiesEnabled", "Enable Intelligence Agencies", cyberFacilitiesEnabled);
+    AddNumberInput(root, "CyberFacilityBaseCost", "Intelligence Agency Base Cost (Commerce)", cyberFacilityBaseCost, 25, 5000, "Requires an operational Power Grid. Higher levels strengthen cyber operations.");
+    AddNumberInput(root, "CyberFacilityMaxLevel", "Intelligence Agency Maximum Level", cyberFacilityMaxLevel, 1, 5, "Higher levels improve cyber-operation success and duration.");
 
     AddCheckBox(root, "AirbasesEnabled", "Enable Airbases", airbasesEnabled);
     AddNumberInput(root, "AirbaseBaseCost", "Airbase Base Cost (Commerce)", airbaseBaseCost, 25, 5000, "One icon per territory. Upgrading changes the same structure rather than adding another icon.");
-    AddNumberInput(root, "AirbaseMaxLevel", "Airbase Maximum Level", airbaseMaxLevel, 1, 5, "Recommended default: 3 visual levels.");
+    AddNumberInput(root, "AirbaseMaxLevel", "Airbase Maximum Level", airbaseMaxLevel, 1, 5, "Default 4 gameplay levels; the same map icon is reused above the available visual tier.");
 
     AddCheckBox(root, "ForwardAirstripsEnabled", "Enable Forward Airstrips", forwardAirstripsEnabled);
     AddNumberInput(root, "ForwardAirstripBaseCost", "Forward Airstrip Cost (Commerce)", forwardAirstripBaseCost, 25, 3000, "Cheaper limited-capacity airfield intended for forward areas.");
@@ -1517,7 +1525,7 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "NuclearResourceLevelDamage", "Nuclear Resource Level Damage", nuclearResourceLevelDamage, 0, 5, "Base resource-facility level loss. High yield can remove an additional level.");
 
     AddCheckBox(root, "PowerGridEnabled", "Enable Power Grid", powerGridEnabled);
-    AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid is the prerequisite for Airbases, Missile Silos, and Cyber Facilities. Infrastructure details use private intelligence filters.");
+    AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid is the prerequisite for Airbases, Missile Silos, and Intelligence Agencies. Infrastructure details use private intelligence filters.");
 
     AddCheckBox(root, "AirWingsEnabled", "Enable Air Wings", airWingsEnabled);
     AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings use normal fog visibility rather than global visibility. Purchasing requires capacity at an owned Airbase and an operational Power Grid.");

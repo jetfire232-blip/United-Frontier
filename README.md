@@ -242,3 +242,13 @@ Airport restrictions only apply when the host enables Airbases and/or Forward Ai
 ## Final RC4 — War Preparedness
 
 This consolidated candidate adds AI war-preparedness gating and host-aware Airlift compatibility.
+
+
+## v4 Strategy/UI Pass
+- Factions tab lists all factions and supports join requests. AI faction behavior now favors ideology/diplomatic alignment.
+- Intelligence Agency replaces player-facing Cyber Facility wording. One Agency per nation; Intelligence 3 levels, Cyber 2, Counterintelligence 2.
+- Detected foreign operations can be countered, traced at Counterintel Lv.2, or ignored during the turn.
+- Missile Command supports quantity purchasing/launching and interceptor stockpiles.
+- Infrastructure max health scales by level: 10/20/30/40 HP. Upgrades strengthen the same installation; they do not represent additional facilities.
+- AI Manager has a simpler UI and a one-time spending allowance in addition to recurring budget.
+- AI stock participation obeys the host AI stock setting.

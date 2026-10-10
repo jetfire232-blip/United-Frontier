@@ -578,6 +578,34 @@ end
 
 end
 
+-- =========================================================
+-- ADVANCE MISSILE WARNING (INTELLIGENCE OPERATIONS LV.3)
+-- =========================================================
+local missileAlerts=(Mod.PlayerGameData or {}).incomingMissileAlerts or {};
+for _,alert in ipairs(missileAlerts) do
+    if alert.resolved~=true then
+        local key="missilewarning:"..tostring(alert.id or "?");
+        if not DiplomacyNotificationsShown[key] then
+            DiplomacyNotificationsShown[key]=true;
+            UI.Alert("STRATEGIC LAUNCH DETECTED\n\nYour Intelligence Agency Lv.3 detected "..tostring(alert.count or 1).." incoming "..tostring(alert.weapon or "missile").." missile(s).\n\nOpen Military > Missile Command & Defense to review your interceptor stockpile.");
+        end
+    end
+end
+
+-- =========================================================
+-- COUNTERINTELLIGENCE NOTIFICATIONS
+-- =========================================================
+local counterAlerts=(Mod.PlayerGameData or {}).counterIntelAlerts or {};
+for _,alert in ipairs(counterAlerts) do
+    if alert.resolved~=true then
+        local key="counterintel:"..tostring(alert.id or "?");
+        if not DiplomacyNotificationsShown[key] then
+            DiplomacyNotificationsShown[key]=true;
+            UI.Alert("FOREIGN OPERATION DETECTED\n\n"..tostring(alert.operation or "Intelligence activity").." targeting your nation.\nAttacker: "..tostring(alert.attackerName or "UNKNOWN").."\n\nOpen Military > Intelligence Agency this turn to COUNTER, TRACE (Lv.2), or IGNORE. If you do nothing, the operation proceeds.");
+        end
+    end
+end
+
 if NationalSetupReminderShown then
 
     return;

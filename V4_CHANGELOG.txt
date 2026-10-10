@@ -1,0 +1,19 @@
+UNITED FRONTIER v4 — STRATEGY / UI PASS
+
+Implemented:
+- All-factions browser + join request/approval UI.
+- Ideology/diplomacy-aware AI faction creation/joining; removed 50% random invite acceptance.
+- Host-configurable Faction Exercise contribution tiers exposed in configure UI (runtime defaults retained if unavailable).
+- Intelligence Agency player-facing rename; one Agency per nation.
+- Intelligence Ops Lv1-3, Cyber Ops Lv1-2, Counterintelligence Lv1-2.
+- Recon, Financial Espionage, Cyber operation actions; detected operations can be Countered/Traced/Ignored.
+- Faction intelligence report sharing.
+- Counterintelligence alerts on client refresh.
+- Missile purchasing and launching support quantities with +/- UI.
+- Interceptor stockpile added; each incoming missile can consume one interceptor (70% Conventional, 55% EMP, 40% Nuclear).
+- Missile silo still requires Grid + Uranium per level; nuclear missiles consume Uranium per missile.
+- Infrastructure health display scales 10 HP per level.
+- Upgrade remains one installation/icon; level increases durability/capability.
+- AI Manager compact screen + one-time spending allowance.
+- AI stock buy/sell honors host AIStockParticipationEnabled.
+- How It Works wording updated for level-based HP / Intelligence Agency terminology.

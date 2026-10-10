@@ -3222,10 +3222,10 @@ end
 -- =========================================================
 
 local UF_MILITARY_KIND_CONFIG = {
-    Airbase={tableName="airbases", enabled="AirbasesEnabled", baseCost="AirbaseBaseCost", maxLevel="AirbaseMaxLevel", defaultCost=350, defaultMax=3},
-    ForwardAirstrip={tableName="forwardAirstrips", enabled="ForwardAirstripsEnabled", baseCost="ForwardAirstripBaseCost", defaultCost=175, defaultMax=1},
-    MissileSilo={tableName="missileSilos", enabled="MissileSilosEnabled", baseCost="MissileSiloBaseCost", maxLevel="MissileSiloMaxLevel", defaultCost=500, defaultMax=3},
-    PowerGrid={tableName="powerGrids", enabled="PowerGridEnabled", baseCost="PowerGridBaseCost", defaultCost=300, defaultMax=3},
+    Airbase={tableName="airbases", enabled="AirbasesEnabled", baseCost="AirbaseBaseCost", maxLevel="AirbaseMaxLevel", defaultCost=350, defaultMax=4},
+    ForwardAirstrip={tableName="forwardAirstrips", enabled="ForwardAirstripsEnabled", baseCost="ForwardAirstripBaseCost", defaultCost=175, defaultMax=3},
+    MissileSilo={tableName="missileSilos", enabled="MissileSilosEnabled", baseCost="MissileSiloBaseCost", maxLevel="MissileSiloMaxLevel", defaultCost=500, defaultMax=4},
+    PowerGrid={tableName="powerGrids", enabled="PowerGridEnabled", baseCost="PowerGridBaseCost", defaultCost=300, defaultMax=4},
     CyberFacility={tableName="cyberFacilities", enabled="CyberFacilitiesEnabled", baseCost="CyberFacilityBaseCost", maxLevel="CyberFacilityMaxLevel", defaultCost=450, defaultMax=3}
 };
 
@@ -3243,6 +3243,7 @@ local function UFEnsurePrivateMilitary(playerID)
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
     state.missileInventory=state.missileInventory or {}; state.pendingStrategicStrikes=state.pendingStrategicStrikes or {};
+    state.interceptorMissiles=tonumber(state.interceptorMissiles) or 0; state.intelligenceOpsLevel=tonumber(state.intelligenceOpsLevel) or 0; state.cyberOpsLevel=tonumber(state.cyberOpsLevel) or 0; state.counterIntelLevel=tonumber(state.counterIntelLevel) or 0; state.intelReports=state.intelReports or {};
     state.pendingAirMissions=state.pendingAirMissions or {}; state.airMissionUsedTurn=state.airMissionUsedTurn or {};
     state.assetCondition=state.assetCondition or {}; state.cityDamage=state.cityDamage or {};
     state.discoveredResourceTerritories=state.discoveredResourceTerritories or {}; state.discoveredMilitary=state.discoveredMilitary or {};
@@ -3278,7 +3279,7 @@ local function UFHQBranchUpgradeCost(level)
 end
 
 local function UFMilitaryDisplayName(kind)
-    local names={Airbase="Airbase",ForwardAirstrip="Forward Airstrip",MissileSilo="Missile Silo",PowerGrid="Power Grid",CyberFacility="Cyber Facility"};
+    local names={Airbase="Airbase",ForwardAirstrip="Forward Airstrip",MissileSilo="Missile Silo",PowerGrid="Power Grid",CyberFacility="Intelligence Agency"};
     return names[kind] or kind;
 end
 
@@ -4173,6 +4174,15 @@ nation.stockCostBasis[
             data;
 
         return;
+    end
+
+
+    if payload.type == "fundAIManagerOnce" then
+        if GetSetting("PlayerAIManagerEnabled",true)~=true then setReturn({success=false,message="The host has disabled the AI Manager."}); return; end
+        local amount=math.max(0,math.min(100000,MakeInteger(payload.amount) or 0)); if amount<=0 then setReturn({success=false,message="Enter a one-time allowance greater than 0."}); return; end
+        local nation=EnsureNation(data,game,playerID); local available=GetStoredGold(game,playerID); if amount>available then amount=available; end
+        nation.aiManagerOneTimeBudget=(tonumber(nation.aiManagerOneTimeBudget) or 0)+amount; nation.aiManagerEnabled=true; nation.aiManagerCancelTurn=nil; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
+        setReturn({success=true,message="AI Manager received a one-time spending allowance of "..tostring(amount).." Commerce. It may use that allowance on the next manager turn."}); return;
     end
 
 
@@ -7115,6 +7125,23 @@ end
 -- CREATE FACTION
 -- =========================================================
 
+if payload.type == "requestFactionJoin" then
+    local fid=payload.factionID; local diplomacy=(data.globalEconomy or {}).diplomacy or {}; diplomacy.factions=diplomacy.factions or {}; diplomacy.pendingFactionInvites=diplomacy.pendingFactionInvites or {}; diplomacy.playerFaction=diplomacy.playerFaction or {};
+    if diplomacy.playerFaction[playerID]~=nil then setReturn({success=false,message="Leave your current Faction before requesting another."}); return; end
+    local f=diplomacy.factions[fid]; if f==nil then setReturn({success=false,message="That Faction no longer exists."}); return; end
+    for _,r in ipairs(diplomacy.pendingFactionInvites) do if r.requestToJoin==true and r.fromPlayerID==playerID and r.factionID==fid then setReturn({success=false,message="Your join request is already pending."}); return; end end
+    table.insert(diplomacy.pendingFactionInvites,{fromPlayerID=playerID,toPlayerID=f.leaderPlayerID,factionID=fid,requestToJoin=true,createdTurn=GetCurrentDiplomacyTurn(data)}); CompactPublicGameDataForSave(data); Mod.PublicGameData=data; setReturn({success=true,message="Join request sent to "..tostring(f.name or "Faction").."."}); return;
+end
+
+if payload.type == "approveFactionJoinRequest" or payload.type == "declineFactionJoinRequest" then
+    local targetID=MakeInteger(payload.targetPlayerID); local diplomacy=(data.globalEconomy or {}).diplomacy or {}; local fid=(diplomacy.playerFaction or {})[playerID]; local f=fid and (diplomacy.factions or {})[fid] or nil;
+    if f==nil or f.leaderPlayerID~=playerID then setReturn({success=false,message="Only the Faction leader can answer join requests."}); return; end
+    local found=nil; for i=#(diplomacy.pendingFactionInvites or {}),1,-1 do local r=diplomacy.pendingFactionInvites[i]; if r.requestToJoin==true and r.fromPlayerID==targetID and r.factionID==fid then found=i; break; end end
+    if found==nil then setReturn({success=false,message="No matching join request."}); return; end; table.remove(diplomacy.pendingFactionInvites,found);
+    if payload.type=="approveFactionJoinRequest" then if (diplomacy.playerFaction or {})[targetID]~=nil then setReturn({success=false,message="That nation already joined another Faction."}); return; end; f.members=f.members or {}; f.members[targetID]=true; diplomacy.playerFaction[targetID]=fid; setReturn({success=true,message=GetPlayerName and "Join request approved." or "Join request approved."}); else setReturn({success=true,message="Join request declined."}); end
+    CompactPublicGameDataForSave(data); Mod.PublicGameData=data; return;
+end
+
 if payload.type == "createFaction" then
 
     local factionName =
@@ -8091,8 +8118,13 @@ end
         local turn=GetCurrentEconomyTurn(data); local ex=faction.militaryExercise or {};
         if ex.active~=true or turn>tonumber(ex.endTurn or 0) then setReturn({success=false,message="Your Faction does not currently have an active military exercise."}); return; end
         ex.contributions=ex.contributions or {}; if ex.contributions[playerID]~=nil then setReturn({success=false,message="You already selected your contribution for this exercise."}); return; end
-        local amount=MakeInteger(payload.amount) or 0; local bonuses={[50]=10,[100]=20,[200]=40,[300]=60}; local bonus=bonuses[amount];
-        if bonus==nil then setReturn({success=false,message="Choose 50, 100, 200, or 300 Commerce."}); return; end
+        local amount=MakeInteger(payload.amount) or 0; local bonuses={};
+        bonuses[math.floor(tonumber(GetSetting("FactionExerciseTier1Cost",50)) or 50)]=math.floor(tonumber(GetSetting("FactionExerciseTier1Bonus",10)) or 10);
+        bonuses[math.floor(tonumber(GetSetting("FactionExerciseTier2Cost",100)) or 100)]=math.floor(tonumber(GetSetting("FactionExerciseTier2Bonus",20)) or 20);
+        bonuses[math.floor(tonumber(GetSetting("FactionExerciseTier3Cost",200)) or 200)]=math.floor(tonumber(GetSetting("FactionExerciseTier3Bonus",40)) or 40);
+        bonuses[math.floor(tonumber(GetSetting("FactionExerciseTier4Cost",300)) or 300)]=math.floor(tonumber(GetSetting("FactionExerciseTier4Bonus",60)) or 60);
+        local bonus=bonuses[amount];
+        if bonus==nil then setReturn({success=false,message="Choose one of the host-configured military exercise contribution tiers."}); return; end
         if GetStoredGold(game,playerID)<amount then setReturn({success=false,message="You need "..tostring(amount).." Commerce for that exercise tier."}); return; end
         RemoveGold(game,playerID,amount); ex.contributions[playerID]={commerce=amount,bonusPercent=bonus,joinedTurn=turn}; faction.militaryExercise=ex;
         CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
@@ -11918,17 +11950,17 @@ end
             setReturn({success=false,message="Cyber disruption currently requires an active war with the target nation."}); return;
         end
         local pd,state = UFEnsurePrivateMilitary(playerID);
-        if GetSetting("CyberFacilitiesEnabled",true) ~= true then setReturn({success=false,message="Cyber Facilities are disabled by the host."}); return; end
-        if GetSetting("PowerGridEnabled",true) ~= true then setReturn({success=false,message="Cyber Facilities require Power Grids, which are disabled by the host."}); return; end
+        if GetSetting("CyberFacilitiesEnabled",true) ~= true then setReturn({success=false,message="Intelligence Agencies are disabled by the host."}); return; end
+        if GetSetting("PowerGridEnabled",true) ~= true then setReturn({success=false,message="Intelligence Agencies require Power Grids, which are disabled by the host."}); return; end
         if not UFHasOperationalPowerGrid(state) then
             setReturn({success=false,message="Cyber operations require an operational Power Grid."}); return;
         end
         local cyberLevel = 0;
         for _,lvl in pairs(state.cyberFacilities or {}) do cyberLevel=math.max(cyberLevel,tonumber(lvl) or 0); end
-        if cyberLevel < 1 then setReturn({success=false,message="Construct a Cyber Facility before launching cyber operations."}); return; end
+        if cyberLevel < 1 then setReturn({success=false,message="Construct a Intelligence Agency before launching cyber operations."}); return; end
         local currentTurn = GetCurrentEconomyTurn(data);
         if state.lastCyberOperationTurn == currentTurn then
-            setReturn({success=false,message="A Cyber Facility already launched an operation this turn."}); return;
+            setReturn({success=false,message="A Intelligence Agency already launched an operation this turn."}); return;
         end
         local targetState = (((pd.strategicMilitary or {}).byPlayer or {})[targetTerr.OwnerPlayerID]) or {};
         local securityLevel = 0;
@@ -11978,6 +12010,13 @@ end
         end
         local tbl=state[cfg.tableName];
         local current=tonumber(tbl[territoryID]) or 0;
+        if kind=="CyberFacility" and current<=0 then
+            for otherTid,otherLvl in pairs(state.cyberFacilities or {}) do
+                if (tonumber(otherLvl) or 0)>0 and (tonumber(otherTid) or otherTid)~=territoryID then
+                    setReturn({success=false,message="Your nation already has an Intelligence Agency. If it is destroyed or captured, you may establish a replacement."}); return;
+                end
+            end
+        end
         local maxLevel=cfg.defaultMax or 1;
         if cfg.maxLevel~=nil then maxLevel=math.max(1,math.floor(tonumber(GetSetting(cfg.maxLevel,maxLevel)) or maxLevel)); end
         if current>=maxLevel then setReturn({success=false,message=UFMilitaryDisplayName(kind).." is already at maximum level here."}); return; end
@@ -12005,50 +12044,37 @@ end
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
         local resourceText = kind=="MissileSilo" and " + 1 Uranium consumed." or "";
         local visibilityText = (kind=="PowerGrid" or kind=="CyberFacility") and " Location remains private and is shown through Military Infrastructure intelligence." or " The map icon updates when the turn advances.";
-        setReturn({success=true,message=UFMilitaryDisplayName(kind).." level "..tostring(newLevel).." established. "..tostring(cost).." Commerce deducted."..resourceText..visibilityText}); return;
+        setReturn({success=true,message=UFMilitaryDisplayName(kind).." level "..tostring(newLevel).." established. Max health is now "..tostring(newLevel*10).." HP. "..tostring(cost).." Commerce deducted."..resourceText..visibilityText}); return;
     end
 
 
     if payload.type == "resupplyMissile" then
-        local siloID=MakeInteger(payload.siloTerritoryID);
-        local weapon=tostring(payload.weapon or "");
-        local costs={Conventional=100,EMP=175,Nuclear=300};
-        if costs[weapon]==nil then setReturn({success=false,message="Invalid missile type."}); return; end
-        local pd,state=UFEnsurePrivateMilitary(playerID);
-        if siloID==nil or (tonumber((state.missileSilos or {})[siloID]) or 0)<=0 or not UFTerritoryOwnedBy(game,siloID,playerID) then
-            setReturn({success=false,message="Select one of your active Missile Silos."}); return;
-        end
-        local cost=costs[weapon];
-        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce to resupply a "..weapon.." missile."}); return; end
-        if weapon=="Nuclear" then
-            local nation=EnsureNation(data,game,playerID); nation.resourceStockpile=nation.resourceStockpile or {};
-            if (tonumber(nation.resourceStockpile.Uranium) or 0)<1 then setReturn({success=false,message="Nuclear missile resupply requires at least 1 Uranium in the national stockpile."}); return; end
-            nation.resourceStockpile.Uranium=(tonumber(nation.resourceStockpile.Uranium) or 0)-1;
-        end
-        RemoveGold(game,playerID,cost);
-        state.missileInventory=state.missileInventory or {}; state.missileInventory[siloID]=state.missileInventory[siloID] or {Conventional=0,EMP=0,Nuclear=0};
-        state.missileInventory[siloID][weapon]=(tonumber(state.missileInventory[siloID][weapon]) or 0)+1;
-        CompactPublicGameDataForSave(data); Mod.PublicGameData=data; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        setReturn({success=true,message=weapon.." missile resupplied at the selected Silo. "..tostring(cost).." Commerce deducted."}); return;
+        local siloID=MakeInteger(payload.siloTerritoryID); local weapon=tostring(payload.weapon or ""); local count=math.max(1,math.min(50,MakeInteger(payload.count) or 1));
+        local costs={Conventional=100,EMP=175,Nuclear=300}; if costs[weapon]==nil then setReturn({success=false,message="Invalid missile type."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID); if siloID==nil or (tonumber((state.missileSilos or {})[siloID]) or 0)<=0 or not UFTerritoryOwnedBy(game,siloID,playerID) then setReturn({success=false,message="Select one of your active Missile Silos."}); return; end
+        local cost=costs[weapon]*count; if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for "..tostring(count).." "..weapon.." missile(s)."}); return; end
+        if weapon=="Nuclear" then local nation=EnsureNation(data,game,playerID); nation.resourceStockpile=nation.resourceStockpile or {}; local u=tonumber(nation.resourceStockpile.Uranium) or 0; if u<count then setReturn({success=false,message="This purchase requires "..tostring(count).." Uranium. Stockpile: "..tostring(u).."."}); return; end; nation.resourceStockpile.Uranium=u-count; end
+        RemoveGold(game,playerID,cost); state.missileInventory=state.missileInventory or {}; state.missileInventory[siloID]=state.missileInventory[siloID] or {Conventional=0,EMP=0,Nuclear=0}; state.missileInventory[siloID][weapon]=(tonumber(state.missileInventory[siloID][weapon]) or 0)+count;
+        CompactPublicGameDataForSave(data); Mod.PublicGameData=data; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); setReturn({success=true,message="Purchased "..tostring(count).." "..weapon.." missile(s) for "..tostring(cost).." Commerce."}); return;
+    end
+
+    if payload.type == "resupplyInterceptor" then
+        local count=math.max(1,math.min(50,MakeInteger(payload.count) or 1)); local unitCost=125; local cost=unitCost*count; local pd,state=UFEnsurePrivateMilitary(playerID);
+        if next(state.missileSilos or {})==nil then setReturn({success=false,message="Build a Missile Silo before stockpiling strategic interceptors."}); return; end
+        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for "..tostring(count).." interceptor(s)."}); return; end
+        RemoveGold(game,playerID,cost); state.interceptorMissiles=(tonumber(state.interceptorMissiles) or 0)+count; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); setReturn({success=true,message="Purchased "..tostring(count).." interceptor(s). Defense stockpile: "..tostring(state.interceptorMissiles).."."}); return;
     end
 
     if payload.type == "launchMissile" then
-        local siloID=MakeInteger(payload.siloTerritoryID); local targetID=MakeInteger(payload.targetTerritoryID); local weapon=tostring(payload.weapon or "Conventional");
-        local pd,state=UFEnsurePrivateMilitary(playerID);
-        if siloID==nil or targetID==nil or (tonumber((state.missileSilos or {})[siloID]) or 0)<=0 or not UFTerritoryOwnedBy(game,siloID,playerID) then setReturn({success=false,message="Select one of your active Missile Silos."}); return; end
-        local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; local target=standing and standing.Territories and standing.Territories[targetID] or nil;
-        if target==nil or target.OwnerPlayerID==playerID or target.OwnerPlayerID==WL.PlayerID.Neutral or target.OwnerPlayerID==WL.PlayerID.Fogged then setReturn({success=false,message="Select an enemy-controlled territory."}); return; end
-        local rel=GetRelationship(data,playerID,target.OwnerPlayerID);
-        if rel==nil or rel.status~="war" then setReturn({success=false,message="Strategic missile strikes may only target a nation you are officially at war with."}); return; end
-        state.missileInventory=state.missileInventory or {}; state.missileInventory[siloID]=state.missileInventory[siloID] or {Conventional=0,EMP=0,Nuclear=0};
-        if (tonumber(state.missileInventory[siloID][weapon]) or 0)<=0 then setReturn({success=false,message="This Silo has no "..weapon.." missile loaded. Resupply first."}); return; end
-        state.missileInventory[siloID][weapon]=math.max(0,(tonumber(state.missileInventory[siloID][weapon]) or 0)-1);
-        state.pendingStrategicStrikes=state.pendingStrategicStrikes or {};
-        local strikeYield=tostring(payload.yield or "Low");
-        table.insert(state.pendingStrategicStrikes,{attackerID=playerID,siloTerritoryID=siloID,targetTerritoryID=targetID,targetOwnerID=target.OwnerPlayerID,weapon=weapon,yield=strikeYield,siloLevel=tonumber(state.missileSilos[siloID]) or 1,queuedTurn=GetCurrentEconomyTurn(data)});
-        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        local td=game.Map and game.Map.Territories and game.Map.Territories[targetID] or nil;
-        setReturn({success=true,message=weapon.." strike scheduled against "..(td and td.Name or tostring(targetID))..". The strike resolves on turn advancement."}); return;
+        local siloID=MakeInteger(payload.siloTerritoryID); local targetID=MakeInteger(payload.targetTerritoryID); local weapon=tostring(payload.weapon or "Conventional"); local count=math.max(1,math.min(50,MakeInteger(payload.count) or 1));
+        local pd,state=UFEnsurePrivateMilitary(playerID); if siloID==nil or targetID==nil or (tonumber((state.missileSilos or {})[siloID]) or 0)<=0 or not UFTerritoryOwnedBy(game,siloID,playerID) then setReturn({success=false,message="Select one of your active Missile Silos."}); return; end
+        local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; local target=standing and standing.Territories and standing.Territories[targetID] or nil; if target==nil or target.OwnerPlayerID==playerID or target.OwnerPlayerID==WL.PlayerID.Neutral or target.OwnerPlayerID==WL.PlayerID.Fogged then setReturn({success=false,message="Select an enemy-controlled territory."}); return; end
+        local rel=GetRelationship(data,playerID,target.OwnerPlayerID); if rel==nil or rel.status~="war" then setReturn({success=false,message="Strategic missile strikes may only target a nation you are officially at war with."}); return; end
+        state.missileInventory=state.missileInventory or {}; state.missileInventory[siloID]=state.missileInventory[siloID] or {Conventional=0,EMP=0,Nuclear=0}; local available=tonumber(state.missileInventory[siloID][weapon]) or 0; if available<count then setReturn({success=false,message="This Silo has "..tostring(available).." "..weapon.." missile(s), but you selected "..tostring(count).."."}); return; end
+        local strikeYield=tostring(payload.yield or "Low"); local siloLevel=tonumber(state.missileSilos[siloID]) or 1; local need=(strikeYield=="High" and 3) or (strikeYield=="Medium" and 2) or 1; if weapon=="Nuclear" and siloLevel<need then setReturn({success=false,message=strikeYield.." nuclear yield requires Missile Silo Lv."..tostring(need).." or higher."}); return; end
+        state.missileInventory[siloID][weapon]=available-count; state.pendingStrategicStrikes=state.pendingStrategicStrikes or {}; for i=1,count do table.insert(state.pendingStrategicStrikes,{attackerID=playerID,siloTerritoryID=siloID,targetTerritoryID=targetID,targetOwnerID=target.OwnerPlayerID,weapon=weapon,yield=strikeYield,siloLevel=siloLevel,queuedTurn=GetCurrentEconomyTurn(data)}); end
+        local targetState=(((pd.strategicMilitary or {}).byPlayer or {})[target.OwnerPlayerID]) or {}; if (tonumber(targetState.intelligenceOpsLevel) or 0)>=3 then local pgd=Mod.PlayerGameData or {}; pgd[target.OwnerPlayerID]=pgd[target.OwnerPlayerID] or {}; pgd[target.OwnerPlayerID].incomingMissileAlerts=pgd[target.OwnerPlayerID].incomingMissileAlerts or {}; table.insert(pgd[target.OwnerPlayerID].incomingMissileAlerts,{id=tostring(playerID)..":"..tostring(GetCurrentEconomyTurn(data))..":"..tostring(targetID),count=count,weapon=weapon,targetTerritoryID=targetID,createdTurn=GetCurrentEconomyTurn(data),resolved=false}); Mod.PlayerGameData=pgd; end
+        UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); local td=game.Map and game.Map.Territories and game.Map.Territories[targetID] or nil; setReturn({success=true,message=tostring(count).." "..weapon.." missile(s) scheduled against "..(td and td.Name or tostring(targetID)).."."}); return;
     end
 
     if payload.type == "specialForcesMission" then
@@ -12101,6 +12127,45 @@ end
         setReturn({success=true,message="Special Forces unit trained. It represents "..tostring(strength).." army combat strength and will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."}); return;
     end
 
+    if payload.type == "upgradeIntelligenceBranch" then
+        local branch=tostring(payload.branch or ""); local field,maxLevel;if branch=="Intelligence" then field="intelligenceOpsLevel";maxLevel=3 elseif branch=="Cyber" then field="cyberOpsLevel";maxLevel=2 elseif branch=="CounterIntel" then field="counterIntelLevel";maxLevel=2 else setReturn({success=false,message="Invalid Agency capability."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID); if next(state.cyberFacilities or {})==nil then setReturn({success=false,message="Build an Intelligence Agency first."}); return; end; local cur=tonumber(state[field]) or 0; if cur>=maxLevel then setReturn({success=false,message=branch.." is already at maximum level."}); return; end; local new=cur+1; local cost=200*new; if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for this upgrade."}); return; end; RemoveGold(game,playerID,cost); state[field]=new; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); setReturn({success=true,message=branch.." upgraded to Lv."..tostring(new).."/"..tostring(maxLevel).."."}); return;
+    end
+
+    local function UFResolveIntelOperationImmediate(pd,op)
+        local attackerState=(((pd.strategicMilitary or {}).byPlayer or {})[op.attackerID]) or {}; local targetState=(((pd.strategicMilitary or {}).byPlayer or {})[op.targetID]) or {}; local attackerNation=EnsureNation(data,game,op.attackerID); local targetNation=EnsureNation(data,game,op.targetID); local lvl=tonumber(attackerState.intelligenceOpsLevel) or 0; local counter=tonumber(targetState.counterIntelLevel) or 0; local chance=math.max(20,math.min(90,55+lvl*10-counter*8)); local success=math.random(1,100)<=chance;
+        if op.operation=="Financial" then
+            if not success then return "FAILED","No Commerce stolen."; end; local available=GetStoredGold(game,op.targetID); local amount=math.min(200,math.max(50,math.floor(available*0.10))); if amount<=0 then return "FAILED","Target had no accessible Commerce."; end; RemoveGold(game,op.targetID,amount); AddGold(game,op.attackerID,amount); return "SUCCESS","Stole "..tostring(amount).." Commerce.";
+        elseif op.operation=="Cyber" then
+            local cyber=tonumber(attackerState.cyberOpsLevel) or 0; chance=math.max(20,math.min(90,50+cyber*15-counter*8)); if math.random(1,100)>chance then return "FAILED","Cyber intrusion failed."; end; targetState.disruptions=targetState.disruptions or {}; targetState.disruptions[op.targetTerritoryID]=GetCurrentEconomyTurn(data)+(cyber>=2 and 3 or 2); return "SUCCESS","Target systems disrupted.";
+        end
+        if not success then return "FAILED","Reconnaissance failed."; end
+        local reportID=tostring(op.attackerID)..":"..tostring(GetCurrentEconomyTurn(data))..":"..tostring(math.random(1000,9999)); local missiles=0; for _,inv in pairs(targetState.missileInventory or {}) do missiles=missiles+(tonumber(inv.Conventional) or 0)+(tonumber(inv.EMP) or 0)+(tonumber(inv.Nuclear) or 0); end; local summary="Commerce "..tostring(GetStoredGold(game,op.targetID)).." | Readiness "..tostring(math.floor(tonumber(targetNation.resourceMilitaryReadiness) or 100)).."% | Unrest "..tostring(math.floor(tonumber(targetNation.resourceUnrest) or 0)).." | Confidence "..tostring(math.floor(tonumber(targetNation.companyConfidence) or 50)).." | Estimated missiles "..tostring(missiles);
+        attackerState.intelReports=attackerState.intelReports or {}; table.insert(attackerState.intelReports,{id=reportID,targetPlayerID=op.targetID,targetName=(game.Game.Players[op.targetID] and game.Game.Players[op.targetID].DisplayName(nil,false)) or tostring(op.targetID),turn=GetCurrentEconomyTurn(data),summary=summary,shared=false}); while #attackerState.intelReports>10 do table.remove(attackerState.intelReports,1); end
+        local pgd=Mod.PlayerGameData or {}; pgd[op.attackerID]=pgd[op.attackerID] or {}; pgd[op.attackerID].strategicIntel=pgd[op.attackerID].strategicIntel or {knownResources={},knownMilitary={}}; local known=pgd[op.attackerID].strategicIntel.knownMilitary or {}; pgd[op.attackerID].strategicIntel.knownMilitary=known; for kind,map in pairs({Airbase=targetState.airbases,MissileSilo=targetState.missileSilos,PowerGrid=targetState.powerGrids,CyberFacility=targetState.cyberFacilities}) do for tid,lev in pairs(map or {}) do known[tostring(op.targetID)..":"..kind..":"..tostring(tid)]={ownerPlayerID=op.targetID,kind=(kind=="CyberFacility" and "Intelligence Agency" or kind),territoryID=tonumber(tid) or tid,level=lev,count=1,reason="Intelligence Operation"}; end end; Mod.PlayerGameData=pgd; return "SUCCESS",summary;
+    end
+
+    if payload.type == "launchIntelligenceOperation" then
+        local operation=tostring(payload.operation or "Recon"); local territoryID=MakeInteger(payload.territoryID); local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; local terr=territoryID and standing and standing.Territories and standing.Territories[territoryID] or nil; if terr==nil or terr.OwnerPlayerID==playerID or terr.OwnerPlayerID==WL.PlayerID.Neutral or terr.OwnerPlayerID==WL.PlayerID.Fogged then setReturn({success=false,message="Select another nation's territory."}); return; end
+        local pd,state=UFEnsurePrivateMilitary(playerID); if next(state.cyberFacilities or {})==nil then setReturn({success=false,message="Build an Intelligence Agency first."}); return; end; local intel=tonumber(state.intelligenceOpsLevel) or 0; local cyber=tonumber(state.cyberOpsLevel) or 0; if operation=="Recon" and intel<1 then setReturn({success=false,message="Intelligence Operations Lv.1 required."}); return; end; if operation=="Financial" and intel<3 then setReturn({success=false,message="Financial Espionage requires Intelligence Operations Lv.3."}); return; end; if operation=="Cyber" and cyber<1 then setReturn({success=false,message="Cyber Operations Lv.1 required."}); return; end; local turn=GetCurrentEconomyTurn(data); if state.lastAgencyOperationTurn==turn then setReturn({success=false,message="Your Intelligence Agency has already launched an operation this turn."}); return; end
+        local targetID=terr.OwnerPlayerID; local targetState=(((pd.strategicMilitary or {}).byPlayer or {})[targetID]) or {}; local counter=tonumber(targetState.counterIntelLevel) or 0; local skill=(operation=="Cyber" and cyber or intel); local detectChance=counter>0 and math.max(15,math.min(85,25+counter*25-skill*8)) or 0; local detected=detectChance>0 and math.random(1,100)<=detectChance; state.lastAgencyOperationTurn=turn; local op={id=tostring(playerID)..":"..tostring(targetID)..":"..tostring(turn)..":"..tostring(math.random(1000,9999)),attackerID=playerID,targetID=targetID,targetTerritoryID=territoryID,operation=operation,createdTurn=turn,resolved=false};
+        if detected then pd.pendingIntelOps=pd.pendingIntelOps or {}; pd.pendingIntelOps[op.id]=op; local pgd=Mod.PlayerGameData or {}; pgd[targetID]=pgd[targetID] or {}; pgd[targetID].counterIntelAlerts=pgd[targetID].counterIntelAlerts or {}; table.insert(pgd[targetID].counterIntelAlerts,{id=op.id,operation=operation,attackerName="UNKNOWN",createdTurn=turn,resolved=false}); Mod.PlayerGameData=pgd; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); setReturn({success=true,message=operation.." operation launched. Results will follow."}); return; end
+        local result,detail=UFResolveIntelOperationImmediate(pd,op); UFAppendHQResult(state,"Intelligence Agency: "..operation,result,detail); UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); Mod.PrivateGameData=pd; setReturn({success=true,message=operation.." RESULT\n"..result.."\n"..detail}); return;
+    end
+
+    if payload.type == "respondCounterIntel" then
+        local opID=tostring(payload.operationID or ""); local choice=tostring(payload.choice or "Ignore"); local pd=Mod.PrivateGameData or {}; local op=(pd.pendingIntelOps or {})[opID]; if op==nil or op.targetID~=playerID or op.resolved==true then setReturn({success=false,message="That foreign operation is no longer pending."}); return; end; local _,state=UFEnsurePrivateMilitary(playerID); local counter=tonumber(state.counterIntelLevel) or 0;
+        local pgd=Mod.PlayerGameData or {}; local function markAlert(name) for _,a in ipairs(((pgd[playerID] or {}).counterIntelAlerts or {})) do if a.id==opID then a.resolved=true; a.attackerName=name or a.attackerName; end end end
+        if choice=="Counter" then if GetStoredGold(game,playerID)<75 then setReturn({success=false,message="You need 75 Commerce to launch the countermeasure."}); return; end; RemoveGold(game,playerID,75); local attackerState=(((pd.strategicMilitary or {}).byPlayer or {})[op.attackerID]) or {}; local skill=(op.operation=="Cyber" and tonumber(attackerState.cyberOpsLevel) or tonumber(attackerState.intelligenceOpsLevel)) or 0; local chance=math.max(25,math.min(90,45+counter*20-skill*10)); if math.random(1,100)<=chance then op.resolved=true; markAlert(counter>=2 and ((game.Game.Players[op.attackerID] and game.Game.Players[op.attackerID].DisplayName(nil,false)) or tostring(op.attackerID)) or "UNKNOWN"); Mod.PlayerGameData=pgd; Mod.PrivateGameData=pd; setReturn({success=true,message="OPERATION BLOCKED. No effect was applied."}); return; end
+        elseif choice=="Trace" then if counter<2 then setReturn({success=false,message="Counterintelligence Lv.2 is required to trace attackers."}); return; end; if GetStoredGold(game,playerID)<50 then setReturn({success=false,message="You need 50 Commerce to trace the operation."}); return; end; RemoveGold(game,playerID,50); markAlert((game.Game.Players[op.attackerID] and game.Game.Players[op.attackerID].DisplayName(nil,false)) or tostring(op.attackerID));
+        end
+        local result,detail=UFResolveIntelOperationImmediate(pd,op); op.resolved=true; markAlert(choice=="Trace" and ((game.Game.Players[op.attackerID] and game.Game.Players[op.attackerID].DisplayName(nil,false)) or tostring(op.attackerID)) or nil); Mod.PlayerGameData=pgd; Mod.PrivateGameData=pd; setReturn({success=true,message="Foreign operation resolved: "..result..". "..detail}); return;
+    end
+
+    if payload.type == "shareFactionIntel" then
+        local reportID=tostring(payload.reportID or ""); local pd,state=UFEnsurePrivateMilitary(playerID); local report=nil; for _,r in ipairs(state.intelReports or {}) do if tostring(r.id)==reportID then report=r; break; end end; if report==nil then setReturn({success=false,message="That intelligence report is unavailable."}); return; end; local diplomacy=(data.globalEconomy or {}).diplomacy or {}; local fid=(diplomacy.playerFaction or {})[playerID]; local f=fid and (diplomacy.factions or {})[fid] or nil; if f==nil then setReturn({success=false,message="Join a Faction before sharing intelligence."}); return; end; local pgd=Mod.PlayerGameData or {}; for mid,isMember in pairs(f.members or {}) do if isMember and mid~=playerID then pgd[mid]=pgd[mid] or {}; pgd[mid].sharedIntelReports=pgd[mid].sharedIntelReports or {}; table.insert(pgd[mid].sharedIntelReports,report); while #pgd[mid].sharedIntelReports>10 do table.remove(pgd[mid].sharedIntelReports,1); end end end; report.shared=true; Mod.PlayerGameData=pgd; UFSaveOwnerMilitaryToPlayerData(playerID,pd,state); setReturn({success=true,message="Intelligence report shared with your Faction."}); return;
+    end
+
     -- =====================================================
     -- STRATEGIC INFRASTRUCTURE REPAIR (10 HP DISPLAY MODEL)
     -- Internally one HP = 10 percentage points, preserving old save data.
@@ -12114,13 +12179,13 @@ end
         local pd,state=UFEnsurePrivateMilitary(playerID); local tbl=state[cfg.tableName] or {};
         local level=tonumber(tbl[territoryID]) or 0; if level<=0 then setReturn({success=false,message="No "..UFMilitaryDisplayName(kind).." exists there."}); return; end
         local c=UFGetAssetCondition(state,kind,territoryID); local damage=math.max(0,math.min(100,tonumber(c.damage) or 0));
-        if damage<=0 and (tonumber(c.disabledUntil) or 0)<=GetCurrentEconomyTurn(data) then setReturn({success=false,message="That asset is already at 10/10 HP and operational."}); return; end
-        local hpMissing=math.max(1,math.ceil(damage/10)); local base=UFRepairBaseCost(kind);
+        local maxHP=math.max(10,level*10); if damage<=0 and (tonumber(c.disabledUntil) or 0)<=GetCurrentEconomyTurn(data) then setReturn({success=false,message="That asset is already at full "..tostring(maxHP).."/"..tostring(maxHP).." HP and operational."}); return; end
+        local hpMissing=math.max(1,math.ceil(damage*maxHP/100)); local base=UFRepairBaseCost(kind);
         local cost=math.max(10,math.floor(base*level*0.05*hpMissing+0.5));
-        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce to restore this asset to 10/10 HP."}); return; end
+        if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce to restore this asset to full "..tostring(maxHP).." HP."}); return; end
         RemoveGold(game,playerID,cost); c.damage=0; c.disabledUntil=0;
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        setReturn({success=true,message=UFMilitaryDisplayName(kind).." restored to 10/10 HP. "..tostring(cost).." Commerce deducted."}); return;
+        setReturn({success=true,message=UFMilitaryDisplayName(kind).." restored to full "..tostring(maxHP).." HP. "..tostring(cost).." Commerce deducted."}); return;
     end
 
     -- =====================================================

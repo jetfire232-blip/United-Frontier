@@ -12510,7 +12510,7 @@ function ProcessAIIncomingFactionInvites(
                 if aiBloc~="" and aiBloc==leaderBloc then score=score+60; elseif tostring(aiNation.ideology or "")==tostring(leaderNation.ideology or "") then score=score+70; else score=score-35; end
                 if HasAgreement(data,toPlayerID,fromPlayerID)==true then score=score+25; end
                 if GetActiveDiplomacyNAP(data,toPlayerID,fromPlayerID)~=nil then score=score+10; end
-                local allianceKey=PairKey(toPlayerID,fromPlayerID); local alliance=(diplomacy.alliances or {})[allianceKey]; if alliance and alliance.active==true then score=score+30; end
+                local allianceKey=EconomyPairKey(toPlayerID,fromPlayerID); local alliance=(diplomacy.alliances or {})[allianceKey]; if alliance and alliance.active==true then score=score+30; end
                 local accepted = score >= 55;
 
 
@@ -12620,7 +12620,7 @@ function ProcessAIFactionStrategy(game,data)
                 for otherID,other in pairs(game.Game.Players or {}) do
                     if otherID~=pid and other and not other.Surrendered and IsNationEconomyReady(game,data,otherID) and diplomacy.playerFaction[otherID]==nil and not IsDiplomacyWar(data,pid,otherID) then
                         local n2=nations[otherID] or {}; local score=(b1~="" and b1==bloc(n2.ideology)) and 60 or -40; if tostring(n1.ideology or "")==tostring(n2.ideology or "") then score=score+20; end; if HasAgreement(data,pid,otherID)==true then score=score+25; end; if GetActiveDiplomacyNAP(data,pid,otherID)~=nil then score=score+10; end;
-                        local ak=PairKey(pid,otherID); local al=(diplomacy.alliances or {})[ak]; if al and al.active==true then score=score+30; end; if score>bestScore then bestScore=score; bestID=otherID; end
+                        local ak=EconomyPairKey(pid,otherID); local al=(diplomacy.alliances or {})[ak]; if al and al.active==true then score=score+30; end; if score>bestScore then bestScore=score; bestID=otherID; end
                     end
                 end
                 -- The lower player id forms the bloc so two aligned AIs do not create duplicate factions on the same turn.

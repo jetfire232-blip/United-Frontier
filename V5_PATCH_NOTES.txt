@@ -8,3 +8,32 @@ How It Works: stock purchase/profit/loss, ETF, resource-shortage and diplomacy e
 Validation: all seven Lua files compile in Lua 5.4; original AI acquisition failure reproduced and patched path passed; empty-world start hook and focused diplomacy UI render passed with mocks. Live War.app validation is still required, especially turn advancement with 40 players and layout on mobile.
 
 GitHub assets folder is StructureImages (exact case), as included in this archive.
+
+V6 MOBILE + FACTION HOTFIX
+
+- Fixed both faction-AI turn crashes caused by calls to the nonexistent PairKey helper. Incoming faction invitations and AI faction strategy now use EconomyPairKey.
+- Added direct regression tests for AI faction invitation acceptance and AI faction creation/invitation.
+- Markets now uses two equal-width buttons per row with shorter mobile labels.
+- Military main controls and infrastructure filters now use two equal-width buttons per row.
+- Faction nation selectors use three buttons per row and each name uses that player's color.
+- Faction directory leaders and member names also use their player colors and less crowded mobile lines.
+
+V7 ACQUISITIONS + MOBILE TRADE + CALLBACK FIX
+
+- Fixed the player-overview crash: CLOSE now passes a normal function wrapper instead of a CallbackFunction value.
+- Acquisition screens now show the target market cap, rank, active-company average, exact offer formula, estimated shareholder payout per share, and the buyer flagship's projected stock-price and confidence changes.
+- Completed acquisitions automatically cash out every shareholder. Each shareholder receives a notice showing shares, Commerce received, and realized value per share.
+- The seller receives the unpaid remainder plus any payout on shares they personally held, with a complete sale-price breakdown and notification.
+- The buyer receives a purchase confirmation with the exact stock-price and confidence change. The market news entry includes the purchase price and settlement totals.
+- Acquisition rounding is floored and capped so shareholder payments can never create more Commerce than the buyer paid.
+- Trade Agreements filters now use two equal-width buttons per row. Each partner is a vertical mobile card with a full-width PROPOSE TRADE button.
+- AI Manager status and spending are split into short lines; budget presets use two equal-width buttons per row.
+
+V8 SECURITY BRIEFING + MARKET NEWS
+
+- Overview now includes a private Security Reports briefing with pending counterintelligence alerts and the latest intelligence, cyber, missile/silo, air-mission, and strategic-warning results.
+- The full Security & Mission Reports feed has mobile filters for All, Intel/Cyber, Missiles/Silos, Air Missions, and Warnings.
+- Player Overview uses short mobile lines and shows only legitimately discovered strategic assets and mission results involving the selected player.
+- Market Overview adds Top 5 Growth Stocks with price/change data and Top 5 Dividend Stocks with dividend per share, displayed yield, and lifetime dividends paid.
+- Market News and Global Economy are combined into one categorized NEWS & ECONOMY feed. Acquisitions, stock splits, ETF rebalances, and War Bonds are highlighted as major events.
+- How It Works now explains the new feeds and includes hard-number examples for growth, dividend yield, acquisitions, shareholder cash-outs, seller proceeds, buyer stock boosts, and security reports.

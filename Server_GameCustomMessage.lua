@@ -9760,43 +9760,84 @@ if payload.type == "acceptAcquisitionOffer" then
     if GetStoredGold(game,buyerID)<price then market.acquisitionOffers[companyID][buyerID]=nil; setReturn({success=false,message="The buyer no longer has enough Commerce to complete the acquisition."}); return; end
     if not RemoveGold(game,buyerID,price) then setReturn({success=false,message="Could not process the buyer's Commerce."}); return; end
 
+    local currentTurn=economy.currentEconomyTurn or data.tradeTurn or 1;
+    local companyName=tostring(company.name or "Flagship Company");
     local totalShares=math.max(1,tonumber(company.totalShares) or 100);
     local paid=0;
+    local sellerSharePayout=0;
+    local shareholderCount=0;
     for holderID,nation in pairs(economy.nations or {}) do
         nation.stockHoldings=nation.stockHoldings or {};
         nation.stockCostBasis=nation.stockCostBasis or {};
         local shares=math.max(0,tonumber(nation.stockHoldings[companyID]) or 0);
         if shares>0 then
-            local payout=math.floor(price*(shares/totalShares)+0.5);
-            if payout>0 then AddGold(game,holderID,payout); paid=paid+payout; end
+            -- Floor and cap each cash-out so rounding can never create Commerce.
+            local payout=math.min(math.max(0,price-paid),math.floor(price*(shares/totalShares)));
+            if payout>0 then
+                AddGold(game,holderID,payout);
+                paid=paid+payout;
+                shareholderCount=shareholderCount+1;
+                if holderID==playerID then sellerSharePayout=payout; end
+                AddPersonalEvent(
+                    nation,
+                    currentTurn,
+                    "acquisition_cashout",
+                    "ACQUISITION CASH-OUT | "..companyName.." | "..tostring(shares).." share(s) automatically sold | "..tostring(payout).." Commerce received | "..string.format("%.2f",payout/shares).." per share."
+                );
+            end
             nation.stockHoldings[companyID]=nil; nation.stockCostBasis[companyID]=nil;
         end
     end
-    if paid<price then AddGold(game,playerID,price-paid); end
+    local sellerRemainder=math.max(0,price-paid);
+    if sellerRemainder>0 then AddGold(game,playerID,sellerRemainder); end
+    local sellerTotalProceeds=sellerRemainder+sellerSharePayout;
 
-    company.active=false; company.delisted=true; company.status="acquired"; company.acquiredByPlayerID=buyerID; company.acquiredTurn=economy.currentEconomyTurn or data.tradeTurn or 1;
+    company.acquisitionSalePrice=price;
+    company.acquisitionPayoutPerShare=price/totalShares;
+    company.shareholderPayoutTotal=paid;
+    company.shareholderPayoutCount=shareholderCount;
+    company.sellerProceeds=sellerTotalProceeds;
+
+    company.active=false; company.delisted=true; company.status="acquired"; company.acquiredByPlayerID=buyerID; company.acquiredTurn=currentTurn;
     local sellerNation=EnsureNation(data,game,playerID);
     sellerNation.flagshipCompanyCreated=false; sellerNation.flagshipCompanyID=nil; sellerNation.flagshipCompanyName=nil;
-    sellerNation.flagshipRebuildAvailableTurn=(economy.currentEconomyTurn or data.tradeTurn or 1)+math.max(0,math.floor(tonumber(GetSetting("AcquisitionRebuildCooldownTurns",3)) or 3));
+    sellerNation.flagshipRebuildAvailableTurn=currentTurn+math.max(0,math.floor(tonumber(GetSetting("AcquisitionRebuildCooldownTurns",3)) or 3));
+
+    AddPersonalEvent(
+        sellerNation,
+        currentTurn,
+        "acquisition_sale",
+        "FLAGSHIP SOLD | "..companyName.." | Sale price: "..tostring(price).." Commerce | Shareholder cash-outs: "..tostring(paid).." | Owner remainder: "..tostring(sellerRemainder).." | Your total proceeds: "..tostring(sellerTotalProceeds).." Commerce."
+    );
 
     local buyerNation=EnsureNation(data,game,buyerID);
     local buyerCompanyID=buyerNation.flagshipCompanyID;
     local buyerCompany=buyerCompanyID and (market.companies or {})[buyerCompanyID] or nil;
+    local buyerStockMessage="No active buyer flagship; no stock-price boost was applied.";
     if buyerCompany and buyerCompany.active==true and buyerCompany.delisted~=true then
         local boost=math.max(0,tonumber(GetSetting("AcquisitionBuyerStockBoostPercent",15)) or 15);
         local old=tonumber(buyerCompany.currentPrice or buyerCompany.startingPrice) or 1;
+        local oldConfidence=tonumber(buyerCompany.confidence) or 50;
         buyerCompany.previousPrice=old;
         buyerCompany.currentPrice=math.max(1,math.floor(old*(1+boost/100)+0.5));
         buyerCompany.marketCap=(tonumber(buyerCompany.totalShares) or 100)*buyerCompany.currentPrice;
-        buyerCompany.confidence=math.min(100,(tonumber(buyerCompany.confidence) or 50)+8);
+        buyerCompany.confidence=math.min(100,oldConfidence+8);
+        buyerStockMessage=tostring(buyerCompany.name or "Buyer flagship").." stock: "..tostring(old).." -> "..tostring(buyerCompany.currentPrice).." ("..tostring(buyerCompany.currentPrice-old).." per share) | Confidence: "..tostring(oldConfidence).." -> "..tostring(buyerCompany.confidence)..".";
     end
     buyerNation.acquiredFlagships=(tonumber(buyerNation.acquiredFlagships) or 0)+1;
 
+    AddPersonalEvent(
+        buyerNation,
+        currentTurn,
+        "acquisition_completed",
+        "ACQUISITION COMPLETED | "..companyName.." | Purchase price: "..tostring(price).." Commerce | "..buyerStockMessage
+    );
+
     market.acquisitionOffers[companyID]={};
     market.news=market.news or {};
-    table.insert(market.news,{turn=economy.currentEconomyTurn or data.tradeTurn or 1,type="acquisition",companyID=companyID,message=GetPlayerName(game,buyerID).." acquired "..tostring(company.name or "a flagship company")..". Target shareholders received the acquisition payout."});
+    table.insert(market.news,{turn=currentTurn,type="acquisition",companyID=companyID,message=GetPlayerName(game,buyerID).." acquired "..companyName.." for "..tostring(price).." Commerce. Shareholders received "..tostring(paid).." Commerce and the seller received "..tostring(sellerTotalProceeds).." Commerce total."});
     economy.market=market; data.globalEconomy=economy; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
-    setReturn({success=true,message="Acquisition completed. Shareholders were paid and the buyer's flagship received a market boost."}); return;
+    setReturn({success=true,message="Acquisition completed for "..tostring(price).." Commerce. Shareholders received "..tostring(paid).."; seller total proceeds were "..tostring(sellerTotalProceeds)..". "..buyerStockMessage}); return;
 end
 
 if payload.type == "rebuildFlagship" then

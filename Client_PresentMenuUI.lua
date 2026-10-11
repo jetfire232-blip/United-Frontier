@@ -223,6 +223,8 @@ UFMenuClose = UFMenuClose or nil;
 ResourceIntelFilter = ResourceIntelFilter or "My Resources";
 MilitaryIntelFilter = MilitaryIntelFilter or "My Infrastructure";
 TradePartnerFilter = TradePartnerFilter or "ALL";
+MarketNewsFilter = MarketNewsFilter or "ALL";
+StrategicReportFilter = StrategicReportFilter or "ALL";
 
 
 function MainTabText(key, label)
@@ -1132,80 +1134,19 @@ selectedDiplomacyOverviewGroup =
         targetColor
     );
 
-    local function AddOverviewPair(
-        leftText,
-        rightText
-    )
-
-        local row =
-            UI.CreateHorizontalLayoutGroup(
-                selectedDiplomacyOverviewGroup
-            );
-
-        UI.CreateLabel(row)
-            .SetText(leftText)
-            .SetFlexibleWidth(1);
-
-        UI.CreateLabel(row)
-            .SetText(rightText)
-            .SetFlexibleWidth(1);
-
-    end
-
-    AddOverviewPair(
-        "Relationship: " ..
-        string.upper(
-            tostring(status)
-        ),
-        "Commerce/Turn: " ..
-        tostring(
-            GetPlayerIncome(
-                game,
-                targetID
-            )
-        )
+    -- Short vertical lines remain readable on mobile screens.
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText(
+        "Relationship: "..string.upper(tostring(status)).." | Commerce/Turn: "..tostring(GetPlayerIncome(game,targetID))
+    ).SetColor(status=="war" and "#FF7B7B" or "#8FD694");
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText(
+        "Ideology: "..tostring(targetNation.ideology or "Unknown").." | Tax: "..tostring(targetNation.taxPolicy or "Unknown")
     );
-
-    AddOverviewPair(
-        "Ideology: " ..
-        tostring(
-            targetNation.ideology
-            or "Unknown"
-        ),
-        "Tax Policy: " ..
-        tostring(
-            targetNation.taxPolicy
-            or "Unknown"
-        )
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText(
+        "Economy: "..tostring(targetNation.economicStrategy or "Unknown").." | Company: "..tostring(targetNation.companyStrategy or "Unknown")
     );
-
-    AddOverviewPair(
-        "Economic Strategy: " ..
-        tostring(
-            targetNation.economicStrategy
-            or "Unknown"
-        ),
-        "Company Strategy: " ..
-        tostring(
-            targetNation.companyStrategy
-            or "Unknown"
-        )
-    );
-
-    AddOverviewPair(
-        "NAP: " ..
-        (
-            hasNAP
-            and "ACTIVE"
-            or "NONE"
-        ),
-        "Alliance: " ..
-        (
-            isAllied
-            and "ACTIVE"
-            or "NONE"
-        )
-    );
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText(
+        "NAP: "..(hasNAP and "ACTIVE" or "NONE").." | Alliance: "..(isAllied and "ACTIVE" or "NONE")
+    ).SetColor((hasNAP or isAllied) and "#62B6FF" or "#BBBBBB");
 
     UI.CreateLabel(
         selectedDiplomacyOverviewGroup
@@ -1217,6 +1158,43 @@ selectedDiplomacyOverviewGroup =
                 or "None"
             )
         );
+
+UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText("KNOWN SECURITY & INTELLIGENCE").SetColor("#FFD166");
+UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText("Only information your nation has legitimately discovered is shown.").SetColor("#888888");
+local playerData=Mod.PlayerGameData or {};
+local strategicIntel=playerData.strategicIntel or {};
+local knownCounts={}; local knownTotal=0;
+for _,item in pairs(strategicIntel.knownMilitary or {}) do
+    if item and item.ownerPlayerID==targetID then
+        local kind=tostring(item.kind or "Asset");
+        knownCounts[kind]=(knownCounts[kind] or 0)+1;
+        knownTotal=knownTotal+1;
+    end
+end
+if knownTotal==0 then
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText("Known strategic assets: None discovered.").SetColor("#888888");
+else
+    local knownParts={};
+    for kind,count in pairs(knownCounts) do table.insert(knownParts,kind.." "..tostring(count)); end
+    table.sort(knownParts);
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText("Known assets: "..table.concat(knownParts," | ")).SetColor("#62B6FF");
+end
+local targetReports={};
+for _,report in ipairs((playerData.ownMilitary or {}).intelligenceReports or {}) do
+    if report and report.targetPlayerID==targetID then table.insert(targetReports,report); end
+end
+table.sort(targetReports,function(a,b) return (tonumber(a.turn) or 0)>(tonumber(b.turn) or 0); end);
+if #targetReports==0 then
+    UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText("Recent missions involving this player: None.").SetColor("#888888");
+else
+    for index=1,math.min(3,#targetReports) do
+        local report=targetReports[index];
+        UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText(
+            "T"..tostring(report.turn or "?").." | "..tostring(report.title or "Mission").." | "..tostring(report.result or "REPORT")
+        ).SetColor(report.result=="SUCCESS" and "#79D279" or "#FFB366");
+        UI.CreateLabel(selectedDiplomacyOverviewGroup).SetText(tostring(report.detail or "")).SetColor("#BBBBBB");
+    end
+end
 
 UI.CreateLabel(
     selectedDiplomacyOverviewGroup
@@ -1458,7 +1436,9 @@ local function RefreshPlayerSearchResults()
                 setMaxSize(850, 650);
                 setScrollable(true);
                 ShowDiplomacyMenu(root, dialogGame, targetID);
-                UI.CreateButton(root).SetText("CLOSE").SetOnClick(closeDialog);
+                UI.CreateButton(root).SetText("CLOSE").SetOnClick(function()
+                    closeDialog();
+                end);
             end);
 
         end);
@@ -3071,20 +3051,19 @@ function ShowMarketsMenu(
     UI.CreateLabel(area).SetText("WHAT WOULD YOU LIKE TO DO?").SetColor("#FFD166");
     UI.CreateLabel(area).SetText("Buy Shares: choose a company and quantity. My Portfolio: review or sell holdings. ETF: buy a fund covering the global market.").SetColor("#BBBBBB");
     local marketActions = {
-        {"BUY SHARES", ShowStockMarket}, {"MY PORTFOLIO", ShowStockPortfolio},
-        {"MARKET OVERVIEW", ShowMarketOverview}, {"MARKET NEWS", ShowMarketNews},
-        {"GLOBAL ETF", ShowMarketETF}, {"TRADE AGREEMENTS", ShowTradeAgreementsMenu},
+        {"BUY SHARES", ShowStockMarket}, {"PORTFOLIO", ShowStockPortfolio},
+        {"OVERVIEW", ShowMarketOverview}, {"NEWS & ECONOMY", ShowMarketNews},
+        {"GLOBAL ETF", ShowMarketETF}, {"TRADE", ShowTradeAgreementsMenu},
         {"INVESTMENTS", ShowInvestments}, {"AI MANAGER", ShowAIManagerMenu},
-        {"GLOBAL ECONOMY", function(p,g) ShowGlobalEconomy(p,g,"all"); end}
+        {"HOW IT WORKS", function(p,g) ShowHowItWorks(p,g); end}
     };
     local shortcutRow;
     for index, entry in ipairs(marketActions) do
-        if (index-1)%3 == 0 then shortcutRow = UI.CreateHorizontalLayoutGroup(area); end
+        if (index-1)%2 == 0 then shortcutRow = UI.CreateHorizontalLayoutGroup(area); end
         local action = entry[2];
-        UI.CreateButton(shortcutRow).SetText(entry[1]).SetFlexibleWidth(1).SetOnClick(function() action(parent,game); end);
+        UI.CreateButton(shortcutRow).SetText(entry[1]).SetFlexibleWidth(1).SetPreferredHeight(42).SetOnClick(function() action(parent,game); end);
     end
-    UI.CreateLabel(area).SetText("New to Markets? Open How It Works for examples of purchases, profits, losses, and resource shortages.").SetColor("#BBBBBB");
-    UI.CreateButton(area).SetText("HOW IT WORKS / EXAMPLES").SetOnClick(function() ShowHowItWorks(parent,game); end);
+    UI.CreateLabel(area).SetText("Tap How It Works for simple purchase, profit, loss, and shortage examples.").SetColor("#BBBBBB");
 
 
     -- WORLD TRENDS: compact public rankings.  Military and Commerce lists intentionally
@@ -5999,6 +5978,50 @@ function ShowOverview(
         UI.CreateButton(quick).SetText("RESOURCES").SetOnClick(function() ShowResourcesMenu(parent,game); end);
         UI.CreateButton(quick).SetText("DIPLOMACY").SetOnClick(function() ShowDiplomacyMenu(parent,game); end);
         UI.CreateButton(quick).SetText("MARKETS").SetOnClick(function() ShowMarketsMenu(parent,game); end);
+
+        -- Fast, private security briefing. Only the local player's legitimately
+        -- available PlayerGameData is used here.
+        UI.CreateLabel(area).SetText("SECURITY REPORTS").SetColor("#FFD166");
+        local securityState=(Mod.PlayerGameData or {}).ownMilitary or {};
+        local pendingSecurityAlerts=0;
+        for _,alert in ipairs(securityState.counterIntelAlerts or {}) do
+            if tostring(alert.status or "") == "PENDING" then pendingSecurityAlerts=pendingSecurityAlerts+1; end
+        end
+        local securityItems={};
+        local function addSecurityItem(category,turn,title,result,detail,color)
+            table.insert(securityItems,{category=category,turn=tonumber(turn) or 0,title=title,result=result,detail=detail,color=color});
+        end
+        for _,report in ipairs(securityState.intelligenceReports or {}) do
+            addSecurityItem("INTEL / CYBER",report.turn,report.title or "Intelligence",report.result or "REPORT",report.detail or "",report.incoming==true and "#FFB366" or "#62B6FF");
+        end
+        for _,report in ipairs(securityState.hqRecentResults or {}) do
+            addSecurityItem("MISSILE / STRATEGIC",report.turn,report.action or "Strategic Event",report.result or "REPORT",report.detail or "","#FF9B71");
+        end
+        for _,report in ipairs(securityState.airWingReports or {}) do
+            addSecurityItem("AIR MISSION",report.turn,report.mission or "Air Mission",report.result or "REPORT",(report.target and ("Target: "..tostring(report.target).." | ") or "")..tostring(report.detail or ""),"#82CFFF");
+        end
+        for _,warning in ipairs(securityState.strategicWarnings or {}) do
+            addSecurityItem("WARNING",warning.turn,"Advance Warning","URGENT",warning.text or "Strategic threat detected.","#FF6B6B");
+        end
+        table.sort(securityItems,function(a,b) return a.turn>b.turn; end);
+        UI.CreateLabel(area).SetText(
+            "Pending counterintelligence alerts: "..tostring(pendingSecurityAlerts)..
+            " | Stored reports: "..tostring(#securityItems)
+        ).SetColor(pendingSecurityAlerts>0 and "#FF7B7B" or "#8FD694");
+        if #securityItems==0 then
+            UI.CreateLabel(area).SetText("No intelligence, cyber, missile, or air-mission reports yet.").SetColor("#888888");
+        else
+            for index=1,math.min(4,#securityItems) do
+                local item=securityItems[index];
+                UI.CreateLabel(area).SetText(
+                    "T"..tostring(item.turn).." | "..item.category.." | "..tostring(item.title).." | "..tostring(item.result)
+                ).SetColor(item.color);
+                if tostring(item.detail or "")~="" then UI.CreateLabel(area).SetText(tostring(item.detail)).SetColor("#BBBBBB"); end
+            end
+        end
+        UI.CreateButton(area).SetText("OPEN ALL SECURITY REPORTS").SetPreferredHeight(40).SetOnClick(function()
+            ShowStrategicReportsMenu(parent,game,"all");
+        end);
         UI.CreateLabel(area).SetText("----------------------------------------");
     end
 
@@ -6173,11 +6196,13 @@ function ShowFindPartners(parent, game)
     local ourID=GetLocalPlayerID(game); local ourAgreementCount=CountOurActiveAgreements(data,game);
     if ourAgreementCount>=ClientMaxAgreements() then UI.CreateLabel(area).SetText("You already have the maximum number of active Trade Agreements.").SetColor("#FFB366"); return; end
     UI.CreateLabel(area).SetText("Search by nation name. Every result shows exact Commerce income and your projected trade bonus.").SetColor("#BBBBBB");
-    local search=CreateWideTextInput(area,240).SetPlaceholderText("Search nation...");
-    local filters=UI.CreateHorizontalLayoutGroup(area); local host=UI.CreateVerticalLayoutGroup(area);
+    local search=CreateWideTextInput(area,300).SetPlaceholderText("Search nation...");
+    local filters=nil; local host=UI.CreateVerticalLayoutGroup(area);
     local refresh=nil;
-    for _,fd in ipairs({{"ALL","ALL"},{"PLAYER","PLAYERS"},{"AI","AI"},{"AVAILABLE","AVAILABLE"},{"EXISTING","EXISTING"}}) do
-        local key,label=fd[1],fd[2]; UI.CreateButton(filters).SetText((TradePartnerFilter==key and "▶ " or "")..label).SetOnClick(function() TradePartnerFilter=key; refresh(); end);
+    for index,fd in ipairs({{"ALL","ALL"},{"PLAYER","PLAYERS"},{"AI","AI"},{"AVAILABLE","AVAILABLE"},{"EXISTING","EXISTING"}}) do
+        if (index-1)%2==0 then filters=UI.CreateHorizontalLayoutGroup(area); end
+        local key,label=fd[1],fd[2];
+        UI.CreateButton(filters).SetText((TradePartnerFilter==key and "▶ " or "")..label).SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function() TradePartnerFilter=key; refresh(); end);
     end
     local function relationState(targetID)
         local hasAgreement=false; for _,a in pairs(data.activeAgreements or {}) do if (a.player1==ourID and a.player2==targetID) or (a.player1==targetID and a.player2==ourID) then hasAgreement=true; break; end end
@@ -6195,10 +6220,13 @@ function ShowFindPartners(parent, game)
             if match and (q=="" or string.find(string.lower(name),q,1,true)) then table.insert(list,{id=pid,name=name,p=p,ag=ag,pend=pend,count=count,cd=cd,available=available}); end
         end end
         table.sort(list,function(a,b) return a.name<b.name; end); if #list==0 then UI.CreateLabel(host).SetText("No nations match this search/filter.").SetColor("#888888"); return; end
-        for _,x in ipairs(list) do local income=GetPlayerIncome(game,x.id) or 0; local bonus=CalculateTradeBonus(income); local g=UI.CreateHorizontalLayoutGroup(host);
+        for _,x in ipairs(list) do local income=GetPlayerIncome(game,x.id) or 0; local bonus=CalculateTradeBonus(income); local g=UI.CreateVerticalLayoutGroup(host);
             local status=x.ag and "ACTIVE" or (x.pend and "PENDING" or (x.cd>0 and ("COOLDOWN "..tostring(x.cd)) or (x.count>=ClientMaxAgreements() and "AT LIMIT" or "AVAILABLE")));
-            UI.CreateLabel(g).SetText(x.name.." | "..(x.p.IsAI and "AI" or "Player").." | Income "..tostring(income).." | Your bonus +"..tostring(bonus).."/turn | "..status).SetColor(x.available and "#8FD694" or "#DDDDDD");
-            if x.available then local tid=x.id; UI.CreateButton(g).SetText("PROPOSE").SetOnClick(function() SafeSendGameCustomMessage(game,"Sending trade proposal...",{type="proposeTrade",targetPlayerID=tid},function(r) if r and r.message then UI.Alert(r.message); end; ShowFindPartners(parent,game); end); end); end
+            UI.CreateLabel(g).SetText(x.name.." | "..(x.p.IsAI and "AI" or "PLAYER")).SetColor(GetPlayerUIColor(game,x.id,"#FFFFFF"));
+            UI.CreateLabel(g).SetText("Income: "..tostring(income).." | Your bonus: +"..tostring(bonus).."/turn").SetColor(x.available and "#8FD694" or "#DDDDDD");
+            UI.CreateLabel(g).SetText("Status: "..status).SetColor(x.available and "#79D279" or "#FFB366");
+            if x.available then local tid=x.id; UI.CreateButton(g).SetText("PROPOSE TRADE").SetPreferredHeight(38).SetOnClick(function() SafeSendGameCustomMessage(game,"Sending trade proposal...",{type="proposeTrade",targetPlayerID=tid},function(r) if r and r.message then UI.Alert(r.message); end; ShowFindPartners(parent,game); end); end); end
+            UI.CreateLabel(g).SetText("----------------------------------------").SetColor("#555555");
         end
     end
     search.SetOnValueChanged(function() refresh(); end); refresh();
@@ -7278,6 +7306,64 @@ local acquisitionPremium = tonumber(GetClientSetting("AcquisitionPremiumPercent"
 local estimatedAcquisitionPrice = math.max(1, math.floor(((tonumber(company.marketCap) or ((tonumber(company.currentPrice) or 1)*(tonumber(company.totalShares) or 100))) * acquisitionPremium / 100) + 0.5));
 market.acquisitionOffers = market.acquisitionOffers or {};
 local companyOffers = market.acquisitionOffers[companyID] or {};
+local targetMarketCap = math.max(0,tonumber(company.marketCap) or ((tonumber(company.currentPrice) or 1)*(tonumber(company.totalShares) or 100)));
+local totalSharesForAcquisition = math.max(1,tonumber(company.totalShares) or 100);
+local activeCompanyCount=0; local activeMarketCapTotal=0; local targetMarketRank=1;
+for _,peer in pairs(market.companies or {}) do
+    if peer and peer.active==true and peer.delisted~=true and peer.status=="trading" then
+        local peerCap=math.max(0,tonumber(peer.marketCap) or ((tonumber(peer.currentPrice) or 1)*(tonumber(peer.totalShares) or 100)));
+        activeCompanyCount=activeCompanyCount+1;
+        activeMarketCapTotal=activeMarketCapTotal+peerCap;
+        if peerCap>targetMarketCap then targetMarketRank=targetMarketRank+1; end
+    end
+end
+local averageActiveMarketCap=activeCompanyCount>0 and math.floor(activeMarketCapTotal/activeCompanyCount+0.5) or targetMarketCap;
+local acquisitionBoost=math.max(0,tonumber(GetClientSetting("AcquisitionBuyerStockBoostPercent",15)) or 15);
+local localTargetShares=math.max(0,tonumber((((economy.nations or {})[localPlayerID] or {}).stockHoldings or {})[companyID]) or 0);
+
+UI.CreateLabel(area).SetText("VALUE COMPARISON").SetColor("#FFD166");
+UI.CreateLabel(area).SetText("Target market cap: "..tostring(targetMarketCap).." Commerce").SetColor("#DDDDDD");
+UI.CreateLabel(area).SetText("Market position: #"..tostring(targetMarketRank).." of "..tostring(activeCompanyCount).." | Active-company average: "..tostring(averageActiveMarketCap)).SetColor("#9CCBFF");
+UI.CreateLabel(area).SetText("Offer formula: "..tostring(acquisitionPremium).."% of market cap = "..tostring(estimatedAcquisitionPrice).." Commerce").SetColor("#FFB366");
+
+local function ShowAcquisitionImpact(buyerID,offerPrice)
+    local finalPrice=math.max(1,math.floor(tonumber(offerPrice) or estimatedAcquisitionPrice));
+    local payoutPerShare=finalPrice/totalSharesForAcquisition;
+    UI.CreateLabel(area).SetText("TARGET INVESTORS").SetColor("#79D279");
+    UI.CreateLabel(area).SetText("Estimated cash payout: "..string.format("%.2f",payoutPerShare).." Commerce per target share.").SetColor("#BBBBBB");
+    if localTargetShares>0 then
+        UI.CreateLabel(area).SetText("Your "..tostring(localTargetShares).." target shares: "..tostring(math.floor(payoutPerShare*localTargetShares)).." Commerce cash-out.").SetColor("#79D279");
+    end
+    if company.ownerPlayerID==localPlayerID then
+        local paidToOtherShareholders=0;
+        for holderID,holderNation in pairs(economy.nations or {}) do
+            if holderID~=localPlayerID then
+                local holderShares=math.max(0,tonumber(((holderNation.stockHoldings or {})[companyID])) or 0);
+                paidToOtherShareholders=paidToOtherShareholders+math.floor(payoutPerShare*holderShares);
+            end
+        end
+        local projectedSellerTotal=math.max(0,finalPrice-paidToOtherShareholders);
+        UI.CreateLabel(area).SetText("SELLER SETTLEMENT").SetColor("#FFD166");
+        UI.CreateLabel(area).SetText("Other shareholders: "..tostring(paidToOtherShareholders).." Commerce | Your projected total proceeds: "..tostring(projectedSellerTotal).." Commerce.").SetColor("#FFD166");
+        UI.CreateLabel(area).SetText("Your total includes your own share cash-out plus the remaining company-sale value.").SetColor("#BBBBBB");
+    end
+
+    local buyerNation=(economy.nations or {})[buyerID] or {};
+    local buyerCompanyID=buyerNation.flagshipCompanyID;
+    local buyerCompany=buyerCompanyID and (market.companies or {})[buyerCompanyID] or nil;
+    UI.CreateLabel(area).SetText("BUYER FLAGSHIP IMPACT").SetColor("#67D5FF");
+    if buyerCompany and buyerCompany.active==true and buyerCompany.delisted~=true then
+        local oldPrice=math.max(1,tonumber(buyerCompany.currentPrice or buyerCompany.startingPrice) or 1);
+        local newPrice=math.max(1,math.floor(oldPrice*(1+acquisitionBoost/100)+0.5));
+        local gainPerShare=newPrice-oldPrice;
+        local oldConfidence=math.max(0,math.min(100,tonumber(buyerCompany.confidence) or 50));
+        local newConfidence=math.min(100,oldConfidence+8);
+        UI.CreateLabel(area).SetText(tostring(buyerCompany.name or "Buyer flagship")..": "..tostring(oldPrice).." → "..tostring(newPrice).." per share ("..tostring(acquisitionBoost).."% setting).").SetColor("#67D5FF");
+        UI.CreateLabel(area).SetText("Each existing buyer-flagship share gains about "..tostring(gainPerShare).." in displayed value; confidence "..tostring(oldConfidence).." → "..tostring(newConfidence)..". This is market value, not an immediate cash dividend.").SetColor("#BBBBBB");
+    else
+        UI.CreateLabel(area).SetText(GetPlayerName(game,buyerID).." has no active flagship to receive the stock-price and confidence boost.").SetColor("#888888");
+    end
+end
 
 UI.CreateLabel(area).SetText("----------------------------------------");
 UI.CreateLabel(area).SetText("FLAGSHIP ACQUISITION").SetColor("#FFB366");
@@ -7295,26 +7381,27 @@ if company.ownerPlayerID == localPlayerID then
     for buyerID,offer in pairs(companyOffers) do
         if offer and offer.status=="pending" then
             offerCount=offerCount+1;
+            UI.CreateLabel(area).SetText(GetPlayerName(game,buyerID).." | Offer: "..tostring(offer.price or 0).." Commerce").SetColor(GetPlayerUIColor(game,buyerID,"#FFFFFF"));
             local row=UI.CreateHorizontalLayoutGroup(area);
-            UI.CreateLabel(row).SetText(GetPlayerName(game,buyerID).." | Offer: "..tostring(offer.price or 0).." Commerce").SetColor(GetPlayerUIColor(game,buyerID,"#FFFFFF"));
-            UI.CreateButton(row).SetText("ACCEPT").SetOnClick(function()
+            UI.CreateButton(row).SetText("ACCEPT").SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function()
                 SafeSendGameCustomMessage(game,"Accepting acquisition...",{type="acceptAcquisitionOffer",companyID=companyID,buyerID=buyerID},function(result)
                     if result and result.message then UI.Alert(result.message); end
                     ShowMarketsMenu(parent,game);
                 end);
             end);
-            UI.CreateButton(row).SetText("REJECT").SetOnClick(function()
+            UI.CreateButton(row).SetText("REJECT").SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function()
                 SafeSendGameCustomMessage(game,"Rejecting acquisition...",{type="rejectAcquisitionOffer",companyID=companyID,buyerID=buyerID},function(result)
                     if result and result.message then UI.Alert(result.message); end
                     ShowCompanyDetails(parent,game,companyID);
                 end);
             end);
+            ShowAcquisitionImpact(buyerID,offer.price);
         end
     end
     if offerCount==0 then UI.CreateLabel(area).SetText("No pending acquisition offers.").SetColor("#888888"); end
 elseif company.allowAcquisitionOffers == true then
     UI.CreateLabel(area).SetText("Estimated acquisition offer: "..tostring(estimatedAcquisitionPrice).." Commerce").SetColor("#FFD166");
-    UI.CreateLabel(area).SetText("If accepted, existing shareholders receive a buyout payout and the buyer's flagship receives a stock-price/confidence boost.").SetColor("#BBBBBB");
+    ShowAcquisitionImpact(localPlayerID,estimatedAcquisitionPrice);
     UI.CreateButton(area).SetText("MAKE ACQUISITION OFFER").SetInteractable(not viewerMode).SetOnClick(function()
         SafeSendGameCustomMessage(game,"Sending acquisition offer...",{type="makeAcquisitionOffer",companyID=companyID},function(result)
             if result and result.message then UI.Alert(result.message); end
@@ -8883,7 +8970,7 @@ if mostTradedCompany ~= nil
 
 end
 UI.CreateLabel(area).SetText("----------------------------------------");
-UI.CreateLabel(area).SetText("TOP 5 GAINERS / TOP 5 DECLINERS");
+UI.CreateLabel(area).SetText("STOCK RANKINGS").SetColor("#FFFFFF");
 
 local rankedMoves = {};
 for _, company in pairs(companies) do
@@ -8896,7 +8983,7 @@ for _, company in pairs(companies) do
 end
 table.sort(rankedMoves, function(a,b) return a.pct > b.pct; end);
 
-UI.CreateLabel(area).SetText("TOP 5 STOCKS").SetColor("#32CD32");
+UI.CreateLabel(area).SetText("TOP 5 GROWTH STOCKS").SetColor("#32CD32");
 for i=1,math.min(5,#rankedMoves) do
     local entry = rankedMoves[i];
     local company = entry.company;
@@ -8904,9 +8991,34 @@ for i=1,math.min(5,#rankedMoves) do
     UI.CreateLabel(area).SetText(
         tostring(i) .. ". " .. tostring(company.name or "Company") ..
         " | " .. string.format("%+.1f%%", entry.pct) ..
+        " | Price " .. string.format("%.2f",tonumber(company.currentPrice or company.startingPrice) or 0) ..
         " | Confidence " .. tostring(math.floor((company.confidence or 50)+0.5)) .. "%" ..
         " | Unrest " .. tostring(math.floor((ownerNation.resourceUnrest or 0)+0.5))
     );
+end
+
+local rankedDividends={};
+for _,company in pairs(companies) do
+    if company.active==true and company.delisted~=true then
+        local price=math.max(0.01,tonumber(company.currentPrice or company.startingPrice) or 0.01);
+        local dividend=math.max(0,tonumber(company.dividendPerShare) or 0);
+        table.insert(rankedDividends,{company=company,dividend=dividend,yield=(dividend/price)*100});
+    end
+end
+table.sort(rankedDividends,function(a,b)
+    if a.dividend==b.dividend then return a.yield>b.yield; end
+    return a.dividend>b.dividend;
+end);
+UI.CreateLabel(area).SetText("TOP 5 DIVIDEND STOCKS").SetColor("#79D279");
+if #rankedDividends==0 then UI.CreateLabel(area).SetText("No active dividend stocks yet.").SetColor("#888888"); end
+for i=1,math.min(5,#rankedDividends) do
+    local entry=rankedDividends[i]; local company=entry.company;
+    UI.CreateLabel(area).SetText(
+        tostring(i)..". "..tostring(company.name or "Company")..
+        " | "..string.format("%.2f",entry.dividend).." Commerce/share"..
+        " | Yield "..string.format("%.2f%%",entry.yield)..
+        " | Total paid "..tostring(company.totalDividendsPaid or 0)
+    ).SetColor(entry.dividend>0 and "#79D279" or "#BBBBBB");
 end
 
 UI.CreateLabel(area).SetText("TOP 5 DOWNTREND STOCKS").SetColor("#FF4C4C");
@@ -9020,7 +9132,7 @@ UI.CreateLabel(area)
 
 end
 
-function ShowMarketNews(
+function ShowMarketNewsLegacy(
     parent,
     game
 )
@@ -9167,6 +9279,73 @@ elseif entry.type == "etf_dividend" or entry.type == "etf_bonus" then
 
     end
 
+end
+
+function ShowMarketNews(parent,game)
+    local area=CreateContentArea(parent);
+    local data=Mod.PublicGameData or {};
+    local economy=data.globalEconomy or {};
+    local market=economy.market or {};
+
+    UI.CreateLabel(area).SetText("MARKET & GLOBAL ECONOMY NEWS").SetColor("#67D5FF");
+    UI.CreateLabel(area).SetText("Acquisitions, stock events, dividends, trade, investments, and global economic activity in one feed.").SetColor("#BBBBBB");
+    UI.CreateButton(area).SetText("BACK TO MARKET").SetOnClick(function() ShowMarketsMenu(parent,game); end);
+
+    local filters={{"ALL","ALL"},{"BIG EVENTS","BIG"},{"STOCKS","STOCKS"},{"DIVIDENDS","DIVIDENDS"},{"GLOBAL ECONOMY","GLOBAL"}};
+    local filterRow=nil;
+    for index,item in ipairs(filters) do
+        if (index-1)%2==0 then filterRow=UI.CreateHorizontalLayoutGroup(area); end
+        local label,value=item[1],item[2];
+        UI.CreateButton(filterRow).SetText((MarketNewsFilter==value and "▶ " or "")..label).SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function()
+            MarketNewsFilter=value; ShowMarketNews(parent,game);
+        end);
+    end
+    UI.CreateLabel(area).SetText("----------------------------------------");
+
+    local combined={}; local seen={}; local sequence=0;
+    local labels={acquisition="ACQUISITION",stock_split="STOCK SPLIT",etf_rebalance="ETF REBALANCE",war_bond="WAR BOND",major_move="PRICE MOVE",dividend="DIVIDEND",etf_dividend="ETF DIVIDEND",etf_bonus="ETF BONUS"};
+    local function addEntry(turn,eventType,message,category,color,priority)
+        local key=tostring(turn).."|"..tostring(message);
+        if seen[key] then return; end
+        seen[key]=true; sequence=sequence+1;
+        table.insert(combined,{turn=tonumber(turn) or 0,eventType=tostring(eventType or "update"),message=tostring(message or "Economic update."),category=category or "GLOBAL",color=color or "#BBBBBB",priority=priority or 1,sequence=sequence});
+    end
+    for _,entry in ipairs(market.news or {}) do
+        local typ=tostring(entry.type or "market_update");
+        local category="STOCKS"; local color="#62B6FF"; local priority=2;
+        if typ=="acquisition" then category="BIG"; color="#FFB347"; priority=5;
+        elseif typ=="stock_split" or typ=="etf_rebalance" or typ=="war_bond" then category="BIG"; color="#D4AF37"; priority=4;
+        elseif typ=="dividend" or typ=="etf_dividend" or typ=="etf_bonus" then category="DIVIDENDS"; color="#79D279"; priority=3;
+        elseif typ=="major_move" then category="STOCKS"; priority=3; color=string.find(string.lower(tostring(entry.message or "")),"fell",1,true) and "#FF7B7B" or "#32CD32"; end
+        addEntry(entry.turn,typ,entry.message,category,color,priority);
+    end
+    for _,entry in ipairs(data.tradeHistory or {}) do
+        local typ=tostring(entry.type or "economic_update");
+        local category=GetEventCategory(typ);
+        local label=(category=="investments" or category=="success" or category=="failed") and "INVESTMENT" or (category=="ai" and "AI ECONOMY" or "TRADE");
+        local color=(category=="success" and "#79D279") or (category=="failed" and "#FF7B7B") or (category=="investments" and "#D995FF") or "#81C784";
+        addEntry(entry.turn,label,entry.message,"GLOBAL",color,2);
+    end
+    for _,entry in ipairs(economy.worldEvents or {}) do
+        addEntry(entry.turn,entry.type or "WORLD EVENT",entry.headline or entry.message,"GLOBAL","#9CCBFF",2);
+    end
+    table.sort(combined,function(a,b)
+        if a.turn==b.turn then if a.priority==b.priority then return a.sequence>b.sequence; end; return a.priority>b.priority; end
+        return a.turn>b.turn;
+    end);
+
+    local shown=0;
+    for _,entry in ipairs(combined) do
+        local passes=MarketNewsFilter=="ALL" or entry.category==MarketNewsFilter;
+        if passes and shown<25 then
+            local typeLabel=labels[entry.eventType] or string.upper(string.gsub(entry.eventType,"_"," "));
+            UI.CreateLabel(area).SetText("TURN "..tostring(entry.turn).." | "..typeLabel).SetColor(entry.color);
+            UI.CreateLabel(area).SetText(entry.message).SetColor("#DDDDDD");
+            UI.CreateLabel(area).SetText("----------------------------------------").SetColor("#444444");
+            shown=shown+1;
+        end
+    end
+    if shown==0 then UI.CreateLabel(area).SetText("No news matches this category yet.").SetColor("#888888"); end
 end
 
 function ShowMarketETF(
@@ -13780,8 +13959,15 @@ local function UFV4PlayerButtons(area,game,title,onPick)
     table.sort(ids,function(a,b) return tostring(GetPlayerName(game,a))<tostring(GetPlayerName(game,b)); end);
     local row=nil;
     for i,pid in ipairs(ids) do
-        if (i-1)%4==0 then row=UI.CreateHorizontalLayoutGroup(area); end
-        local captured=pid; UI.CreateButton(row).SetText(GetPlayerName(game,pid)).SetOnClick(function() onPick(captured); end); shown=shown+1;
+        if (i-1)%3==0 then row=UI.CreateHorizontalLayoutGroup(area); end
+        local captured=pid;
+        UI.CreateButton(row)
+            .SetText(GetPlayerName(game,pid))
+            .SetTextColor(GetPlayerUIColor(game,pid,"#FFFFFF"))
+            .SetFlexibleWidth(1)
+            .SetPreferredHeight(38)
+            .SetOnClick(function() onPick(captured); end);
+        shown=shown+1;
     end
     if shown==0 then UI.CreateLabel(area).SetText("No eligible nations.").SetColor("#888888"); end
 end
@@ -13804,7 +13990,7 @@ function ShowIntelligenceTargetMenu(parent,game,mode)
     UI.CreateButton(area).SetText("BACK TO INTELLIGENCE AGENCY").SetOnClick(function() ShowIntelligenceAgencyMenu(parent,game); end);
 end
 
-function ShowStrategicReportsMenu(parent,game,focus)
+function ShowStrategicReportsMenuLegacy(parent,game,focus)
     local area=CreateContentArea(parent); local state=UFPrivateMilitaryState(); local turn=tonumber((((Mod.PublicGameData or {}).globalEconomy or {}).currentEconomyTurn)) or 0;
     UI.CreateLabel(area).SetText("STRATEGIC REPORTS").SetColor("#FFD166");
     UI.CreateLabel(area).SetText("Latest intelligence, counterintelligence, and missile results in one place.").SetColor("#BBBBBB");
@@ -13827,6 +14013,59 @@ function ShowStrategicReportsMenu(parent,game,focus)
         UI.CreateLabel(area).SetText(tostring(r.detail or "")).SetColor("#BBBBBB");
     end end
     local w=state.strategicWarnings or {}; if #w>0 then UI.CreateLabel(area).SetText("ADVANCE WARNINGS — INTELLIGENCE LV.3").SetColor("#FF6B6B"); for i=#w,math.max(1,#w-4),-1 do UI.CreateLabel(area).SetText("Turn "..tostring(w[i].turn or "?").." | "..tostring(w[i].text or "Warning")).SetColor("#FFB3B3"); end end
+    UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
+end
+
+function ShowStrategicReportsMenu(parent,game,focus)
+    local area=CreateContentArea(parent); local state=UFPrivateMilitaryState();
+    if focus=="all" then StrategicReportFilter="ALL";
+    elseif focus=="intel" or focus=="CyberFacility" then StrategicReportFilter="INTEL";
+    elseif focus=="missile" or focus=="MissileSilo" then StrategicReportFilter="MISSILE";
+    elseif focus=="air" then StrategicReportFilter="AIR"; end
+    UI.CreateLabel(area).SetText("SECURITY & MISSION REPORTS").SetColor("#FFD166");
+    UI.CreateLabel(area).SetText("Intelligence, cyber defense, missile/silo activity, air missions, and advance warnings in one readable feed.").SetColor("#BBBBBB");
+
+    local filters={{"ALL","ALL"},{"INTEL / CYBER","INTEL"},{"MISSILES / SILOS","MISSILE"},{"AIR MISSIONS","AIR"},{"WARNINGS","WARNING"}};
+    local row=nil;
+    for index,item in ipairs(filters) do
+        if (index-1)%2==0 then row=UI.CreateHorizontalLayoutGroup(area); end
+        local label,value=item[1],item[2];
+        UI.CreateButton(row).SetText((StrategicReportFilter==value and "▶ " or "")..label).SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function()
+            StrategicReportFilter=value; ShowStrategicReportsMenu(parent,game);
+        end);
+    end
+
+    local pending=0;
+    for _,alert in ipairs(state.counterIntelAlerts or {}) do if tostring(alert.status or "")=="PENDING" then pending=pending+1; end end
+    UI.CreateLabel(area).SetText("Pending counterintelligence decisions: "..tostring(pending)).SetColor(pending>0 and "#FF7B7B" or "#8FD694");
+    local events={}; local sequence=0;
+    local function add(category,turn,title,result,detail,color,report)
+        sequence=sequence+1; table.insert(events,{category=category,turn=tonumber(turn) or 0,title=tostring(title or "Report"),result=tostring(result or "REPORT"),detail=tostring(detail or ""),color=color,sequence=sequence,report=report});
+    end
+    for _,report in ipairs(state.intelligenceReports or {}) do
+        local color=(report.result=="SUCCESS" and "#79D279") or ((report.result=="FAILED" or report.result=="BLOCKED" or report.result=="BACKFIRED") and "#FF7B7B") or "#FFD166";
+        add("INTEL",report.turn,report.title,report.result,report.detail,color,report);
+    end
+    for _,report in ipairs(state.hqRecentResults or {}) do add("MISSILE",report.turn,report.action or "Strategic Event",report.result,report.detail,"#FF9B71",report); end
+    for _,report in ipairs(state.airWingReports or {}) do add("AIR",report.turn,report.mission or "Air Mission",report.result,(report.target and ("Target: "..tostring(report.target).." | ") or "")..tostring(report.detail or ""),"#82CFFF",report); end
+    for _,warning in ipairs(state.strategicWarnings or {}) do add("WARNING",warning.turn,"Advance Warning","URGENT",warning.text,"#FF6B6B",warning); end
+    table.sort(events,function(a,b) if a.turn==b.turn then return a.sequence>b.sequence; end; return a.turn>b.turn; end);
+
+    local shown=0;
+    for _,event in ipairs(events) do
+        if (StrategicReportFilter=="ALL" or event.category==StrategicReportFilter) and shown<20 then
+            UI.CreateLabel(area).SetText("TURN "..tostring(event.turn).." | "..event.category.." | "..event.title.." | "..event.result).SetColor(event.color);
+            if event.detail~="" then UI.CreateLabel(area).SetText(event.detail).SetColor("#BBBBBB"); end
+            local report=event.report;
+            if event.category=="INTEL" and report and report.result=="SUCCESS" and report.incoming~=true and report.shared~=true then
+                local rid=tostring(report.id or ""); UI.CreateButton(area).SetText("SHARE WITH FACTION").SetOnClick(function()
+                    SafeSendGameCustomMessage(game,"Sharing intelligence...",{type="shareIntelReport",reportID=rid},function(x) if x and x.message then UI.Alert(x.message); end; ShowStrategicReportsMenu(parent,game); end);
+                end);
+            end
+            UI.CreateLabel(area).SetText("----------------------------------------").SetColor("#444444"); shown=shown+1;
+        end
+    end
+    if shown==0 then UI.CreateLabel(area).SetText("No reports match this category yet.").SetColor("#888888"); end
     UI.CreateButton(area).SetText("BACK TO MILITARY").SetOnClick(function() ShowMilitaryMenu(parent,game); end);
 end
 
@@ -13917,16 +14156,29 @@ end
 function ShowMilitaryMenu(parent,game)
     local area=CreateContentArea(parent); local state=UFPrivateMilitaryState(); local intel=(Mod.PlayerGameData or {}).strategicIntel or {};
     UI.CreateLabel(area).SetText("MILITARY").SetColor("#8FBF6F");
-    local quick=UI.CreateHorizontalLayoutGroup(area);
-    UI.CreateButton(quick).SetText("RECRUITMENT").SetOnClick(function() ShowArmyRecruitersMenu(parent,game); end);
-    if GetClientSetting("CyberFacilitiesEnabled",true) then UI.CreateButton(quick).SetText("INTELLIGENCE AGENCY").SetOnClick(function() ShowIntelligenceAgencyMenu(parent,game); end); end
-    if GetClientSetting("MissileSilosEnabled",true) then UI.CreateButton(quick).SetText("MISSILE COMMAND & DEFENSE").SetOnClick(function() ShowMissileCommandMenu(parent,game); end); end
-    UI.CreateButton(quick).SetText("REPORTS").SetOnClick(function() ShowStrategicReportsMenu(parent,game); end);
+    local quickActions = {
+        {"RECRUITMENT", function() ShowArmyRecruitersMenu(parent,game); end},
+        {"INTELLIGENCE", function() ShowIntelligenceAgencyMenu(parent,game); end, GetClientSetting("CyberFacilitiesEnabled",true)},
+        {"MISSILES", function() ShowMissileCommandMenu(parent,game); end, GetClientSetting("MissileSilosEnabled",true)},
+        {"REPORTS", function() ShowStrategicReportsMenu(parent,game); end}
+    };
+    local quick=nil; local quickIndex=0;
+    for _,entry in ipairs(quickActions) do
+        if entry[3]~=false then
+            if quickIndex%2==0 then quick=UI.CreateHorizontalLayoutGroup(area); end
+            quickIndex=quickIndex+1;
+            UI.CreateButton(quick).SetText(entry[1]).SetFlexibleWidth(1).SetPreferredHeight(42).SetOnClick(entry[2]);
+        end
+    end
 
     UI.CreateLabel(area).SetText("MILITARY INFRASTRUCTURE").SetColor("#8FBF6F");
     UI.CreateLabel(area).SetText("Power Grids and Intelligence Agencies are private. Foreign details appear only when legitimately discovered.").SetColor("#BBBBBB");
-    local filterRow=UI.CreateHorizontalLayoutGroup(area); local filters={{"My Infrastructure","MY INFRASTRUCTURE"},{"Neighbors","NEIGHBORS"},{"Shared Intel","ALLY / FACTION"},{"All Known","ALL KNOWN"}};
-    for _,fd in ipairs(filters) do local key,label=fd[1],fd[2]; UI.CreateButton(filterRow).SetText((MilitaryIntelFilter==key and "▶ " or "")..label).SetOnClick(function() MilitaryIntelFilter=key; ShowMilitaryMenu(parent,game); end); end
+    local filterRow=nil; local filters={{"My Infrastructure","MY ASSETS"},{"Neighbors","NEIGHBORS"},{"Shared Intel","ALLY / FACTION"},{"All Known","ALL KNOWN"}};
+    for index,fd in ipairs(filters) do
+        if (index-1)%2==0 then filterRow=UI.CreateHorizontalLayoutGroup(area); end
+        local key,label=fd[1],fd[2];
+        UI.CreateButton(filterRow).SetText((MilitaryIntelFilter==key and "▶ " or "")..label).SetFlexibleWidth(1).SetPreferredHeight(40).SetOnClick(function() MilitaryIntelFilter=key; ShowMilitaryMenu(parent,game); end);
+    end
 
     local function addOwn(kind,tid,lvl)
         local td=game.Map and game.Map.Territories and game.Map.Territories[tid] or nil; local hp,maxHP=UFV4AssetHP(state,kind,tid,lvl); local row=UI.CreateHorizontalLayoutGroup(area); local name=UFV4StructureName(kind);
@@ -13971,9 +14223,15 @@ function ShowFactionMenu(parent,game)
     local alerts=((dip.factionAlerts or {})[ourID]) or {}; for i=#alerts,1,-1 do local a=alerts[i]; if a and a.seen~=true then UI.CreateLabel(area).SetText("⚠ "..tostring(a.kind or "FACTION NOTICE").." | "..tostring(a.text or "New Faction event")).SetColor("#FFB366"); local aid=tostring(a.id or ""); UI.CreateButton(area).SetText("ACKNOWLEDGE").SetOnClick(function() SafeSendGameCustomMessage(game,"Acknowledging...",{type="ackFactionAlert",alertID=aid},function(r) ShowFactionMenu(parent,game); end); end); break; end end
     UI.CreateLabel(area).SetText("FACTION DIRECTORY").SetColor("#9CCBFF"); local ids={}; for id,_ in pairs(factions) do table.insert(ids,id); end; table.sort(ids,function(a,b) return tonumber(a or 0)<tonumber(b or 0); end);
     if #ids==0 then UI.CreateLabel(area).SetText("No Factions have been created yet.").SetColor("#888888"); end
-    for _,fid in ipairs(ids) do local f=factions[fid]; local count=0; local names={}; for pid,v in pairs(f.members or {}) do if v then count=count+1; table.insert(names,GetPlayerName(game,pid)); end end; table.sort(names); local leader=GetPlayerName(game,f.leaderPlayerID); local n=((economy.nations or {})[f.leaderPlayerID]) or {}; local ideology=tostring(n.ideology or "Mixed / Unknown");
-        UI.CreateLabel(area).SetText(tostring(f.name or ("Faction "..tostring(fid))).." | Leader: "..leader.." | Members: "..tostring(count).." | Alignment: "..ideology).SetColor(fid==ourFID and "#79D279" or "#DDEEFF");
-        UI.CreateLabel(area).SetText(table.concat(names," | ")).SetColor("#888888");
+    for _,fid in ipairs(ids) do local f=factions[fid]; local count=0; local memberIDs={}; for pid,v in pairs(f.members or {}) do if v then count=count+1; table.insert(memberIDs,pid); end end; table.sort(memberIDs,function(a,b) return tostring(GetPlayerName(game,a))<tostring(GetPlayerName(game,b)); end); local leader=GetPlayerName(game,f.leaderPlayerID); local n=((economy.nations or {})[f.leaderPlayerID]) or {}; local ideology=tostring(n.ideology or "Mixed / Unknown");
+        UI.CreateLabel(area).SetText(tostring(f.name or ("Faction "..tostring(fid)))).SetColor(fid==ourFID and "#79D279" or "#DDEEFF");
+        UI.CreateLabel(area).SetText("Leader: "..leader.." | Members: "..tostring(count)).SetColor(GetPlayerUIColor(game,f.leaderPlayerID,"#FFFFFF"));
+        UI.CreateLabel(area).SetText("Alignment: "..ideology).SetColor("#D4AF37");
+        local memberRow=nil;
+        for index,pid in ipairs(memberIDs) do
+            if (index-1)%3==0 then memberRow=UI.CreateHorizontalLayoutGroup(area); end
+            UI.CreateLabel(memberRow).SetText(GetPlayerName(game,pid)).SetColor(GetPlayerUIColor(game,pid,"#FFFFFF")).SetFlexibleWidth(1);
+        end
         if our==nil then local cfid=fid; UI.CreateButton(area).SetText("REQUEST TO JOIN").SetOnClick(function() SafeSendGameCustomMessage(game,"Sending join request...",{type="requestJoinFaction",factionID=cfid},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); end
     end
     if our==nil then
@@ -13982,7 +14240,7 @@ function ShowFactionMenu(parent,game)
         UI.CreateLabel(area).SetText("YOUR FACTION — "..tostring(our.name or ourFID)).SetColor("#79D279"); UI.CreateLabel(area).SetText("Leader: "..GetPlayerName(game,our.leaderPlayerID));
         UI.CreateLabel(area).SetText("MEMBERS").SetColor("#9CCBFF");
         for pid,v in pairs(our.members or {}) do if v then
-            local cp=pid; local rr=UI.CreateHorizontalLayoutGroup(area); local txt=GetPlayerName(game,pid)..(pid==our.leaderPlayerID and " | LEADER" or ""); UI.CreateLabel(rr).SetText(txt).SetFlexibleWidth(1);
+            local cp=pid; local rr=UI.CreateHorizontalLayoutGroup(area); local txt=GetPlayerName(game,pid)..(pid==our.leaderPlayerID and " | LEADER" or ""); UI.CreateLabel(rr).SetText(txt).SetColor(GetPlayerUIColor(game,pid,"#FFFFFF")).SetFlexibleWidth(1);
             if our.leaderPlayerID==ourID and pid~=ourID then
                 UI.CreateButton(rr).SetText("PROMOTE").SetOnClick(function() SafeSendGameCustomMessage(game,"Transferring leadership...",{type="promoteFactionLeader",targetPlayerID=cp},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end);
                 UI.CreateButton(rr).SetText("REMOVE").SetOnClick(function() SafeSendGameCustomMessage(game,"Removing member...",{type="removeFactionMember",targetPlayerID=cp},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end);
@@ -14012,11 +14270,23 @@ function ShowAIManagerMenu(parent,game)
     UI.CreateLabel(area).SetText("AI MANAGER").SetColor("#62B6FF"); UI.CreateButton(area).SetText("BACK TO OVERVIEW").SetOnClick(function() ShowOverview(parent,game); end);
     if GetClientSetting("PlayerAIManagerEnabled",true)~=true then UI.CreateLabel(area).SetText("Disabled by host.").SetColor("#FF7B7B"); return; end
     if nation==nil or nation.setupComplete~=true then UI.CreateLabel(area).SetText("Complete National Setup first.").SetColor("#FFD166"); return; end
-    UI.CreateLabel(area).SetText("Status: "..(nation.aiManagerEnabled==true and "ACTIVE" or "OFF").." | Recurring: "..tostring(nation.aiManagerBudget or 100).."/turn | One-time next turn: "..tostring(nation.aiManagerOneTimeBudget or 0)).SetColor(nation.aiManagerEnabled==true and "#79D279" or "#BBBBBB");
-    UI.CreateLabel(area).SetText("Last turn spent: "..tostring(nation.aiManagerSpentThisTurn or 0).." | Markets "..tostring(nation.aiManagerMarketSpentThisTurn or 0).." | Economy "..tostring(nation.aiManagerInvestmentSpentThisTurn or 0).." | Resources/Military "..tostring(nation.aiManagerMilitarySpentThisTurn or 0)).SetColor("#BBBBBB");
-    UI.CreateLabel(area).SetText("RECURRING BUDGET").SetColor("#FFD166"); local bi=CreateWideTextInput(area).SetText(tostring(nation.aiManagerBudget or 100)); local br=UI.CreateHorizontalLayoutGroup(area); for _,v in ipairs({100,250,500,1000,2500}) do local cv=v; UI.CreateButton(br).SetText(tostring(v)).SetOnClick(function() bi.SetText(tostring(cv)); end); end
+    UI.CreateLabel(area).SetText("Status: "..(nation.aiManagerEnabled==true and "ACTIVE" or "OFF")).SetColor(nation.aiManagerEnabled==true and "#79D279" or "#BBBBBB");
+    UI.CreateLabel(area).SetText("Recurring budget: "..tostring(nation.aiManagerBudget or 100).." per turn").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("One-time budget next turn: "..tostring(nation.aiManagerOneTimeBudget or 0)).SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("LAST TURN SPENDING").SetColor("#9CCBFF");
+    UI.CreateLabel(area).SetText("Total: "..tostring(nation.aiManagerSpentThisTurn or 0).." | Markets: "..tostring(nation.aiManagerMarketSpentThisTurn or 0)).SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Economy: "..tostring(nation.aiManagerInvestmentSpentThisTurn or 0).." | Resources/Military: "..tostring(nation.aiManagerMilitarySpentThisTurn or 0)).SetColor("#BBBBBB");
+    local function AddBudgetPresets(input,values)
+        local presetRow=nil;
+        for index,v in ipairs(values) do
+            if (index-1)%2==0 then presetRow=UI.CreateHorizontalLayoutGroup(area); end
+            local cv=v;
+            UI.CreateButton(presetRow).SetText(tostring(v)).SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function() input.SetText(tostring(cv)); end);
+        end
+    end
+    UI.CreateLabel(area).SetText("RECURRING BUDGET").SetColor("#FFD166"); local bi=CreateWideTextInput(area,300).SetText(tostring(nation.aiManagerBudget or 100)); AddBudgetPresets(bi,{100,250,500,1000,2500});
     UI.CreateButton(area).SetText("UPDATE / ACTIVATE").SetOnClick(function() local b=tonumber(bi.GetText()); if not b then UI.Alert("Enter a valid budget."); return; end; SafeSendGameCustomMessage(game,"Updating AI Manager...",{type="updateAIManager",enabled=true,budget=math.max(25,math.floor(b))},function(r) if r and r.message then UI.Alert(r.message); end; ShowAIManagerMenu(parent,game); end); end);
-    UI.CreateLabel(area).SetText("ONE-TIME EXTRA BUDGET").SetColor("#D7A6FF"); local oi=CreateWideTextInput(area).SetText(tostring(nation.aiManagerOneTimeBudget or 1000)); local orow=UI.CreateHorizontalLayoutGroup(area); for _,v in ipairs({500,1000,2500,5000}) do local cv=v; UI.CreateButton(orow).SetText(tostring(v)).SetOnClick(function() oi.SetText(tostring(cv)); end); end
+    UI.CreateLabel(area).SetText("ONE-TIME EXTRA BUDGET").SetColor("#D7A6FF"); local oi=CreateWideTextInput(area,300).SetText(tostring(nation.aiManagerOneTimeBudget or 1000)); AddBudgetPresets(oi,{500,1000,2500,5000});
     UI.CreateButton(area).SetText("AUTHORIZE NEXT TURN").SetOnClick(function() local b=tonumber(oi.GetText()); if not b then UI.Alert("Enter a valid amount."); return; end; SafeSendGameCustomMessage(game,"Authorizing one-time AI budget...",{type="fundAIManagerOnce",amount=math.floor(b)},function(r) if r and r.message then UI.Alert(r.message); end; ShowAIManagerMenu(parent,game); end); end);
     if nation.aiManagerEnabled==true then UI.CreateButton(area).SetText("PAUSE MANAGER NEXT TURN").SetOnClick(function() SafeSendGameCustomMessage(game,"Pausing AI Manager...",{type="updateAIManager",enabled=false,budget=nation.aiManagerBudget or 100},function(r) if r and r.message then UI.Alert(r.message); end; ShowAIManagerMenu(parent,game); end); end); end
     UI.CreateLabel(area).SetText("The manager prioritizes urgent needs, economy, resources, military, then market opportunities. Full rules are in How It Works.").SetColor("#888888");
@@ -14031,10 +14301,12 @@ function ShowHowItWorks(parent)
     end
     UI.CreateLabel(area).SetText("HOW UNITED FRONTIER WORKS").SetColor("#67D5FF");
     UI.CreateLabel(area).SetText("Deep strategy, simple controls: every action shows its cost, effect, and result.").SetColor("#FFFFFF");
-    Section("MARKETS — START HERE", "BUY SHARES opens the company list. Choose a flagship, open VIEW / TRADE COMPANY, choose a quantity, and review the total before buying. MY PORTFOLIO shows your holdings and selling options. GLOBAL ETF buys a fund rather than one company. INVESTMENTS funds projects; check their cost, deadline and risk.", "#67D5FF");
+    Section("MARKETS — START HERE", "BUY SHARES opens the company list. Choose a flagship, open VIEW / TRADE COMPANY, choose a quantity, and review the total before buying. PORTFOLIO shows holdings and selling options. OVERVIEW ranks Growth and Dividend stocks. NEWS & ECONOMY combines acquisitions, price events, dividends, trade, investments, and global activity.", "#67D5FF");
     Section("EXAMPLE: SHARE PURCHASE", "Illustrative prices: 5 shares at 20 Commerce cost 100 before any applicable fees. If the price later reaches 24, the holding is worth 120. If it falls to 16, it is worth 80. You realize the gain or loss by selling; dividends depend on the company and game settings.", "#79D279");
+    Section("MARKET RANKINGS — WHAT THE NUMBERS MEAN", "Top 5 Growth ranks the largest percentage price increases from the previous turn. Example: 20 → 24 is +20%. Top 5 Dividend ranks dividend Commerce paid per share and shows yield. Example: a 2 Commerce dividend at a 40 Commerce stock price is a 5% displayed yield. A high yield can still carry price risk.", "#79D279");
+    Section("EXAMPLE: FLAGSHIP ACQUISITION", "Illustrative host settings: target market cap 3,000 × 150% premium = 4,500 Commerce purchase price. With 100 total shares, the cash-out value is 45 per share. An investor holding 20 shares receives 900 Commerce automatically. All other shareholders are paid first; the seller receives the remaining sale value plus the cash-out on shares the seller held. If the buyer flagship is 30 and the boost setting is 15%, its new displayed price is 35 after rounding (+5/share), and confidence increases by 8. That price boost is market value, not an instant cash dividend.", "#FFB347");
     Section("EXAMPLE: RESOURCE SHORTAGE", "Production 4 minus need 7 leaves a deficit of 3. A stockpile of 5 covers this turn and leaves 2. Next turn, the same deficit would leave 1 uncovered. Increase production or arrange a resource contract before the reserve runs out.", "#FFD166");
-    Section("EXAMPLE: PLAYER ACTIONS", "Click a player name in Diplomacy. Their overview opens in a separate window with actions for that player. At peace, you may propose a pact or alliance; at war, you may offer peace. Existing pacts and alliances can restrict Declare War.", "#C792EA");
+    Section("EXAMPLE: PLAYER ACTIONS", "Click a player name in Diplomacy. Their mobile overview shows relationship, Commerce/turn, policy, agreements, flagship, discovered strategic assets, and up to 3 recent missions involving that player. Private assets are never exposed unless your nation legitimately discovered them. At peace, you may propose a pact or alliance; at war, you may offer peace.", "#C792EA");
     Section("1. GETTING STARTED","Complete National Setup. Your ideology, economic strategy, taxes, and company strategy show hard numerical effects before you confirm. If setup is left incomplete through the host deadline, missing choices are assigned automatically. An unfinished target is never immune from war.","#FFD166");
     Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence directly affects flagship market movement. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
     Section("3. RESOURCES","Resource locations are private. You learn them through ownership, borders, faction/alliance intelligence, or successful intelligence operations. Oil and Iron are used by Airbases; Oil by Forward Airstrips; Uranium is required to develop Missile Command and to buy Nuclear missiles.","#67D5FF");
@@ -14045,6 +14317,6 @@ function ShowHowItWorks(parent)
     Section("8. DIPLOMACY & FACTIONS","Diplomacy handles nation-to-nation wars, peace, NAPs, alliances, and trade. Factions have a public directory, leader/member management, join requests, chat, shared intelligence, Military Exercises, and Faction wars. A Faction leader may declare war on another Faction; all members are notified and member wars propagate automatically.","#D4AF37");
     Section("9. FACTION MILITARY EXERCISES","The Faction leader starts the exercise. Each member chooses a host-configured Commerce tier. The button shows hard troop numbers such as 10 → 14 troops/turn. The bonus applies only during the exercise; then a cooldown begins.","#D4AF37");
     Section("10. UNITED NATIONS","Security Council resolutions include sanctions, embargoes, aid, condemnation, and ceasefires. Aid uses an adjustable Commerce amount within host limits instead of a hidden fixed value. Resolution effects and durations are shown before submission.","#90CAF9");
-    Section("11. NOTIFICATIONS & REPORTS","War declarations, Faction wars, Faction invitations, detected espionage, missile warnings, shared intelligence, and strategic results generate short notifications. Military > Reports combines Intelligence and Missile reports so you do not have to hunt through separate screens.","#FFFFFF");
+    Section("11. SECURITY REPORTS","Overview shows a quick private briefing: pending counterintelligence decisions, total stored reports, and the latest 4 results. OPEN ALL SECURITY REPORTS provides filters for Intel/Cyber, Missiles/Silos, Air Missions, and Warnings. Every entry shows turn, type, result, and the actual effect—for example Commerce stolen, infrastructure disrupted, missile result, interception, or air-mission outcome.","#FFFFFF");
     Section("12. AI MANAGER","Human players may authorize a recurring budget plus a one-time extra budget. The manager prioritizes urgent shortages, economy, resources/military, then market opportunities. AI nations use the same infrastructure/resource/airlift rules and use active countermeasures when they detect foreign operations.","#62B6FF");
 end

@@ -1,0 +1,13 @@
+UNITED FRONTIER v9 — LIVE POLICY NUMBERS & IDEOLOGY RECRUITMENT
+
+- Rebuilt National Setup's live preview as separate color-coded lines for fast mobile scanning.
+- Commerce now shows the exact current -> projected Commerce per turn.
+- Market now shows the player's live flagship price (or calculated starting price) plus an exact +5% movement example before and after the selected Market modifier.
+- Investment now shows an exact 100-Commerce / 25%-base-return payout example before and after the selected Investment modifier.
+- Ideology now changes real Army Recruiter production:
+  Free Market -15%, Capitalist -10%, Social Democratic 0%, State Capitalist +5%, Socialist +10%, Communist +15%, Fascist +10%, Nationalist +5%.
+- The Recruiter preview shows an exact Level 3 example so every ideology's rounded troop difference is visible.
+- Recruiting Stations now show base output, exact live output, Ideology, Readiness, Unrest, total levels, and last-turn troops.
+- Market Overview now repeats the player's live policy impact after setup.
+- Faction military-exercise previews include Ideology Recruiter modifiers.
+- How It Works explains the economic-versus-mobilization ideology tradeoff.

@@ -4148,6 +4148,23 @@ function GetUnrestRecruiterPenaltyPercent(nation)
     return 0;
 end
 
+-- Ideology is an economic-versus-mobilization choice. Market-led systems
+-- receive stronger market/investment benefits but recruit fewer armies, while
+-- state-directed systems convert more national capacity into troops.
+function GetIdeologyRecruiterModifierPercent(nation)
+    local ideology=nation and nation.ideology or "Social Democratic";
+    if ideology=="Free Market" then return -15;
+    elseif ideology=="Capitalist" then return -10;
+    elseif ideology=="Social Democratic" then return 0;
+    elseif ideology=="State Capitalist" then return 5;
+    elseif ideology=="Socialist" then return 10;
+    elseif ideology=="Communist" then return 15;
+    elseif ideology=="Fascist" then return 10;
+    elseif ideology=="Nationalist" then return 5;
+    end
+    return 0;
+end
+
 function CalculateTaxCommerceAdjustment(
     game,
     playerID,
@@ -14865,7 +14882,8 @@ local function ProcessArmyRecruiterProduction(game, data, addNewOrder)
             if ex and ex.active==true and turn<=tonumber(ex.endTurn or 0) then
                 local c=(ex.contributions or {})[owner]; exerciseBonus=tonumber(c and c.bonusPercent) or 0;
             end
-            local productionMultiplier=math.max(0,100 - recruiterPenalty + exerciseBonus);
+            local ideologyRecruiterModifier=GetIdeologyRecruiterModifierPercent(nation);
+            local productionMultiplier=math.max(0,100 + ideologyRecruiterModifier - recruiterPenalty + exerciseBonus);
             local armies = math.max(0, math.floor(base * level * readiness / 100 * productionMultiplier / 100 + 0.5));
             if armies > 0 then
                 addNewOrder(WL.GameOrderDeploy.Create(owner, armies, territoryID, true));
@@ -18674,6 +18692,27 @@ function Server_AdvanceTurn_Order(
     -- purchases, and mod events are untouched.
 
 if order == nil then
+    return;
+end
+
+-- =====================================================
+-- GIFT CARD -> OFFICIAL WAR RESTRICTION
+-- =====================================================
+-- Peaceful gifts remain available for consensual territory transfers.
+-- When enabled by the host, a nation cannot use a Gift Card to hand a
+-- territory directly to a nation it is officially fighting.
+if order.proxyType == "GameOrderPlayCardGift" then
+    if GetSetting("GiftWarRestrictionEnabled", true) == true then
+        local giverID = order.PlayerID;
+        local recipientID = order.GiftTo;
+        if giverID ~= nil and recipientID ~= nil and giverID ~= recipientID then
+            local data = ADVANCE_TURN_ORDER_DATA_CACHE or GetEconomicData();
+            if data ~= nil and IsDiplomacyWar(data, giverID, recipientID) then
+                skipThisOrder(WL.ModOrderControl.Skip);
+                return;
+            end
+        end
+    end
     return;
 end
 

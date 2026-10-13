@@ -1,10 +1,18 @@
 # United Frontier
 
+## v10 diplomacy filters and Gift Card enforcement
+
+Diplomacy now has mobile-friendly ALL, PLAYERS, AI, AT WAR, and AT PEACE filters, with four player buttons per row. The existing host Gift Card restriction is now enforced server-side: peaceful gifts remain allowed, but direct gifts between nations officially at war are rejected when the option is enabled.
+
+## v9 live policy and recruitment update
+
+National policy choices now show color-coded, exact before-and-after numbers for Commerce, market price examples, investment payout examples, confidence, and Recruiter troops. Ideology is also a real economic-versus-mobilization choice: market-led systems receive lower Recruiter output, while state-directed and military-focused systems receive higher Recruiter output. Market Overview and Recruiting Stations keep these live numbers available after setup.
+
 United Frontier is a War.app / Warzone Lua strategy mod that adds national economics, strategic resources, markets, diplomacy, factions, the United Nations, military infrastructure, intelligence, missiles, and Smart AI.
 
-## Current v4 design
+## Current design
 
-The everyday UI is intentionally concise: costs, hard numbers, actions, and reports are shown directly; deeper rules are in **How It Works**.
+The everyday UI is intentionally concise: costs, hard numbers, actions, and reports are shown directly; deeper rules are in **How It Works**. Diplomacy includes mobile-friendly filters for all nations, human players, AI, nations at war, and nations at peace. When enabled by the host, the Gift Card wartime restriction is enforced by the server while peaceful gifts remain available.
 
 ### National systems
 - Mandatory National Setup with numerical previews and auto-assignment for unfinished setup.
@@ -49,4 +57,4 @@ The everyday UI is intentionally concise: costs, hard numbers, actions, and repo
 - AI flagship acquisition availability is determined from economic/market conditions rather than being permanently fixed.
 - Human AI Manager supports a recurring budget plus a one-time extra budget and has a simplified control screen.
 
-See **How It Works** inside the mod for the player-facing guide and `V4_PATCH_NOTES.txt` for the latest patch summary.
+See **How It Works** inside the mod for the player-facing guide and `V10_PATCH_NOTES.txt` for the latest patch summary.

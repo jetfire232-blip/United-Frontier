@@ -223,6 +223,7 @@ UFMenuClose = UFMenuClose or nil;
 ResourceIntelFilter = ResourceIntelFilter or "My Resources";
 MilitaryIntelFilter = MilitaryIntelFilter or "My Infrastructure";
 TradePartnerFilter = TradePartnerFilter or "ALL";
+DiplomacyPlayerFilter = DiplomacyPlayerFilter or "ALL";
 MarketNewsFilter = MarketNewsFilter or "ALL";
 StrategicReportFilter = StrategicReportFilter or "ALL";
 
@@ -571,9 +572,9 @@ else
     UI.CreateLabel(area).SetText("FACTION MILITARY EXERCISE").SetColor("#D4AF37");
     local function ExerciseTroopsPerTurn(memberID, bonusPercent)
         local memberNation=(economy.nations or {})[memberID] or {}; local readiness=math.max(0,math.min(100,tonumber(memberNation.resourceMilitaryReadiness) or 100)); local unrest=math.max(0,math.min(100,tonumber(memberNation.resourceUnrest) or 0));
-        local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local total=0;
+        local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local ideologyBonus=GetClientIdeologyRecruiterModifierPercent(memberNation); local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local total=0;
         local recruiters=((economy.armyRecruiters or {}).territories or {}); local standing=game.LatestStanding;
-        for tid,lvl in pairs(recruiters) do local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid] or nil; if terr and terr.OwnerPlayerID==memberID then local mult=math.max(0,100-penalty+(tonumber(bonusPercent) or 0)); total=total+math.max(0,math.floor(base*(tonumber(lvl) or 0)*readiness/100*mult/100+0.5)); end end
+        for tid,lvl in pairs(recruiters) do local ntid=tonumber(tid) or tid; local terr=standing and standing.Territories and standing.Territories[ntid] or nil; if terr and terr.OwnerPlayerID==memberID then local mult=math.max(0,100+ideologyBonus-penalty+(tonumber(bonusPercent) or 0)); total=total+math.max(0,math.floor(base*(tonumber(lvl) or 0)*readiness/100*mult/100+0.5)); end end
         return total;
     end
     local ex=ourFaction.militaryExercise or {}; local turn=tonumber((economy or {}).currentEconomyTurn or (Mod.PublicGameData or {}).tradeTurn) or 0;
@@ -889,6 +890,9 @@ local playerSearchResults =
 
 local playerSearchResultsHost =
     nil;
+
+local playerFilterButtons =
+    {};
 
     local selectedDiplomacyPlayerID =
     focusPlayerID;
@@ -1309,6 +1313,22 @@ local function RefreshPlayerSearchResults()
     local matches =
         {};
 
+    for filterKey, filterButton in pairs(playerFilterButtons) do
+        if filterButton ~= nil and not UI.IsDestroyed(filterButton) then
+            local labels = {
+                ALL = "ALL",
+                PLAYERS = "PLAYERS",
+                AI = "AI",
+                WAR = "AT WAR",
+                PEACE = "AT PEACE"
+            };
+            filterButton.SetText(
+                (DiplomacyPlayerFilter == filterKey and "▶ " or "") ..
+                tostring(labels[filterKey] or filterKey)
+            );
+        end
+    end
+
     for playerID, player
         in pairs(
             game.Game.Players
@@ -1332,13 +1352,32 @@ local function RefreshPlayerSearchResults()
                     or ""
                 );
 
-            if searchText == ""
+            local relationshipStatus = "peace";
+            if ourID ~= nil then
+                local a = tostring(ourID);
+                local b = tostring(playerID);
+                local relationshipKey = a < b and (a .. "|" .. b) or (b .. "|" .. a);
+                local relationship = relationships[relationshipKey];
+                if relationship ~= nil and relationship.status ~= nil then
+                    relationshipStatus = relationship.status;
+                end
+            end
+
+            local matchesFilter =
+                DiplomacyPlayerFilter == "ALL"
+                or (DiplomacyPlayerFilter == "PLAYERS" and player.IsAI ~= true)
+                or (DiplomacyPlayerFilter == "AI" and player.IsAI == true)
+                or (DiplomacyPlayerFilter == "WAR" and ourID ~= nil and relationshipStatus == "war")
+                or (DiplomacyPlayerFilter == "PEACE" and ourID ~= nil and relationshipStatus ~= "war");
+
+            if matchesFilter
+                and (searchText == ""
                 or string.find(
                     lowerName,
                     searchText,
                     1,
                     true
-                ) ~= nil
+                ) ~= nil)
             then
 
                 table.insert(
@@ -1386,7 +1425,7 @@ local function RefreshPlayerSearchResults()
         in ipairs(matches)
     do
 
-        if (index - 1) % 6 == 0 then
+        if (index - 1) % 4 == 0 then
 
             row =
                 UI.CreateHorizontalLayoutGroup(
@@ -1455,8 +1494,29 @@ end
 
     UI.CreateLabel(area)
         .SetText(
-            "Search or tap a player to open their overview."
+            "Filter, search, or tap a player to open their overview."
         );
+
+    local function AddPlayerFilterButton(row, key, label)
+        local button = UI.CreateButton(row)
+            .SetText((DiplomacyPlayerFilter == key and "▶ " or "") .. label)
+            .SetFlexibleWidth(1)
+            .SetPreferredHeight(38);
+        playerFilterButtons[key] = button;
+        button.SetOnClick(function()
+            DiplomacyPlayerFilter = key;
+            RefreshPlayerSearchResults();
+        end);
+    end
+
+    local filterRowOne = UI.CreateHorizontalLayoutGroup(area);
+    AddPlayerFilterButton(filterRowOne, "ALL", "ALL");
+    AddPlayerFilterButton(filterRowOne, "PLAYERS", "PLAYERS");
+    AddPlayerFilterButton(filterRowOne, "AI", "AI");
+
+    local filterRowTwo = UI.CreateHorizontalLayoutGroup(area);
+    AddPlayerFilterButton(filterRowTwo, "WAR", "AT WAR");
+    AddPlayerFilterButton(filterRowTwo, "PEACE", "AT PEACE");
 
     playerSearchInput =
         CreateWideTextInput(
@@ -3168,7 +3228,22 @@ end
 -- SHARED TAX / IDEOLOGY PREVIEW
 -- =========================================================
 
-function GetPolicyPreviewText(game, taxPolicy, ideology, economicStrategy, companyStrategy)
+function GetClientIdeologyRecruiterModifierPercent(ideologyOrNation)
+    local ideology=type(ideologyOrNation)=="table" and ideologyOrNation.ideology or ideologyOrNation;
+    ideology=ideology or "Social Democratic";
+    if ideology=="Free Market" then return -15;
+    elseif ideology=="Capitalist" then return -10;
+    elseif ideology=="Social Democratic" then return 0;
+    elseif ideology=="State Capitalist" then return 5;
+    elseif ideology=="Socialist" then return 10;
+    elseif ideology=="Communist" then return 15;
+    elseif ideology=="Fascist" then return 10;
+    elseif ideology=="Nationalist" then return 5;
+    end
+    return 0;
+end
+
+function GetPolicyPreviewData(game, taxPolicy, ideology, economicStrategy, companyStrategy)
     local taxCommerce,taxMarket,taxInvestment,taxConfidence=0,0,0,0;
     if taxPolicy=="Low" then taxCommerce=-10; taxMarket=10; taxInvestment=10; taxConfidence=5;
     elseif taxPolicy=="High" then taxCommerce=10; taxMarket=-10; taxInvestment=-10; taxConfidence=-5; end
@@ -3182,17 +3257,50 @@ function GetPolicyPreviewText(game, taxPolicy, ideology, economicStrategy, compa
     local se=strategyEffects[economicStrategy] or {0,0,0,0};
     local commerce=taxCommerce+ie[1]+se[1]; local market=taxMarket+ie[2]+se[2]; local investment=taxInvestment+ie[3]+se[3]; local confidence=taxConfidence+ie[4]+se[4];
     local currentCommerce=0; if game and game.Us then currentCommerce=GetPlayerIncome(game,GetLocalPlayerID(game)) or 0; end
-    local projected=math.floor(currentCommerce*(1+commerce/100)+0.5);
+    local projected=math.max(0,math.floor(currentCommerce*(1+commerce/100)+0.5));
+
+    local currentPrice=math.floor(15+math.sqrt(math.max(0,currentCommerce))*2+0.5);
+    currentPrice=math.max(10,math.min(150,currentPrice));
+    local nation=GetOurNationState(game) or {};
+    local economy=((Mod.PublicGameData or {}).globalEconomy or {}); local companies=((economy.market or {}).companies or {});
+    for _,company in pairs(companies) do
+        if company and (company.id==nation.flagshipCompanyID or company.ownerPlayerID==GetLocalPlayerID(game)) and company.active==true and company.delisted~=true then
+            currentPrice=tonumber(company.currentPrice or company.startingPrice) or currentPrice; break;
+        end
+    end
+    -- A fixed +5% base move makes the selected Market modifier readable. The
+    -- actual turn still uses live income, demand, confidence and volatility.
+    local baseMarketMove=5; local modifiedMarketMove=baseMarketMove*(1+market/100);
+    local baseMarketPrice=currentPrice*(1+baseMarketMove/100); local modifiedMarketPrice=currentPrice*(1+modifiedMarketMove/100);
+    local baseInvestmentReturn=25; local modifiedInvestmentReturn=baseInvestmentReturn*(1+investment/100);
+    local recruiterBase=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local recruiterLevel=3;
+    local recruiterModifier=GetClientIdeologyRecruiterModifierPercent(ideology);
+    local recruiterBaseOutput=recruiterBase*recruiterLevel;
+    local recruiterOutput=math.max(0,math.floor(recruiterBaseOutput*(1+recruiterModifier/100)+0.5));
+    return {
+        commerce=commerce,currentCommerce=currentCommerce,projectedCommerce=projected,
+        market=market,currentPrice=currentPrice,baseMarketMove=baseMarketMove,modifiedMarketMove=modifiedMarketMove,
+        baseMarketPrice=baseMarketPrice,modifiedMarketPrice=modifiedMarketPrice,
+        investment=investment,baseInvestmentReturn=baseInvestmentReturn,modifiedInvestmentReturn=modifiedInvestmentReturn,
+        confidence=confidence,recruiterModifier=recruiterModifier,recruiterBase=recruiterBase,recruiterLevel=recruiterLevel,recruiterBaseOutput=recruiterBaseOutput,recruiterOutput=recruiterOutput,
+        strategyEffects=se,companyStrategy=companyStrategy,economicStrategy=economicStrategy
+    };
+end
+
+function GetPolicyPreviewText(game, taxPolicy, ideology, economicStrategy, companyStrategy)
+    local p=GetPolicyPreviewData(game,taxPolicy,ideology,economicStrategy,companyStrategy);
     local function sg(v,suf) return (v>0 and "+" or "")..tostring(v)..(suf or ""); end
     local companyText="Select a company strategy";
     if companyStrategy=="Growth" then companyText="Growth Company: price fundamentals x1.35 | dividend pool 1% of owner income | random volatility scale 30%";
     elseif companyStrategy=="Balanced" then companyText="Balanced Company: price fundamentals x1.00 | dividend pool 2% of owner income | random volatility scale 25%";
     elseif companyStrategy=="Dividend" then companyText="Dividend Company: price fundamentals x0.45 | dividend pool 4%-6% of owner income | random volatility scale 15%"; end
     return "LIVE NUMERICAL PREVIEW\n"..
-        "Base Commerce/Turn: "..tostring(currentCommerce).."\n"..
-        "Policy Commerce Modifier: "..sg(commerce,"%").." => ~"..tostring(projected).." Commerce/turn\n"..
-        "Market Modifier: "..sg(market,"%").." | Investment Return Modifier: "..sg(investment,"%").." | Company Confidence: "..sg(confidence,"").."\n"..
-        "Economic Strategy: "..tostring(economicStrategy or "None").." => Commerce "..sg(se[1],"%")..", Market "..sg(se[2],"%")..", Investment "..sg(se[3],"%")..", Confidence "..sg(se[4],"").."\n"..
+        "COMMERCE: "..tostring(p.currentCommerce).." -> "..tostring(p.projectedCommerce).." /turn ("..sg(p.commerce,"%")..")\n"..
+        "MARKET LIVE PRICE: "..string.format("%.2f",p.currentPrice).." | example +5.00% move: "..string.format("%.2f",p.baseMarketPrice).." -> "..string.format("%.2f",p.modifiedMarketPrice).." ("..sg(p.market,"%").." modifier)\n"..
+        "INVESTMENT: 100 at 25% base return pays "..string.format("%.2f",100+p.baseInvestmentReturn).." -> "..string.format("%.2f",100+p.modifiedInvestmentReturn).." total ("..sg(p.investment,"%")..")\n"..
+        "RECRUITER LEVEL "..tostring(p.recruiterLevel).." EXAMPLE: "..tostring(p.recruiterBaseOutput).." -> "..tostring(p.recruiterOutput).." armies/turn (Ideology "..sg(p.recruiterModifier,"%")..")\n"..
+        "CONFIDENCE MODIFIER: "..sg(p.confidence,"").."\n"..
+        "Economic Strategy: "..tostring(economicStrategy or "None").." => Commerce "..sg(p.strategyEffects[1],"%")..", Market "..sg(p.strategyEffects[2],"%")..", Investment "..sg(p.strategyEffects[3],"%")..", Confidence "..sg(p.strategyEffects[4],"").."\n"..
         companyText;
 end
 
@@ -4881,7 +4989,12 @@ function ShowArmyRecruitersMenu(parent, game)
     local recruiterCost=math.max(25,math.floor(tonumber(GetClientSetting("ArmyRecruiterBaseCost",250)) or 250));
     local recruiterMax=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterMaxPerPlayer",3)) or 3));
     local recruiterArmies=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4));
-    UI.CreateLabel(area).SetText("Stations: "..tostring(nation.armyRecruiterCount or 0).."/"..tostring(recruiterMax).." | Output: "..tostring(recruiterArmies).." armies per level/turn");
+    local ideologyRecruiter=GetClientIdeologyRecruiterModifierPercent(nation); local readiness=math.max(0,math.min(100,tonumber(nation.resourceMilitaryReadiness) or 100)); local unrest=math.max(0,math.min(100,tonumber(nation.resourceUnrest) or 0)); local unrestPenalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0;
+    local livePerLevel=math.max(0,math.floor(recruiterArmies*readiness/100*math.max(0,100+ideologyRecruiter-unrestPenalty)/100+0.5));
+    local sign=ideologyRecruiter>0 and "+" or "";
+    UI.CreateLabel(area).SetText("Stations: "..tostring(nation.armyRecruiterCount or 0).."/"..tostring(recruiterMax).." | Base: "..tostring(recruiterArmies).." armies per level/turn");
+    UI.CreateLabel(area).SetText("LIVE PER LEVEL: "..tostring(recruiterArmies).." -> "..tostring(livePerLevel).." | Ideology "..sign..tostring(ideologyRecruiter).."% | Readiness "..tostring(math.floor(readiness)).."% | Unrest -"..tostring(unrestPenalty).."%").SetColor(livePerLevel>=recruiterArmies and "#79D279" or "#FF7B7B");
+    UI.CreateLabel(area).SetText("Last full-turn production: "..tostring(nation.armyRecruiterArmiesGeneratedThisTurn or 0).." armies from "..tostring(nation.armyRecruiterLevels or 0).." total Recruiter level(s).").SetColor("#67D5FF");
     UI.CreateButton(area).SetText("SELECT TERRITORY TO BUILD / UPGRADE").SetOnClick(function()
         UFShowTerritorySelector(parent,game,"Building Recruiting Station...",{type="buildArmyRecruiter"});
     end);
@@ -5891,6 +6004,8 @@ function ShowOverview(
         local unrestCommercePenalty=(unrest>=80 and 20) or (unrest>=60 and 12) or (unrest>=40 and 7) or (unrest>=20 and 3) or 0;
         local unrestRecruiterPenalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0;
         UI.CreateLabel(area).SetText("Commerce: "..tostring(commerce).." | Income: +"..tostring(income).." | Military Readiness: "..tostring(math.floor(readiness+0.5)).."% | Unrest: "..tostring(unrest).."/100").SetColor("#E0E0E0");
+        local ideologyRecruiterModifier=GetClientIdeologyRecruiterModifierPercent(nation);
+        UI.CreateLabel(area).SetText("Recruiter Ideology: "..tostring(nation.ideology or "None").." | "..(ideologyRecruiterModifier>0 and "+" or "")..tostring(ideologyRecruiterModifier).."% troop production").SetColor(ideologyRecruiterModifier>=0 and "#79D279" or "#FF7B7B");
         UI.CreateLabel(area).SetText("Unrest Effects: Commerce -"..tostring(unrestCommercePenalty).."% | Recruiter Production -"..tostring(unrestRecruiterPenalty).."%").SetColor(unrest>=60 and "#FF7B7B" or (unrest>=20 and "#FFB366" or "#8FD694"));
 
         if nation.aiManagerEnabled == true then
@@ -8769,6 +8884,19 @@ function ShowMarketOverview(
         .SetText(
             "----------------------------------------"
         );
+
+    local ourNation=GetOurNationState(game);
+    if ourNation~=nil and ourNation.setupComplete==true then
+        local live=GetPolicyPreviewData(game,ourNation.taxPolicy,ourNation.ideology,ourNation.economicStrategy,ourNation.companyStrategy);
+        local function sg(v,suf) return (v>0 and "+" or "")..tostring(v)..(suf or ""); end
+        UI.CreateLabel(area).SetText("YOUR LIVE POLICY IMPACT").SetColor("#FFFFFF");
+        UI.CreateLabel(area).SetText("Commerce: "..tostring(live.currentCommerce).." -> "..tostring(live.projectedCommerce).." /turn | "..sg(live.commerce,"%")).SetColor(live.commerce>=0 and "#79D279" or "#FF7B7B");
+        UI.CreateLabel(area).SetText("Stock price: "..string.format("%.2f",live.currentPrice).." | example +5.00% move: "..string.format("%.2f",live.baseMarketPrice).." -> "..string.format("%.2f",live.modifiedMarketPrice).." | Market "..sg(live.market,"%")).SetColor(live.market>=0 and "#67D5FF" or "#FF7B7B");
+        UI.CreateLabel(area).SetText("Investment example: 100 at 25% base return | payout "..string.format("%.2f",100+live.baseInvestmentReturn).." -> "..string.format("%.2f",100+live.modifiedInvestmentReturn).." | "..sg(live.investment,"%")).SetColor(live.investment>=0 and "#D98CFF" or "#FF7B7B");
+        UI.CreateLabel(area).SetText("Recruiter Level "..tostring(live.recruiterLevel).." example: "..tostring(live.recruiterBaseOutput).." -> "..tostring(live.recruiterOutput).." armies/turn | Ideology "..sg(live.recruiterModifier,"%")).SetColor(live.recruiterModifier>=0 and "#FFB366" or "#FF7B7B");
+        UI.CreateLabel(area).SetText("Stock movement still changes with live income, trading demand, confidence, and random volatility.").SetColor("#AAAAAA");
+        UI.CreateLabel(area).SetText("----------------------------------------");
+    end
 
     local topGainer =
         nil;
@@ -12541,7 +12669,7 @@ function ShowHowItWorks(parent)
         "#64B5F6");
 
     Section("RECRUITING STATIONS",
-        "Recruiters are visible military structures that generate armies each turn according to their level and the nation's Military Readiness. Upgrading changes the same Recruiter structure tier instead of creating another Recruiter icon.\n\n" ..
+        "Recruiters are visible military structures that generate armies each turn according to their level, national Ideology, Military Readiness, Unrest, and active Faction exercise bonuses. Free Market and Capitalist systems accept lower troop production for stronger private-market benefits; state-directed and military-focused systems receive higher troop output. Every Recruiter screen shows the exact live before-and-after number. Upgrading changes the same Recruiter structure tier instead of creating another Recruiter icon.\n\n" ..
         "Smart AI prefers Recruiters behind the frontline when geography allows, using safer interior or second-line territories rather than wasting major production directly on exposed borders.",
         "#D4AF37");
 
@@ -12587,8 +12715,9 @@ function ShowHowItWorks(parent)
         "#FFCC80");
 
     Section("DIPLOMACY & CURRENT WARS",
-        "Diplomacy contains relations, alliances, Factions, Current Wars, Join War, peace, NAPs, shared-intelligence requests, Faction leadership controls, and Military Exercises. Wars remain inside Diplomacy rather than using a separate top-level Wars tab.\n\n" ..
-        "Current Wars groups coalition conflicts into one entry and preserves the original cause. Join War lets an eligible human choose a side subject to diplomacy safety checks. AI allies and faction partners may also enter an ally's conflict, while AI nations can proactively seek Alliances when trade/NAP relationships and strategic conditions make cooperation useful. Trade Agreements are available to human players from both Markets and Diplomacy.",
+        "Diplomacy contains relations, alliances, Factions, Current Wars, Join War, peace, NAPs, shared-intelligence requests, Faction leadership controls, and Military Exercises. Wars remain inside Diplomacy rather than using a separate top-level Wars tab. Use ALL, PLAYERS, AI, AT WAR, and AT PEACE to shorten the player list, then search or tap a name to open that player's overview.\n\n" ..
+        "Current Wars groups coalition conflicts into one entry and preserves the original cause. Join War lets an eligible human choose a side subject to diplomacy safety checks. AI allies and faction partners may also enter an ally's conflict, while AI nations can proactively seek Alliances when trade/NAP relationships and strategic conditions make cooperation useful. Trade Agreements are available to human players from both Markets and Diplomacy.\n\n" ..
+        "GIFT CARDS: Peaceful territory gifts remain allowed. If the host enables the wartime Gift Card restriction, a Gift Card sent directly between two nations that are officially at war is rejected by the server. Gift Cards therefore cannot replace combat or evade the official-war rules.",
         "#FFB74D");
 
     Section("UNITED NATIONS",
@@ -12938,7 +13067,7 @@ function ShowNationalSetup(
     local ideologyEffectsLabel =
     nil;
 
-    local policyPreviewLabel =
+    local policyPreviewLabels =
     nil;
 
     local companyNameInput =
@@ -12973,21 +13102,21 @@ local function GetIdeologyEffectsText(
 )
 
     if ideology == "Free Market" then
-        return "Ideology Effects - Free Market\nGovernment Commerce: -3% | Market: +8% | Investment: +6% | Company Confidence: +2";
+        return "Ideology Effects - Free Market\nGovernment Commerce: -3% | Market: +8% | Investment: +6% | Confidence: +2 | Recruiters: -15%";
     elseif ideology == "Capitalist" then
-        return "Ideology Effects - Capitalist\nGovernment Commerce: -2% | Market: +6% | Investment: +5% | Company Confidence: +3";
+        return "Ideology Effects - Capitalist\nGovernment Commerce: -2% | Market: +6% | Investment: +5% | Confidence: +3 | Recruiters: -10%";
     elseif ideology == "Social Democratic" then
-        return "Ideology Effects - Social Democratic\nGovernment Commerce: +2% | Market: +2% | Investment: +3% | Company Confidence: +2";
+        return "Ideology Effects - Social Democratic\nGovernment Commerce: +2% | Market: +2% | Investment: +3% | Confidence: +2 | Recruiters: 0%";
     elseif ideology == "State Capitalist" then
-        return "Ideology Effects - State Capitalist\nGovernment Commerce: +4% | Market: +1% | Investment: +5% | Company Confidence: +4";
+        return "Ideology Effects - State Capitalist\nGovernment Commerce: +4% | Market: +1% | Investment: +5% | Confidence: +4 | Recruiters: +5%";
     elseif ideology == "Socialist" then
-        return "Ideology Effects - Socialist\nGovernment Commerce: +5% | Market: -5% | Investment: +1% | Company Confidence: +1";
+        return "Ideology Effects - Socialist\nGovernment Commerce: +5% | Market: -5% | Investment: +1% | Confidence: +1 | Recruiters: +10%";
     elseif ideology == "Communist" then
-        return "Ideology Effects - Communist\nGovernment Commerce: +7% | Market: -9% | Investment: -2% | Company Confidence: +0";
+        return "Ideology Effects - Communist\nGovernment Commerce: +7% | Market: -9% | Investment: -2% | Confidence: +0 | Recruiters: +15%";
     elseif ideology == "Fascist" then
-        return "Ideology Effects - Fascist\nGovernment Commerce: +3% | Market: -2% | Investment: +1% | Company Confidence: +3";
+        return "Ideology Effects - Fascist\nGovernment Commerce: +3% | Market: -2% | Investment: +1% | Confidence: +3 | Recruiters: +10%";
     elseif ideology == "Nationalist" then
-        return "Ideology Effects - Nationalist\nGovernment Commerce: +2% | Market: -1% | Investment: +0% | Company Confidence: +2";
+        return "Ideology Effects - Nationalist\nGovernment Commerce: +2% | Market: -1% | Investment: +0% | Confidence: +2 | Recruiters: +5%";
     end
 
     return "Ideology Effects: None";
@@ -13032,18 +13161,26 @@ end
 
 end
 
-if policyPreviewLabel ~= nil then
-
-    policyPreviewLabel.SetText(
-        GetPolicyPreviewText(
-            game,
-            selectedTaxPolicy,
-            selectedIdeology,
-            selectedEconomicStrategy,
-            selectedCompanyStrategy
-        )
-    );
-
+if policyPreviewLabels ~= nil then
+    local p=GetPolicyPreviewData(game,selectedTaxPolicy,selectedIdeology,selectedEconomicStrategy,selectedCompanyStrategy);
+    local function sg(v,suf) return (v>0 and "+" or "")..tostring(v)..(suf or ""); end
+    policyPreviewLabels.commerce.SetText("COMMERCE / TURN | "..tostring(p.currentCommerce).." -> "..tostring(p.projectedCommerce).." | "..sg(p.commerce,"%"));
+    policyPreviewLabels.commerce.SetColor(p.commerce>=0 and "#79D279" or "#FF7B7B");
+    policyPreviewLabels.market.SetText("MARKET LIVE PRICE | "..string.format("%.2f",p.currentPrice).." | example +5.00% move: "..string.format("%.2f",p.baseMarketPrice).." -> "..string.format("%.2f",p.modifiedMarketPrice).." | modifier "..sg(p.market,"%"));
+    policyPreviewLabels.market.SetColor(p.market>=0 and "#67D5FF" or "#FF7B7B");
+    policyPreviewLabels.investment.SetText("INVESTMENT EXAMPLE | 100 at 25% base return | payout "..string.format("%.2f",100+p.baseInvestmentReturn).." -> "..string.format("%.2f",100+p.modifiedInvestmentReturn).." | modifier "..sg(p.investment,"%"));
+    policyPreviewLabels.investment.SetColor(p.investment>=0 and "#D98CFF" or "#FF7B7B");
+    policyPreviewLabels.recruiter.SetText("RECRUITER LEVEL "..tostring(p.recruiterLevel).." EXAMPLE | "..tostring(p.recruiterBaseOutput).." -> "..tostring(p.recruiterOutput).." armies/turn | ideology "..sg(p.recruiterModifier,"%"));
+    policyPreviewLabels.recruiter.SetColor(p.recruiterModifier>=0 and "#FFB366" or "#FF7B7B");
+    policyPreviewLabels.confidence.SetText("COMPANY CONFIDENCE | modifier "..sg(p.confidence,"").." | 10 confidence changes stock movement by 0.6 percentage points");
+    policyPreviewLabels.confidence.SetColor(p.confidence>=0 and "#FFD166" or "#FF7B7B");
+    local se=p.strategyEffects;
+    policyPreviewLabels.strategy.SetText("Selected Economic Strategy: "..tostring(selectedEconomicStrategy or "None").." | Commerce "..sg(se[1],"%").." | Market "..sg(se[2],"%").." | Investment "..sg(se[3],"%").." | Confidence "..sg(se[4],""));
+    local companyText="Select a company strategy";
+    if selectedCompanyStrategy=="Growth" then companyText="Growth Company | price fundamentals x1.35 | dividend pool 1% | volatility scale 30%";
+    elseif selectedCompanyStrategy=="Balanced" then companyText="Balanced Company | price fundamentals x1.00 | dividend pool 2% | volatility scale 25%";
+    elseif selectedCompanyStrategy=="Dividend" then companyText="Dividend Company | price fundamentals x0.45 | dividend pool 4%-6% | volatility scale 15%"; end
+    policyPreviewLabels.company.SetText(companyText);
 end
 
         companyStrategyLabel.SetText(
@@ -13207,14 +13344,14 @@ end
 
     UI.CreateLabel(area)
         .SetText(
-            "Free Market | Commerce -3% | Market +8% | Investment +6% | Confidence +2\n" ..
-            "Capitalist | Commerce -2% | Market +6% | Investment +5% | Confidence +3\n" ..
-            "Social Democratic | Commerce +2% | Market +2% | Investment +3% | Confidence +2\n" ..
-            "State Capitalist | Commerce +4% | Market +1% | Investment +5% | Confidence +4\n" ..
-            "Socialist | Commerce +5% | Market -5% | Investment +1% | Confidence +1\n" ..
-            "Communist | Commerce +7% | Market -9% | Investment -2% | Confidence +0\n" ..
-            "Fascist | Commerce +3% | Market -2% | Investment +1% | Confidence +3\n" ..
-            "Nationalist | Commerce +2% | Market -1% | Investment +0% | Confidence +2"
+            "Free Market | Commerce -3% | Market +8% | Investment +6% | Confidence +2 | Recruiters -15%\n" ..
+            "Capitalist | Commerce -2% | Market +6% | Investment +5% | Confidence +3 | Recruiters -10%\n" ..
+            "Social Democratic | Commerce +2% | Market +2% | Investment +3% | Confidence +2 | Recruiters 0%\n" ..
+            "State Capitalist | Commerce +4% | Market +1% | Investment +5% | Confidence +4 | Recruiters +5%\n" ..
+            "Socialist | Commerce +5% | Market -5% | Investment +1% | Confidence +1 | Recruiters +10%\n" ..
+            "Communist | Commerce +7% | Market -9% | Investment -2% | Confidence +0 | Recruiters +15%\n" ..
+            "Fascist | Commerce +3% | Market -2% | Investment +1% | Confidence +3 | Recruiters +10%\n" ..
+            "Nationalist | Commerce +2% | Market -1% | Investment +0% | Confidence +2 | Recruiters +5%"
         )
         .SetColor("#D8C7FF");
 
@@ -13404,18 +13541,18 @@ ideologyEffectsLabel.SetText(
     )
 );
 
-policyPreviewLabel =
-    UI.CreateLabel(area).SetColor("#8FD694");
-
-policyPreviewLabel.SetText(
-    GetPolicyPreviewText(
-        game,
-        selectedTaxPolicy,
-        selectedIdeology,
-        selectedEconomicStrategy,
-        selectedCompanyStrategy
-    )
-);
+UI.CreateLabel(area).SetText("LIVE NUMERICAL PREVIEW").SetColor("#FFFFFF");
+UI.CreateLabel(area).SetText("Tap any policy above. Percentages and their actual before -> after numbers update immediately.").SetColor("#AAAAAA");
+policyPreviewLabels={
+    commerce=UI.CreateLabel(area),
+    market=UI.CreateLabel(area),
+    investment=UI.CreateLabel(area),
+    recruiter=UI.CreateLabel(area),
+    confidence=UI.CreateLabel(area),
+    strategy=UI.CreateLabel(area).SetColor("#8FD694"),
+    company=UI.CreateLabel(area).SetColor("#8FD694")
+};
+UpdateSelections();
 
 UI.CreateLabel(area)
     .SetText("WHAT CONFIDENCE & UNREST ACTUALLY DO")
@@ -13434,6 +13571,13 @@ UI.CreateLabel(area)
         "80-100 = Commerce -20%, Recruiters -35%. Overview always shows your current Unrest and exact active penalties."
     )
     .SetColor("#FFB366");
+UI.CreateLabel(area)
+    .SetText(
+        "Ideology Recruiter tradeoff: Free Market -15% | Capitalist -10% | Social Democratic 0% | " ..
+        "State Capitalist +5% | Socialist +10% | Communist +15% | Fascist +10% | Nationalist +5%. " ..
+        "The live result also includes Readiness, Unrest, and Faction exercise bonuses."
+    )
+    .SetColor("#D8C7FF");
 
 UI.CreateLabel(area)
     .SetText(
@@ -14256,8 +14400,8 @@ function ShowFactionMenu(parent,game)
         end
         UI.CreateLabel(area).SetText("MILITARY EXERCISE").SetColor("#D4AF37"); local ex=our.militaryExercise or {}; local turn=tonumber(economy.currentEconomyTurn or economy.tradeTurn) or 0;
         if ex.active==true and turn<=tonumber(ex.endTurn or 0) then
-            UI.CreateLabel(area).SetText("ACTIVE through Turn "..tostring(ex.endTurn).." | boosts your Recruiter output only if you contribute.").SetColor("#79D279"); local nation=(economy.nations or {})[ourID] or {}; local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local levels=math.max(0,math.floor(tonumber(nation.armyRecruiterLevels) or tonumber(nation.armyRecruiterCount) or 0)); local readiness=math.max(0,math.min(100,tonumber(nation.resourceMilitaryReadiness) or 100)); local unrest=tonumber(nation.resourceUnrest) or 0; local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local normal=math.max(0,math.floor(base*levels*readiness/100*math.max(0,100-penalty)/100+0.5));
-            if (ex.contributions or {})[ourID]==nil then for i=1,4 do local cost=math.max(0,math.floor(tonumber(GetClientSetting("FactionExerciseTier"..tostring(i).."Cost",({50,100,200,300})[i])) or 0)); local bonus=math.max(0,math.floor(tonumber(GetClientSetting("FactionExerciseTier"..tostring(i).."Bonus",({10,20,40,60})[i])) or 0)); local boosted=math.max(0,math.floor(base*levels*readiness/100*math.max(0,100-penalty+bonus)/100+0.5)); local cc=cost; UI.CreateButton(area).SetText(tostring(cost).." Commerce | "..tostring(normal).." → "..tostring(boosted).." troops/turn (+"..tostring(boosted-normal)..")").SetOnClick(function() SafeSendGameCustomMessage(game,"Joining exercise...",{type="contributeFactionExercise",amount=cc},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); end else local c=(ex.contributions or {})[ourID]; UI.CreateLabel(area).SetText("Your contribution: "..tostring(c.commerce or 0).." Commerce | Recruiter bonus +"..tostring(c.bonusPercent or 0).."%").SetColor("#9CCBFF"); end
+            UI.CreateLabel(area).SetText("ACTIVE through Turn "..tostring(ex.endTurn).." | boosts your Recruiter output only if you contribute.").SetColor("#79D279"); local nation=(economy.nations or {})[ourID] or {}; local base=math.max(1,math.floor(tonumber(GetClientSetting("ArmyRecruiterArmiesPerTurn",4)) or 4)); local levels=math.max(0,math.floor(tonumber(nation.armyRecruiterLevels) or tonumber(nation.armyRecruiterCount) or 0)); local readiness=math.max(0,math.min(100,tonumber(nation.resourceMilitaryReadiness) or 100)); local unrest=tonumber(nation.resourceUnrest) or 0; local penalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0; local ideologyBonus=GetClientIdeologyRecruiterModifierPercent(nation); local normal=math.max(0,math.floor(base*levels*readiness/100*math.max(0,100+ideologyBonus-penalty)/100+0.5));
+            if (ex.contributions or {})[ourID]==nil then for i=1,4 do local cost=math.max(0,math.floor(tonumber(GetClientSetting("FactionExerciseTier"..tostring(i).."Cost",({50,100,200,300})[i])) or 0)); local bonus=math.max(0,math.floor(tonumber(GetClientSetting("FactionExerciseTier"..tostring(i).."Bonus",({10,20,40,60})[i])) or 0)); local boosted=math.max(0,math.floor(base*levels*readiness/100*math.max(0,100+ideologyBonus-penalty+bonus)/100+0.5)); local cc=cost; UI.CreateButton(area).SetText(tostring(cost).." Commerce | "..tostring(normal).." → "..tostring(boosted).." troops/turn (+"..tostring(boosted-normal)..")").SetOnClick(function() SafeSendGameCustomMessage(game,"Joining exercise...",{type="contributeFactionExercise",amount=cc},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); end else local c=(ex.contributions or {})[ourID]; UI.CreateLabel(area).SetText("Your contribution: "..tostring(c.commerce or 0).." Commerce | Recruiter bonus +"..tostring(c.bonusPercent or 0).."%").SetColor("#9CCBFF"); end
         else if our.leaderPlayerID==ourID then UI.CreateButton(area).SetText("START MILITARY EXERCISE").SetOnClick(function() SafeSendGameCustomMessage(game,"Starting exercise...",{type="startFactionExercise"},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); end end
         UI.CreateLabel(area).SetText("FACTION CHAT").SetColor("#9CCBFF"); local chat=our.chat or {}; for i=math.max(1,#chat-5),#chat do local m=chat[i]; if m then UI.CreateLabel(area).SetText("T"..tostring(m.turn or "?").." "..GetPlayerName(game,m.playerID)..": "..tostring(m.text or "")).SetColor("#BBBBBB"); end end; local ci=CreateWideTextInput(area).SetPlaceholderText("Message faction..."); UI.CreateButton(area).SetText("SEND").SetOnClick(function() SafeSendGameCustomMessage(game,"Sending message...",{type="sendFactionChat",message=ci.GetText()},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end);
         if our.leaderPlayerID~=ourID then UI.CreateButton(area).SetText("LEAVE FACTION").SetOnClick(function() SafeSendGameCustomMessage(game,"Leaving Faction...",{type="leaveFaction"},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); else UI.CreateButton(area).SetText("DISBAND FACTION").SetOnClick(function() SafeSendGameCustomMessage(game,"Disbanding Faction...",{type="disbandFaction"},function(r) if r and r.message then UI.Alert(r.message); end; ShowFactionMenu(parent,game); end); end); end

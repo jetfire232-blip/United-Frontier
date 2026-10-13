@@ -1,0 +1,21 @@
+UNITED FRONTIER V10
+
+DIPLOMACY PLAYER FILTERS
+- Added ALL, PLAYERS, AI, AT WAR, and AT PEACE filters.
+- Player buttons now use four columns instead of six for easier mobile reading.
+- Search continues to work together with the active filter.
+
+GIFT CARD RULE ENFORCEMENT
+- Fixed the host's Gift Card wartime-restriction setting so it is now enforced server-side.
+- Peaceful territory gifts remain allowed.
+- When the restriction is enabled, a Gift Card directly between nations officially at war is rejected.
+
+NATIONAL SETUP CHECK
+- National Setup continues to show exact live Recruiter production before confirmation.
+- The preview includes base output, final armies per turn, and the selected Ideology percentage.
+
+GUIDE
+- How It Works now explains the Diplomacy filters and Gift Card rule in plain language.
+
+SCOPE
+- Armored Corps and Air Defense Battery were not added.

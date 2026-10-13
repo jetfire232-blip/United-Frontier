@@ -953,7 +953,7 @@ function Client_PresentConfigureUI(rootParent)
     AddCheckBox(
         root,
         "GiftWarRestrictionEnabled",
-        "Block wartime Gift Card transfers that bypass official war declarations",
+        "Block Gift Cards sent directly between nations officially at war",
         giftWarRestrictionEnabled
     );
 

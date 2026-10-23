@@ -1,15 +1,9 @@
 United Frontier
 
-A modern economy, diplomacy, resource, intelligence, and strategic-warfare expansion for War.app.
+Build national power through Commerce, markets, private strategic resources, diplomacy, factions, Recruiters, airports, Airstrips, Air Wings, Special Forces, Tank Battalions, Drones, Smart AI and the United Nations.
 
-Build national power through Commerce, Markets, private strategic resources, diplomacy, Headquarters intelligence, visible military infrastructure, Air Wings, Special Forces, Smart AI, and the United Nations.
+Complete National Setup with live numerical policy previews. Trade shares, earn proportional dividends, acquire flagship companies, negotiate agreements and develop resources.
 
-Resources are discovered through ownership, direct borders, allies/factions, and intelligence. Military installations appear as map assets while deeper strategic details can remain intelligence-sensitive.
+Airport infrastructure restricts Airlift Card endpoints when enabled by the host. Conventional units use normal combat and fog. Hosts configure unit costs, strength and national limits. No Power Grid is required.
 
-Operational Warfare: powered Headquarters, Airbase-gated airlifts, missile targeting, and enhanced Smart AI frontline behavior.
-
-Phase 7: operational HQ actions, AI airport airlifts, clearer war UI, and simple strategic-action results.
-
-Includes host-configurable missile damage, detailed strike reports, Headquarters intelligence/cyber systems, resources, diplomacy, markets, and strategic infrastructure.
-
-AI nations now follow a stronger War Economy doctrine, spend excess Commerce instead of hoarding it, maintain resource-supported Recruiters and logistics, use Airlift/Gift support where appropriate, and operate Missile Silos against strategic targets. Military assets upgrade in place from the Military screen.
+Includes mobile-friendly military controls, acquisition payout explanations, diplomacy filters, Recruiter upgrades, war-focused AI spending and How It Works.

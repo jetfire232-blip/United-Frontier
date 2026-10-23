@@ -268,7 +268,6 @@ function Client_SaveConfigureUI(
         );
 
     local acquisitionPremiumPercent = ReadNumber("AcquisitionPremiumPercent");
-    local acquisitionBuyerStockBoostPercent = ReadNumber("AcquisitionBuyerStockBoostPercent");
     local acquisitionRebuildCooldownTurns = ReadNumber("AcquisitionRebuildCooldownTurns");
 
 
@@ -473,9 +472,6 @@ function Client_SaveConfigureUI(
 
     local militaryExpansionEnabled = ReadBool("MilitaryExpansionEnabled");
     local hiddenMilitaryInfrastructureEnabled = ReadBool("HiddenMilitaryInfrastructureEnabled");
-    local cyberFacilitiesEnabled = ReadBool("CyberFacilitiesEnabled");
-    local cyberFacilityBaseCost = ReadNumber("CyberFacilityBaseCost");
-    local cyberFacilityMaxLevel = ReadNumber("CyberFacilityMaxLevel");
     local airbasesEnabled = ReadBool("AirbasesEnabled");
     local airbaseBaseCost = ReadNumber("AirbaseBaseCost");
     local airbaseMaxLevel = ReadNumber("AirbaseMaxLevel");
@@ -485,27 +481,6 @@ function Client_SaveConfigureUI(
     local forwardAirstripBaseCost = ReadNumber("ForwardAirstripBaseCost");
     local forwardAirstripMaxLevel = ReadNumber("ForwardAirstripMaxLevel");
     local forwardAirstripOilPerLevel = ReadNumber("ForwardAirstripOilPerLevel");
-    local missileSilosEnabled = ReadBool("MissileSilosEnabled");
-    local missileSiloBaseCost = ReadNumber("MissileSiloBaseCost");
-    local missileSiloMaxLevel = ReadNumber("MissileSiloMaxLevel");
-    local missileInterceptorCost = ReadNumber("MissileInterceptorCost");
-    local missileDefenseConventionalChance = ReadNumber("MissileDefenseConventionalChance");
-    local missileDefenseEMPChance = ReadNumber("MissileDefenseEMPChance");
-    local missileDefenseNuclearChance = ReadNumber("MissileDefenseNuclearChance");
-    local conventionalMissileArmyDamagePercent = ReadNumber("ConventionalMissileArmyDamagePercent");
-    local conventionalMissileStructureDamagePercent = ReadNumber("ConventionalMissileStructureDamagePercent");
-    local conventionalMissileCityDamagePercent = ReadNumber("ConventionalMissileCityDamagePercent");
-    local conventionalMissileResourceLevelDamage = ReadNumber("ConventionalMissileResourceLevelDamage");
-    local empBaseDisableTurns = ReadNumber("EMPBaseDisableTurns");
-    local nuclearLowDamagePercent = ReadNumber("NuclearLowDamagePercent");
-    local nuclearMediumDamagePercent = ReadNumber("NuclearMediumDamagePercent");
-    local nuclearHighDamagePercent = ReadNumber("NuclearHighDamagePercent");
-    local nuclearStructureDamagePercent = ReadNumber("NuclearStructureDamagePercent");
-    local nuclearCityDamagePercent = ReadNumber("NuclearCityDamagePercent");
-    local nuclearResourceLevelDamage = ReadNumber("NuclearResourceLevelDamage");
-    local powerGridEnabled = ReadBool("PowerGridEnabled");
-    local powerGridBaseCost = ReadNumber("PowerGridBaseCost");
-    local powerGridMaxLevel = ReadNumber("PowerGridMaxLevel");
     local airWingsEnabled = ReadBool("AirWingsEnabled");
     local airWingBaseCost = ReadNumber("AirWingBaseCost");
     local aircraftPerAirWing = ReadNumber("AircraftPerAirWing");
@@ -985,9 +960,7 @@ function Client_SaveConfigureUI(
     if not ValidateRange(alert, unCeasefireMaxTurns, 1, 20, "Ceasefire Maximum Duration must be between 1 and 20 turns.") then return; end
     if unCeasefireMaxTurns < unCeasefireMinTurns then alert("Ceasefire Maximum Duration cannot be lower than the minimum."); return; end
 
-    if (airbasesEnabled or missileSilosEnabled or cyberFacilitiesEnabled or airWingsEnabled) and not powerGridEnabled then
-        alert("Power Grid must be enabled when Airbases, Missile Command sites, Intelligence Agencies, or Air Wings are enabled."); return;
-    end
+
     if airWingsEnabled and not airbasesEnabled then
         alert("Air Wings require Airbases. Enable Airbases or disable Air Wings."); return;
     end
@@ -1211,7 +1184,7 @@ function Client_SaveConfigureUI(
         dividendPayoutScalePercent;
 
     Mod.Settings.AcquisitionPremiumPercent = acquisitionPremiumPercent;
-    Mod.Settings.AcquisitionBuyerStockBoostPercent = acquisitionBuyerStockBoostPercent;
+    Mod.Settings.AcquisitionDividendYieldPercent = math.max(0,math.min(10,ReadNumber("AcquisitionDividendYieldPercent") or 5));
     Mod.Settings.AcquisitionRebuildCooldownTurns = acquisitionRebuildCooldownTurns;
 
 
@@ -1364,9 +1337,6 @@ function Client_SaveConfigureUI(
     Mod.Settings.HiddenMilitaryInfrastructureEnabled = hiddenMilitaryInfrastructureEnabled;
     -- Headquarters retired. Keep the legacy toggle forced off for old saves.
     Mod.Settings.HeadquartersEnabled = false;
-    Mod.Settings.CyberFacilitiesEnabled = cyberFacilitiesEnabled;
-    Mod.Settings.CyberFacilityBaseCost = math.max(25, math.min(5000, cyberFacilityBaseCost or 450));
-    Mod.Settings.CyberFacilityMaxLevel = math.max(1, math.min(5, cyberFacilityMaxLevel or 4));
     Mod.Settings.AirbasesEnabled = airbasesEnabled;
     Mod.Settings.AirbaseBaseCost = math.max(25, math.min(5000, airbaseBaseCost or 350));
     Mod.Settings.AirbaseMaxLevel = math.max(1, math.min(5, airbaseMaxLevel or 4));
@@ -1378,27 +1348,6 @@ function Client_SaveConfigureUI(
     Mod.Settings.ForwardAirstripOilPerLevel = math.max(0, math.min(20, forwardAirstripOilPerLevel or 1));
     -- SAM Sites retired in the full patch.
     Mod.Settings.SAMSitesEnabled = false;
-    Mod.Settings.MissileSilosEnabled = missileSilosEnabled;
-    Mod.Settings.MissileSiloBaseCost = math.max(50, math.min(10000, missileSiloBaseCost or 500));
-    Mod.Settings.MissileSiloMaxLevel = math.max(1, math.min(5, missileSiloMaxLevel or 4));
-    Mod.Settings.MissileInterceptorCost = math.max(10, math.min(5000, missileInterceptorCost or 125));
-    Mod.Settings.MissileDefenseConventionalChance = math.max(0, math.min(100, missileDefenseConventionalChance or 70));
-    Mod.Settings.MissileDefenseEMPChance = math.max(0, math.min(100, missileDefenseEMPChance or 55));
-    Mod.Settings.MissileDefenseNuclearChance = math.max(0, math.min(100, missileDefenseNuclearChance or 40));
-    Mod.Settings.ConventionalMissileArmyDamagePercent = math.max(0, math.min(100, conventionalMissileArmyDamagePercent or 20));
-    Mod.Settings.ConventionalMissileStructureDamagePercent = math.max(0, math.min(100, conventionalMissileStructureDamagePercent or 30));
-    Mod.Settings.ConventionalMissileCityDamagePercent = math.max(0, math.min(100, conventionalMissileCityDamagePercent or 15));
-    Mod.Settings.ConventionalMissileResourceLevelDamage = math.max(0, math.min(5, conventionalMissileResourceLevelDamage or 1));
-    Mod.Settings.EMPBaseDisableTurns = math.max(1, math.min(10, empBaseDisableTurns or 3));
-    Mod.Settings.NuclearLowDamagePercent = math.max(0, math.min(100, nuclearLowDamagePercent or 35));
-    Mod.Settings.NuclearMediumDamagePercent = math.max(0, math.min(100, nuclearMediumDamagePercent or 55));
-    Mod.Settings.NuclearHighDamagePercent = math.max(0, math.min(100, nuclearHighDamagePercent or 75));
-    Mod.Settings.NuclearStructureDamagePercent = math.max(0, math.min(100, nuclearStructureDamagePercent or 70));
-    Mod.Settings.NuclearCityDamagePercent = math.max(0, math.min(100, nuclearCityDamagePercent or 60));
-    Mod.Settings.NuclearResourceLevelDamage = math.max(0, math.min(5, nuclearResourceLevelDamage or 2));
-    Mod.Settings.PowerGridEnabled = powerGridEnabled;
-    Mod.Settings.PowerGridBaseCost = math.max(25, math.min(5000, powerGridBaseCost or 300));
-    Mod.Settings.PowerGridMaxLevel = math.max(1, math.min(5, powerGridMaxLevel or 4));
     Mod.Settings.AirWingsEnabled = airWingsEnabled;
     Mod.Settings.AirWingBaseCost = math.max(25, math.min(5000, airWingBaseCost or 200));
     Mod.Settings.AircraftPerAirWing = math.max(1, math.min(500, aircraftPerAirWing or 25));
@@ -1407,6 +1356,14 @@ function Client_SaveConfigureUI(
     Mod.Settings.SpecialForcesBaseCost = math.max(25, math.min(5000, specialForcesBaseCost or 180));
     Mod.Settings.SpecialForcesCombatStrength = math.max(1, math.min(50, specialForcesCombatStrength or 5));
     Mod.Settings.SpecialForcesMaxPerPlayer = math.max(1, math.min(25, specialForcesMaxPerPlayer or 4));
+    Mod.Settings.TanksEnabled = ReadBool("TanksEnabled");
+    Mod.Settings.TankBaseCost=math.max(25,math.min(5000,ReadNumber("TankBaseCost")));
+    Mod.Settings.TankCombatStrength=math.max(1,math.min(50,ReadNumber("TankCombatStrength")));
+    Mod.Settings.TankMaxPerPlayer=math.max(1,math.min(100,ReadNumber("TankMaxPerPlayer")));
+    Mod.Settings.DronesEnabled = ReadBool("DronesEnabled");
+    Mod.Settings.DroneBaseCost=math.max(25,math.min(5000,ReadNumber("DroneBaseCost")));
+    Mod.Settings.DroneCombatStrength=math.max(1,math.min(50,ReadNumber("DroneCombatStrength")));
+    Mod.Settings.DroneMaxPerPlayer=math.max(1,math.min(100,ReadNumber("DroneMaxPerPlayer")));
     Mod.Settings.UraniumDistributionMode = math.max(0, math.min(5, uraniumDistributionMode or 1));
     Mod.Settings.UraniumFacilityCostMultiplier = math.max(100, math.min(500, uraniumFacilityCostMultiplier or 200));
     Mod.Settings.StartingUraniumStockpile = math.max(0, math.min(1000, startingUraniumStockpile or 0));

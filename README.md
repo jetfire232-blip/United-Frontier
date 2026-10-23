@@ -1,60 +1,13 @@
-# United Frontier
+# United Frontier — v15
 
-## v10 diplomacy filters and Gift Card enforcement
+United Frontier adds national economics, markets, resources, diplomacy, factions, the United Nations, Recruiters, airports and conventional combat units to War.app.
 
-Diplomacy now has mobile-friendly ALL, PLAYERS, AI, AT WAR, and AT PEACE filters, with four player buttons per row. The existing host Gift Card restriction is now enforced server-side: peaceful gifts remain allowed, but direct gifts between nations officially at war are rejected when the option is enabled.
+Military infrastructure is now limited to Airbases and Forward Airstrips. Air Wings, Special Forces, Tank Battalions and Drones use normal game movement, combat and fog. Power Grids are no longer required. Tank/Drone costs, combat strength and national limits are configurable by the host.
 
-## v9 live policy and recruitment update
+Missiles, nuclear/EMP strikes, interceptors, agencies, cyber operations, espionage and counterintelligence are removed. Existing-game migration cancels their queued actions and clears their private state. Map structures from those systems are removed on turn completion; old structure artwork is retained solely for compatibility until cleanup.
 
-National policy choices now show color-coded, exact before-and-after numbers for Commerce, market price examples, investment payout examples, confidence, and Recruiter troops. Ideology is also a real economic-versus-mobilization choice: market-led systems receive lower Recruiter output, while state-directed and military-focused systems receive higher Recruiter output. Market Overview and Recruiting Stations keep these live numbers available after setup.
+Markets, acquisition settlement and proportional dividends, resource stockpiles, Recruiter upgrades, policy previews, Gift Card restrictions, diplomacy filters, factions and the UN retain the previous fixes.
 
-United Frontier is a War.app / Warzone Lua strategy mod that adds national economics, strategic resources, markets, diplomacy, factions, the United Nations, military infrastructure, intelligence, missiles, and Smart AI.
+See INSTALL_V15.txt for upload instructions and V15_PATCH_NOTES.txt for costs, migration details and verification. Upload all eight Lua files and both image folders.
 
-## Current design
-
-The everyday UI is intentionally concise: costs, hard numbers, actions, and reports are shown directly; deeper rules are in **How It Works**. Diplomacy includes mobile-friendly filters for all nations, human players, AI, nations at war, and nations at peace. When enabled by the host, the Gift Card wartime restriction is enforced by the server while peaceful gifts remain available.
-
-### National systems
-- Mandatory National Setup with numerical previews and auto-assignment for unfinished setup.
-- Company Confidence affects flagship market performance.
-- Unrest has visible Commerce and Recruiter penalties.
-- Strategic Resources are private and discovered through ownership, borders, faction/alliance sharing, or intelligence.
-
-### Military infrastructure
-- Recruiters remain the core military system and continue working if optional military systems are disabled.
-- Power Grid is a private prerequisite for Airbases, Missile Command, and the Intelligence Agency.
-- Infrastructure durability scales with level: Lv.1 10 HP, Lv.2 20 HP, Lv.3 30 HP, Lv.4 40 HP.
-- An upgrade strengthens the existing installation and preserves existing damage; it does not intentionally create another structure icon.
-- Airbases consume Oil + Iron per build/upgrade (host configurable).
-- Forward Airstrips consume Oil per build/upgrade (host configurable).
-- If Airbases or Airstrips are enabled, Airlift Cards require airport infrastructure at both endpoints. If both are disabled, normal War.app Airlift rules apply. AI follows the same rule.
-
-### Intelligence Agency
-- One physical Intelligence Agency per nation; it can be rebuilt after destruction/capture.
-- Intelligence Operations: 3 levels.
-- Cyber Operations: 2 levels.
-- Counterintelligence: 2 levels.
-- Lv.3 Intelligence unlocks Financial Espionage and strategic missile warnings.
-- Detected covert operations let human defenders Counter, Trace (Lv.2), or Ignore before the turn advances. AI defenders can use active countermeasures automatically.
-- Successful intelligence can be shared with Faction members.
-
-### Missile Command & Defense
-- Missile Command development requires an operational Power Grid and Uranium for each build/upgrade.
-- Conventional, EMP, Nuclear, and Interceptor stockpiles.
-- Quantity controls allow multi-missile purchases and salvos.
-- Every missile resolves independently against interception.
-- Nuclear missiles consume Uranium and Low/Medium/High yield requires Missile Command Lv.1/Lv.2/Lv.3 respectively.
-
-### Factions
-- Public Faction directory with leaders/members.
-- Invitations, join requests, member management, leader transfer, Faction chat.
-- Faction Military Exercises with host-configurable contribution tiers and hard Recruiter-output previews.
-- Faction leaders can declare war on another Faction; members receive notifications and member wars propagate.
-- AI Faction creation/join decisions use ideology and diplomatic alignment instead of a random 50% roll.
-
-### AI / automation
-- Smart AI follows strategic-resource, airport/airlift, Uranium, infrastructure, and missile-defense rules.
-- AI flagship acquisition availability is determined from economic/market conditions rather than being permanently fixed.
-- Human AI Manager supports a recurring budget plus a one-time extra budget and has a simplified control screen.
-
-See **How It Works** inside the mod for the player-facing guide and `V10_PATCH_NOTES.txt` for the latest patch summary.
+New map icons cover Air Wings, Tank Battalions and Drones. Helicopter artwork is included as an unused asset, ready for future Helicopter gameplay. Resource types have not been removed.

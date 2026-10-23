@@ -1,3 +1,4 @@
+require('UF_ConventionalMilitary');
 -- =========================================================
 -- GLOBAL ECONOMY & DIPLOMACY
 -- INITIAL GAME / NATION STATE
@@ -1222,8 +1223,6 @@ function Server_StartGame(
                 airbases = {},
                 forwardAirstrips = {},
                 samSites = {},
-                missileSilos = {},
-                powerGrids = {},
                 airWings = {},
                 specialForces = {},
                 pendingAirWings = {},
@@ -1240,6 +1239,7 @@ function Server_StartGame(
     Mod.PrivateGameData = privateData;
     Mod.PlayerGameData = playerData;
 
+    UFConventionalMigration(game);
     print(
         "Global Economy initialization complete."
     );

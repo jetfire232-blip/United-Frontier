@@ -1,0 +1,38 @@
+UNITED FRONTIER V15 — CONVENTIONAL MILITARY
+
+Removed missile sites, all missile purchases and launches, salvos, nuclear and
+EMP strikes, interceptors, agencies, intelligence operations, financial espionage,
+cyber operations, counterintelligence, tracing, operation notifications and reports.
+Removed their AI actions, configuration controls, menu entries and help text.
+Retired Power Grids; Airbases and Air Wings operate without a grid prerequisite.
+
+Military screen: Airbases (airports), Forward Airstrips, Air Wings, Special Forces,
+Tanks and Drones. Recruiters remain available because they produce regular armies.
+Existing markets, resources, recruitment, diplomacy, factions and UN systems remain.
+
+NEW UNITS (host can change Commerce, strength and national limits)
+Tank: 300 Commerce + 1 Oil + 1 Iron; strength 8; limit 10 per nation.
+Drone: 150 Commerce + 1 Oil; strength 2; limit 10 per nation.
+Tank deployment: any owned territory.
+Drone deployment: owned Airbase or Forward Airstrip.
+Strength sets attack, defense, damage-to-kill and damage absorption.
+Purchases deploy when the turn advances, then use normal movement and combat.
+They follow normal fog and cannot be gifted/transferred to teammates.
+No separate Drone recon or remote attack missions are included.
+Limits count real units on the current map plus pending purchases.
+AI can buy them within its normal wartime spending budget and resource stockpile.
+
+Mobile military screen uses full-width actions, readable costs and confirmation.
+How It Works describes the current systems and exact numerical examples.
+
+EXISTING GAMES
+On the next server action or turn, migration discards obsolete inventories,
+queued strikes/covert operations, agency reports, alerts and disruptions.
+Obsolete map structures are removed when the turn finishes. Compatibility PNGs
+remain in the archive only so old map structures can load until cleanup runs.
+Old research/discovery caches are rebuilt from ownership, borders and sharing.
+This retirement does not refund historical construction/research purchases.
+Economy, holdings, companies, airport levels and existing combat units are kept.
+
+Install the complete set of eight Lua files, including NEW
+UF_ConventionalMilitary.lua, plus the two image directories.

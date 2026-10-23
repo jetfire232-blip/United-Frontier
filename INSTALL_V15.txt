@@ -1,0 +1,20 @@
+UNITED FRONTIER V15 — INSTALLATION
+
+Use this build for UNITED FRONTIER, not Global Affairs V3 or Host Authority.
+
+1. Keep a copy of your existing mod source.
+2. Upload all eight Lua files into the United Frontier mod root.
+   UF_ConventionalMilitary.lua is new and required by the server files.
+3. Upload StructureImages and SpecialUnitImages using those exact names.
+4. Reload the mod code using your normal development/update workflow.
+5. Open Military: airports, Airstrips, Air Wings, Special Forces, Tank Battalions
+   and Drones are available. Recruiters remain in Recruitment/My Assets.
+6. Existing games clear obsolete private state on a server action/turn and remove
+   obsolete map icons when the turn finishes. Historical purchases are not refunded.
+
+The Helicopter icon is included as artwork only; there is no playable Helicopter
+unit in this source yet. All resource types are unchanged pending your selection.
+
+Tested: Lua parsing, retirement migration, rejection of removed actions, unit
+purchase/deployment, costs, resource deduction, pending/deployed caps, and AI
+readiness without retired buildings. In-game/mobile testing is still needed.

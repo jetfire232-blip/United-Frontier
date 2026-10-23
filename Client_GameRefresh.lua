@@ -597,32 +597,6 @@ for _, alert in ipairs(factionAlerts) do
     end
 end
 
-local ownMilitary = (Mod.PlayerGameData or {}).ownMilitary or {};
-for _, alert in ipairs(ownMilitary.counterIntelAlerts or {}) do
-    if alert ~= nil and tostring(alert.status or "") == "PENDING" then
-        local notificationKey = "counterIntel:" .. tostring(alert.opID or "?");
-        if not DiplomacyNotificationsShown[notificationKey] then
-            DiplomacyNotificationsShown[notificationKey] = true;
-            UI.Alert(
-                "FOREIGN OPERATION DETECTED\n\n" ..
-                "Your Counterintelligence detected a possible " .. tostring(alert.kind or "foreign") .. " operation.\n" ..
-                "Attacker: Unknown\n\nOpen Military > Intelligence Agency before the turn advances to COUNTER, TRACE (Lv.2), or IGNORE it."
-            );
-        end
-    end
-end
-
-for index, warning in ipairs(ownMilitary.strategicWarnings or {}) do
-    local notificationKey = "strategicWarning:" .. tostring(warning.turn or "?") .. ":" .. tostring(index) .. ":" .. tostring(warning.text or "");
-    if not DiplomacyNotificationsShown[notificationKey] then
-        DiplomacyNotificationsShown[notificationKey] = true;
-        UI.Alert(
-            "STRATEGIC MISSILE WARNING\n\n" .. tostring(warning.text or "Incoming strategic threat detected.") ..
-            "\n\nOpen Military > Missile Command & Defense for status and reports."
-        );
-    end
-end
-
 if NationalSetupReminderShown then
 
     return;

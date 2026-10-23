@@ -409,7 +409,6 @@ function Client_PresentConfigureUI(rootParent)
         );
 
     local acquisitionPremiumPercent = GetNumberSetting(settings,"AcquisitionPremiumPercent",150);
-    local acquisitionBuyerStockBoostPercent = GetNumberSetting(settings,"AcquisitionBuyerStockBoostPercent",15);
     local acquisitionRebuildCooldownTurns = GetNumberSetting(settings,"AcquisitionRebuildCooldownTurns",3);
 
 
@@ -695,9 +694,6 @@ function Client_PresentConfigureUI(rootParent)
 
     -- Headquarters and SAM Sites were retired in the full patch.  Their old
     -- settings are intentionally not exposed; legacy state is purged safely.
-    local cyberFacilitiesEnabled = GetBoolSetting(settings, "CyberFacilitiesEnabled", true);
-    local cyberFacilityBaseCost = GetNumberSetting(settings, "CyberFacilityBaseCost", 450);
-    local cyberFacilityMaxLevel = GetNumberSetting(settings, "CyberFacilityMaxLevel", 4);
 
     local airbasesEnabled = GetBoolSetting(settings, "AirbasesEnabled", true);
     local airbaseBaseCost = GetNumberSetting(settings, "AirbaseBaseCost", 350);
@@ -712,28 +708,7 @@ function Client_PresentConfigureUI(rootParent)
 
     -- SAM Sites removed from United Frontier military infrastructure.
 
-    local missileSilosEnabled = GetBoolSetting(settings, "MissileSilosEnabled", true);
-    local missileSiloBaseCost = GetNumberSetting(settings, "MissileSiloBaseCost", 500);
-    local missileSiloMaxLevel = GetNumberSetting(settings, "MissileSiloMaxLevel", 4);
-    local missileInterceptorCost = GetNumberSetting(settings, "MissileInterceptorCost", 125);
-    local missileDefenseConventionalChance = GetNumberSetting(settings, "MissileDefenseConventionalChance", 70);
-    local missileDefenseEMPChance = GetNumberSetting(settings, "MissileDefenseEMPChance", 55);
-    local missileDefenseNuclearChance = GetNumberSetting(settings, "MissileDefenseNuclearChance", 40);
-    local conventionalMissileArmyDamagePercent = GetNumberSetting(settings, "ConventionalMissileArmyDamagePercent", 20);
-    local conventionalMissileStructureDamagePercent = GetNumberSetting(settings, "ConventionalMissileStructureDamagePercent", 30);
-    local conventionalMissileCityDamagePercent = GetNumberSetting(settings, "ConventionalMissileCityDamagePercent", 15);
-    local conventionalMissileResourceLevelDamage = GetNumberSetting(settings, "ConventionalMissileResourceLevelDamage", 1);
-    local empBaseDisableTurns = GetNumberSetting(settings, "EMPBaseDisableTurns", 3);
-    local nuclearLowDamagePercent = GetNumberSetting(settings, "NuclearLowDamagePercent", 35);
-    local nuclearMediumDamagePercent = GetNumberSetting(settings, "NuclearMediumDamagePercent", 55);
-    local nuclearHighDamagePercent = GetNumberSetting(settings, "NuclearHighDamagePercent", 75);
-    local nuclearStructureDamagePercent = GetNumberSetting(settings, "NuclearStructureDamagePercent", 70);
-    local nuclearCityDamagePercent = GetNumberSetting(settings, "NuclearCityDamagePercent", 60);
-    local nuclearResourceLevelDamage = GetNumberSetting(settings, "NuclearResourceLevelDamage", 2);
 
-    local powerGridEnabled = GetBoolSetting(settings, "PowerGridEnabled", true);
-    local powerGridBaseCost = GetNumberSetting(settings, "PowerGridBaseCost", 300);
-    local powerGridMaxLevel = GetNumberSetting(settings, "PowerGridMaxLevel", 4);
 
     local airWingsEnabled = GetBoolSetting(settings, "AirWingsEnabled", true);
     local airWingBaseCost = GetNumberSetting(settings, "AirWingBaseCost", 200);
@@ -1225,7 +1200,7 @@ function Client_PresentConfigureUI(rootParent)
     );
 
     AddNumberInput(root,"AcquisitionPremiumPercent","Flagship Acquisition Premium (%)",acquisitionPremiumPercent,110,300,"Accepted acquisition offers are based on market value multiplied by this premium.");
-    AddNumberInput(root,"AcquisitionBuyerStockBoostPercent","Buyer Flagship Stock Boost (%)",acquisitionBuyerStockBoostPercent,0,50,"Immediate price boost to the buyer's own flagship after a successful acquisition. Existing buyer shareholders benefit from the price increase.");
+    AddNumberInput(root,"AcquisitionDividendYieldPercent","Acquired Business Dividend Pool (% value/turn)",GetNumberSetting(settings,"AcquisitionDividendYieldPercent",5),0,10,"New acquisitions add this percentage of the acquired market value to the buyer company dividend pool each turn. Paid only on held shares. No separate national income. Stock price absorbs target value per buyer share.");
     AddNumberInput(root,"AcquisitionRebuildCooldownTurns","Replacement Flagship Cooldown (turns)",acquisitionRebuildCooldownTurns,0,10,"Turns an acquired nation must wait before creating a new flagship company.");
 
 
@@ -1509,13 +1484,10 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ArmyRecruiterMaxLevel", "Maximum Recruiter Level", armyRecruiterMaxLevel, 1, 5, "Upgrades increase army output and strategic resource maintenance demand.");
 
 
-    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Power Grid dependencies, Air Wings, Special Forces, Intelligence Agencies, and strategic readiness.");
+    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Airbases, Airstrips, Air Wings, Special Forces, Tanks, Drones, and strategic readiness.");
 
     AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
     AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Protect Military Asset Details Behind Intelligence", hiddenMilitaryInfrastructureEnabled);
-    AddCheckBox(root, "CyberFacilitiesEnabled", "Enable Intelligence Agency", cyberFacilitiesEnabled);
-    AddNumberInput(root, "CyberFacilityBaseCost", "Intelligence Agency Facility Base Cost (Commerce)", cyberFacilityBaseCost, 25, 5000, "One hidden agency per nation. Facility level increases maximum HP by 10 per level.");
-    AddNumberInput(root, "CyberFacilityMaxLevel", "Intelligence Agency Facility Maximum Level", cyberFacilityMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP. Intelligence/Cyber/Counterintelligence capability levels are upgraded separately in-game.");
 
     AddCheckBox(root, "AirbasesEnabled", "Enable Airbases", airbasesEnabled);
     AddNumberInput(root, "AirbaseBaseCost", "Airbase Base Cost (Commerce)", airbaseBaseCost, 25, 5000, "One icon per territory. Upgrading strengthens the same Airbase and raises its maximum HP.");
@@ -1528,41 +1500,27 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ForwardAirstripMaxLevel", "Forward Airstrip Maximum Level", forwardAirstripMaxLevel, 1, 5, "Upgrading strengthens the same icon and raises maximum HP by 10 per level.");
     AddNumberInput(root, "ForwardAirstripOilPerLevel", "Forward Airstrip Oil Required per Build/Upgrade", forwardAirstripOilPerLevel, 0, 20, "Consumed from the national stockpile each time the Airstrip gains a level.");
 
-    AddCheckBox(root, "MissileSilosEnabled", "Enable Missile Command sites", missileSilosEnabled);
-    AddNumberInput(root, "MissileSiloBaseCost", "Missile Command Base Cost (Commerce)", missileSiloBaseCost, 50, 10000, "Missile Command sites are visible strategic assets designed for limited missile inventory, reloads, and strategic strike orders.");
-    AddNumberInput(root, "MissileSiloMaxLevel", "Missile Command Maximum Level", missileSiloMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP. The same map icon is upgraded rather than duplicated.");
-    AddNumberInput(root, "MissileInterceptorCost", "Interceptor Missile Cost (Commerce)", missileInterceptorCost, 10, 5000, "Interceptors are stored nationally and consumed one per interception attempt.");
-    AddNumberInput(root, "MissileDefenseConventionalChance", "Conventional Missile Interception Chance (%)", missileDefenseConventionalChance, 0, 100, "Chance per incoming missile when an interceptor is available.");
-    AddNumberInput(root, "MissileDefenseEMPChance", "EMP Missile Interception Chance (%)", missileDefenseEMPChance, 0, 100, "Chance per incoming missile when an interceptor is available.");
-    AddNumberInput(root, "MissileDefenseNuclearChance", "Nuclear Missile Interception Chance (%)", missileDefenseNuclearChance, 0, 100, "Chance per incoming missile when an interceptor is available.");
 
-    AddSection(root, "MISSILE DAMAGE & EFFECTS", "Host controls for how destructive Missile Command strikes are. Percent values are applied to the target and are reduced on nuclear splash territories.");
-    AddNumberInput(root, "ConventionalMissileArmyDamagePercent", "Conventional Missile Army Damage (%)", conventionalMissileArmyDamagePercent, 0, 100, "Percent of armies removed on the primary target before splash scaling.");
-    AddNumberInput(root, "ConventionalMissileStructureDamagePercent", "Conventional Infrastructure Damage (%)", conventionalMissileStructureDamagePercent, 0, 100, "Damage applied to strategic structures on a successful conventional strike.");
-    AddNumberInput(root, "ConventionalMissileCityDamagePercent", "Conventional City / Territory Damage (%)", conventionalMissileCityDamagePercent, 0, 100, "Adds persistent city/territory damage to the struck territory.");
-    AddNumberInput(root, "ConventionalMissileResourceLevelDamage", "Conventional Resource Level Damage", conventionalMissileResourceLevelDamage, 0, 5, "How many facility levels can be removed from each resource present on the target territory.");
-    AddNumberInput(root, "EMPBaseDisableTurns", "EMP Base Disable Duration (turns)", empBaseDisableTurns, 1, 10, "Base strategic-system shutdown duration. Higher-level Silos can still improve EMP reach.");
-    AddNumberInput(root, "NuclearLowDamagePercent", "Nuclear LOW Army Damage (%)", nuclearLowDamagePercent, 0, 100, "Primary-target army damage for Low yield.");
-    AddNumberInput(root, "NuclearMediumDamagePercent", "Nuclear MEDIUM Army Damage (%)", nuclearMediumDamagePercent, 0, 100, "Primary-target army damage for Medium yield.");
-    AddNumberInput(root, "NuclearHighDamagePercent", "Nuclear HIGH Army Damage (%)", nuclearHighDamagePercent, 0, 100, "Primary-target army damage for High yield.");
-    AddNumberInput(root, "NuclearStructureDamagePercent", "Nuclear Infrastructure Damage (%)", nuclearStructureDamagePercent, 0, 100, "Base infrastructure damage. Low/High yield modifies this value down/up.");
-    AddNumberInput(root, "NuclearCityDamagePercent", "Nuclear City / Territory Damage (%)", nuclearCityDamagePercent, 0, 100, "Base persistent city/territory damage on the primary target.");
-    AddNumberInput(root, "NuclearResourceLevelDamage", "Nuclear Resource Level Damage", nuclearResourceLevelDamage, 0, 5, "Base resource-facility level loss. High yield can remove an additional level.");
 
-    AddCheckBox(root, "PowerGridEnabled", "Enable Power Grid", powerGridEnabled);
-    AddNumberInput(root, "PowerGridBaseCost", "Power Grid Cost (Commerce)", powerGridBaseCost, 25, 5000, "Power Grid is the prerequisite for Airbases, Missile Command, and the Intelligence Agency. Its location stays private.");
-    AddNumberInput(root, "PowerGridMaxLevel", "Power Grid Maximum Level", powerGridMaxLevel, 1, 5, "Default 4 = 10/20/30/40 maximum HP.");
 
     AddCheckBox(root, "AirWingsEnabled", "Enable Air Wings", airWingsEnabled);
-    AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings use normal fog visibility rather than global visibility. Purchasing requires capacity at an owned Airbase and an operational Power Grid.");
+    AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings use normal fog visibility rather than global visibility. Purchasing requires capacity at an owned operational Airbase.");
     AddNumberInput(root, "AircraftPerAirWing", "Aircraft Represented per Air Wing", aircraftPerAirWing, 1, 500, "Display scale only; example: one small Air Wing icon can represent 25 aircraft.");
     AddNumberInput(root, "AirWingMaxPerPlayer", "Maximum Air Wings per Player", airWingMaxPerPlayer, 1, 100, "Host-configurable national limit.");
 
     AddCheckBox(root, "SpecialForcesEnabled", "Enable Special Forces Infantry", specialForcesEnabled);
-    AddNumberInput(root, "SpecialForcesBaseCost", "Special Forces Cost (Commerce)", specialForcesBaseCost, 25, 5000, "Elite visible military unit. Dedicated covert-operation missions are not enabled in this release.");
+    AddNumberInput(root, "SpecialForcesBaseCost", "Special Forces Cost (Commerce)", specialForcesBaseCost, 25, 5000, "Elite visible combat unit.");
     AddNumberInput(root, "SpecialForcesCombatStrength", "Army Strength Represented per Special Forces Unit", specialForcesCombatStrength, 1, 50, "Controls the unit's attack, defense, damage-to-kill, and damage absorption. Default 5 means one Special Forces icon fights roughly like five normal armies.");
     AddNumberInput(root, "SpecialForcesMaxPerPlayer", "Maximum Special Forces Units per Player", specialForcesMaxPerPlayer, 1, 25, "Keeps Special Forces elite rather than replacing normal armies.");
 
+    AddCheckBox(root, "TanksEnabled", "Enable Tanks", GetBoolSetting(settings,"TanksEnabled",true));
+    AddNumberInput(root, "TankBaseCost", "Tank Cost (Commerce)", GetNumberSetting(settings,"TankBaseCost",300),25,5000,"Resource cost: 1 Oil + 1 Iron.");
+    AddNumberInput(root, "TankCombatStrength", "Tank Combat Strength", GetNumberSetting(settings,"TankCombatStrength",8),1,50,"Sets attack, defense, health and damage absorption.");
+    AddNumberInput(root, "TankMaxPerPlayer", "Maximum Tanks per Player", GetNumberSetting(settings,"TankMaxPerPlayer",10),1,100,"Includes deployed units and pending purchases.");
+    AddCheckBox(root, "DronesEnabled", "Enable Drones", GetBoolSetting(settings,"DronesEnabled",true));
+    AddNumberInput(root, "DroneBaseCost", "Drone Cost (Commerce)", GetNumberSetting(settings,"DroneBaseCost",150),25,5000,"Resource cost: 1 Oil; deployment requires an Airbase or Airstrip.");
+    AddNumberInput(root, "DroneCombatStrength", "Drone Combat Strength", GetNumberSetting(settings,"DroneCombatStrength",2),1,50,"Sets attack, defense, health and damage absorption.");
+    AddNumberInput(root, "DroneMaxPerPlayer", "Maximum Drones per Player", GetNumberSetting(settings,"DroneMaxPerPlayer",10),1,100,"Includes deployed units and pending purchases.");
     AddSection(root, "URANIUM STRATEGY", "Uranium is intentionally rarer and more expensive than ordinary resources. Players do not automatically receive Uranium based on Commerce or income.");
     AddNumberInput(root, "UraniumDistributionMode", "Uranium Distribution (0=None, 1=Very Rare, 2=Rare, 3=Moderate, 4=Common, 5=Manual)", uraniumDistributionMode, 0, 5, "Distribution logic will be applied during the resource-generation upgrade phase.");
     AddNumberInput(root, "UraniumFacilityCostMultiplier", "Uranium Facility Cost (% of normal resource facility)", uraniumFacilityCostMultiplier, 100, 500, "Default 200% makes Uranium the most expensive resource facility.");

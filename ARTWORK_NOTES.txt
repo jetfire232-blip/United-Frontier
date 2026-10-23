@@ -1,0 +1,14 @@
+New map art: AirWing.png, Tank.png, Drone.png, Helicopter.png.
+All are 50 x 50 RGBA PNGs with genuine transparent backgrounds.
+Air Wing, Tank Battalion and Drone are referenced by their playable units.
+Helicopter is a prepared art asset only.
+Special Forces retains the previous artwork.
+
+Generated with the built-in image tool, then resized for the game.
+Prompt set: crisp isometric military miniatures, realistic materials simplified
+to bold readable shapes, charcoal edges, light from upper left, transparent
+background, centered subject, no text/flags/tiles.
+- Air Wing: three steel-gray fighter jets in triangular formation.
+- Tank Battalion: olive-drab main battle tank with wide tracks and long barrel.
+- Drone: gray unmanned fixed-wing aircraft with narrow fuselage and long wings.
+- Helicopter: olive-drab utility helicopter with four-blade rotor and landing skids.

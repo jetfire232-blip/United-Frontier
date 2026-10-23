@@ -1,0 +1,56 @@
+UNITED FRONTIER — V16 APPROVAL CANDIDATE
+
+This is a locally checked submission candidate, not an approval from War.app.
+
+EARLIER GLOBAL AFFAIRS REVIEW CONCERNS
+- Spectator/reviewer nil-player crash in Portfolio.
+- Spectator Create Faction attempting to send a game message.
+- Narrow Diplomacy/Faction text inputs and poor Customize Tabs contrast.
+- PublicGameData exceeding the game's save limit.
+
+CHECKS COMPLETED FOR THIS BUILD
+- 25 screens rendered in reviewer/spectator mode with no active player.
+- Spectator Create/Purchase actions: zero server messages.
+- The same 25 screens rendered in active-player mode.
+- All eight Lua files parsed.
+- Actual host configuration UI and save exercised without missing controls.
+- Public resource nation/type filters and SHOW controls checked.
+- Uranium retirement, one-time pending-build refund and Airstrip rejection checked.
+- Recruiter/resource/Airport icon coexistence and obsolete-icon cleanup checked.
+- Acquisition cash settlement and proportional earnings regression passed.
+- Diplomacy/Gift Card restrictions and Turn 3 guard regressions passed.
+- Malformed client payloads rejected without a crash.
+- Resource offer/contract duplicate and queue limits checked.
+- A synthetic 40-nation, 2,000-deposit save with oversized histories compacted
+  from 2,862,394 to 383,525 estimated JSON bytes. This is a test fixture, not a
+  measurement of your actual game's engine serialization or a universal size cap.
+- All resource/unit image names and structure tier paths checked against files.
+- Existing MIT license retained; descriptions match current features.
+
+SMALL REVIEW FIXES
+- Common text-field preferred width increased from 120 to 260.
+- Public resource catalog no longer copied into each player's private data.
+- Resource offers: maximum 20 outgoing per nation / 400 total pending.
+- Resource contracts: maximum 64 involving one nation / 512 active in total.
+- Duplicate resource supply contracts must be canceled before replacement.
+- No airport artwork, airport levels or airport upgrade rules were added.
+
+LIVE TESTS STILL REQUIRED BEFORE REQUEST PUBLIC
+1. Create a SINGLE-PLAYER test using this exact code. Set up a nation; visit all
+   main tabs; buy/upgrade a Recruiter; buy an Airport, Air Wing, Tank and Drone;
+   complete several turns and reload the saved game.
+2. Test the same build in MULTIPLAYER. Include another human and AI; verify
+   resource contracts, company buying/selling/dividends, diplomacy, unit deployment
+   and turn advancement. Inspect the game as a spectator and test Create Faction.
+3. Test the Resources/Diplomacy/Faction screens on mobile for actual readability.
+4. Check Mod Reports and fix any runtime error before submitting.
+5. Mod Development Console > Open > Request Public; choose your tested game.
+
+Official references:
+https://war.app/wiki/Public_Mods
+https://war.app/wiki/Mod_Developers_Guide
+https://war.app/wiki/Mod_Game_Data_Storage
+https://war.app/wiki/Mod_Security
+
+Local tests cannot reproduce the War.app multiplayer Lua engine, real network
+callbacks, device rendering or a complete live 40-player match.

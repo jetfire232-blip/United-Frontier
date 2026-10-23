@@ -35,7 +35,7 @@ end
 -- Give every mod text input a sensible preferred width while still allowing
 -- the layout engine to size it for smaller screens.
 local function CreateWideTextInput(parent, width)
-    return UI.CreateTextInputField(parent).SetPreferredWidth(width or 120);
+    return UI.CreateTextInputField(parent).SetPreferredWidth(width or 260);
 end
 
 InvestmentProjectTypes = {
@@ -4442,6 +4442,7 @@ function ShowResourcesMenu(parent, game)
     UI.CreateLabel(area).SetText("Oil + Iron: Airports and Tanks. Oil: Drones. Each Recruiter level: +1 Oil, +1 Food, +1 Iron maintenance per turn.").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("Gas and Coal support the economy. Copper, Rare Earths and Lithium support industry/electronics. Losing baseline supply causes the shortage effects shown below; surplus fills your stockpile or can be traded.").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("Production − Need = Net. Stockpiles cover a negative Net before a shortage penalty applies.").SetColor("#82CFFF");
+    UI.CreateLabel(area).SetText("Trading limits: 20 pending offers per nation; 64 active contracts per nation. One active supply contract per resource and seller/buyer pair. Resolve or cancel an existing entry before replacing it.").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("Per uncovered unit: Oil −15 readiness; Food −10 readiness and +3 unrest; Iron −12 readiness. Gas −5 readiness and −"..tostring(GetClientSetting("ResourceShortagePenaltyPercent",3)).."% Commerce; Coal/Copper −2% Commerce; Rare Earths −3 readiness / −1% Commerce; Lithium −2 readiness / −1% Commerce. National caps still apply.").SetColor("#FFB366");
 
     if IsViewerMode(game) then

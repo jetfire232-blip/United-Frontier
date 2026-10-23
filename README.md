@@ -1,5 +1,9 @@
 # United Frontier — v16
 
+Approval candidate: see APPROVAL_REVIEW.txt for completed checks and the remaining
+single-player/multiplayer tests. Common text fields are wider, duplicate resource
+catalog storage is removed, and resource offer/contract growth is bounded.
+
 This build includes public resource locations and filters, Airports, Air Wings, Special Forces, Tank Battalions, Drones, Recruiters, markets, diplomacy, factions and the United Nations.
 
 Forward Airstrips, Power Grids, missiles, agencies, cyber operations, counterintelligence and Uranium are removed. Resource locations and owners are available directly in Resources. Map icons follow normal game fog.

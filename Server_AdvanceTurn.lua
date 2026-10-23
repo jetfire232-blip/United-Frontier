@@ -19048,7 +19048,9 @@ local function UFRefreshAllPlayerStrategicIntel(game, data)
         privateData.strategicMilitary.byPlayer[playerID] = state;
         playerData[playerID] = playerData[playerID] or {};
         playerData[playerID].strategicIntel = {
-            knownResources = UFBuildKnownResourcesForPlayer(game, data, standing, playerID, state),
+            -- Resource locations are already in the public catalog. Avoid
+            -- duplicating the entire catalog once per player.
+            knownResources = {},
             knownMilitary = UFBuildKnownMilitaryForPlayer(game, data, standing, playerID, privateData)
         };
         playerData[playerID].ownMilitary = state;

@@ -3382,8 +3382,8 @@ function Server_GameCustomMessage(
     setReturn
 )
 
-    if payload == nil
-        or payload.type == nil then
+    if type(payload) ~= "table"
+        or type(payload.type) ~= "string" then
 
 
         setReturn({
@@ -12217,6 +12217,9 @@ end
 
     if payload.type == "proposeResourceTrade" then
 
+        local allowed,reason=UFResourceOfferAllowed(resourceData or {},playerID,MakeInteger(payload.targetPlayerID),tostring(payload.resource or ""),"offer");
+        if not allowed then setReturn({success=false,message=reason});return;end
+
         if resourceData == nil
             or resourceData.enabled ~= true
             or GetSetting("ResourceTradingEnabled", true) ~= true
@@ -12280,6 +12283,8 @@ end
 
 
     if payload.type == "requestResourceTrade" then
+        local allowed,reason=UFResourceOfferAllowed(resourceData or {},playerID,MakeInteger(payload.targetPlayerID),tostring(payload.resource or ""),"request");
+        if not allowed then setReturn({success=false,message=reason});return;end
         if resourceData == nil
             or resourceData.enabled ~= true
             or GetSetting("ResourceTradingEnabled", true) ~= true
@@ -12344,6 +12349,8 @@ end
             setReturn({success=false, message="Resource trade offer not found."});
             return;
         end
+        local allowed,reason=UFResourceContractAllowed(resourceData,offer);
+        if not allowed then setReturn({success=false,message=reason});return;end
         table.remove(resourceData.pendingOffers, index);
         local activeTrade = offer;
         if offer.kind == "request" then

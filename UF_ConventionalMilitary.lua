@@ -38,6 +38,8 @@ function UFConventionalMigration(game)
             pgd[playerID]=pgd[playerID] or {}; pgd[playerID].strategicIntel={knownResources={},knownMilitary={}};
         end
         pgd[playerID]=pgd[playerID] or {}; pgd[playerID].ownMilitary=state;
+        pgd[playerID].strategicIntel=pgd[playerID].strategicIntel or {};
+        pgd[playerID].strategicIntel.knownResources={};
     end
     Mod.PrivateGameData=pd; Mod.PlayerGameData=pgd;
     local data=Mod.PublicGameData or {};
@@ -85,6 +87,34 @@ function UFPublishResourceCatalog(game,data)
         nodes.Uranium=nil;local id=tonumber(tid) or tid;local terr=standing.Territories[id];
         if terr then resources.owners[tid]=terr.OwnerPlayerID;resources.owners[id]=terr.OwnerPlayerID;end
     end
+end
+
+-- Bound resource queues so repeated requests cannot grow a save indefinitely.
+function UFResourceOfferAllowed(resources,playerID,targetID,resource,kind)
+    local pending=resources.pendingOffers or {};local count=0;
+    if #pending>=400 then return false,"The resource offer queue is full. Resolve existing offers first.";end
+    for _,offer in ipairs(pending)do
+        if offer.fromPlayerID==playerID then count=count+1;end
+        if offer.fromPlayerID==playerID and offer.toPlayerID==targetID and offer.resource==resource and tostring(offer.kind or "offer")==kind then
+            return false,"You already have a pending offer/request for this resource and partner.";
+        end
+    end
+    if count>=20 then return false,"Resolve your pending resource offers before sending more (maximum 20).";end
+    return true;
+end
+
+function UFResourceContractAllowed(resources,offer)
+    local trades=resources.activeTrades or {};if #trades>=512 then return false,"The resource contract limit has been reached. End an existing contract first.";end
+    local seller=offer.kind=="request" and offer.toPlayerID or offer.fromPlayerID;
+    local buyer=offer.kind=="request" and offer.fromPlayerID or offer.toPlayerID;
+    local sellerCount,buyerCount=0,0;
+    for _,trade in ipairs(trades)do
+        if trade.fromPlayerID==seller or trade.toPlayerID==seller then sellerCount=sellerCount+1;end
+        if trade.fromPlayerID==buyer or trade.toPlayerID==buyer then buyerCount=buyerCount+1;end
+        if trade.fromPlayerID==seller and trade.toPlayerID==buyer and trade.resource==offer.resource then return false,"An active contract already supplies this resource between these nations. Cancel it before replacing it.";end
+    end
+    if sellerCount>=64 or buyerCount>=64 then return false,"A nation has reached its limit of 64 active resource contracts.";end
+    return true;
 end
 
 local function liveCount(game,playerID,name)

@@ -9,13 +9,14 @@ UFConventionalUnitConfig={
 };
 
 function UFRetiredAction(payload)
-    if (payload.type=="requestHeadquartersSharing" or payload.type=="respondHeadquartersSharing") and payload.shareType~="SharedIntelligence" then return true; end
+    if payload.resource=="Uranium" then return true; end
+    if payload.type=="requestHeadquartersSharing" or payload.type=="respondHeadquartersSharing" then return true; end
     local retired={upgradeAgencyCapability=true,quoteAgencyOperation=true,launchIntelligenceOperation=true,launchFinancialEspionage=true,launchAgencyCyberOperation=true,counterIntelResponse=true,shareIntelReport=true,hqCyberDisrupt=true,hqResourceScan=true,hqMilitaryScan=true,resupplyMissile=true,launchMissile=true,buildHeadquarters=true,upgradeHeadquartersBranch=true};
     if retired[payload.type] then return true; end
-    return (payload.type=="buildStrategicMilitary" or payload.type=="repairMilitaryAsset") and payload.kind~="Airbase" and payload.kind~="ForwardAirstrip";
+    return (payload.type=="buildStrategicMilitary" or payload.type=="repairMilitaryAsset") and payload.kind~="Airbase";
 end
 
-local retiredFields={"headquarters","samSites","missileSilos","powerGrids","cyberFacilities","missileInventory","interceptorInventory","pendingStrategicStrikes","pendingAirMissions","airMissionUsedTurn","intelligenceOperationsLevel","cyberOperationsLevel","counterIntelligenceLevel","intelligenceReports","counterIntelAlerts","strategicWarnings","lastAgencyOperationTurn","lastAgencyTargetTurn","lastCyberOperationTurn","hqRecentResults","disruptions","cityDamage"};
+local retiredFields={"headquarters","samSites","missileSilos","powerGrids","forwardAirstrips","cyberFacilities","missileInventory","interceptorInventory","pendingStrategicStrikes","pendingAirMissions","airMissionUsedTurn","intelligenceOperationsLevel","cyberOperationsLevel","counterIntelligenceLevel","intelligenceReports","counterIntelAlerts","strategicWarnings","lastAgencyOperationTurn","lastAgencyTargetTurn","lastCyberOperationTurn","hqRecentResults","disruptions","cityDamage"};
 
 function UFConventionalMigration(game)
     local pd=Mod.PrivateGameData or {};
@@ -25,7 +26,7 @@ function UFConventionalMigration(game)
     local pgd=Mod.PlayerGameData or {};
     for playerID,state in pairs(military.byPlayer) do
         for _,field in ipairs(retiredFields) do state[field]=nil; end
-        state.airbases=state.airbases or {}; state.forwardAirstrips=state.forwardAirstrips or {};
+        state.airbases=state.airbases or {};
         state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
         state.tanks=state.tanks or {}; state.drones=state.drones or {};
         state.pendingTanks=state.pendingTanks or {}; state.pendingDrones=state.pendingDrones or {};
@@ -42,15 +43,48 @@ function UFConventionalMigration(game)
     local data=Mod.PublicGameData or {};
     for _,nation in pairs((data.globalEconomy or {}).nations or {}) do
         if nation.military then
-            for _,field in ipairs({"headquartersStatus","headquartersLevel","headquartersTerritoryID","headquartersBranches","samSiteCount","missileSiloCount","powerGridCount","jointStrategicWarningEnabled"}) do nation.military[field]=nil; end
+            for _,field in ipairs({"headquartersStatus","headquartersLevel","headquartersTerritoryID","headquartersBranches","samSiteCount","missileSiloCount","powerGridCount","forwardAirstripCount","jointStrategicWarningEnabled"}) do nation.military[field]=nil; end
         end
         nation.aiLastMissileOrder=nil;
+        for _,field in ipairs({"resourceStockpile","resourceProduction","resourceEffective","resourceRequirements","resourceShortages","resourceStockpileChange"}) do if type(nation[field])=="table" then nation[field].Uranium=nil;end end
     end
     local diplomacy=(data.globalEconomy or {}).diplomacy or {};
-    for _,alliance in pairs(diplomacy.alliances or {}) do alliance.jointStrategicWarning=nil; end
-    local requests=diplomacy.pendingHeadquartersShareRequests or {};
-    for i=#requests,1,-1 do if requests[i].shareType~="SharedIntelligence" then table.remove(requests,i); end end
+    for _,alliance in pairs(diplomacy.alliances or {}) do alliance.jointStrategicWarning=nil;alliance.sharedIntelligence=nil;end
+    diplomacy.pendingHeadquartersShareRequests={};
+    local resources=(data.globalEconomy or {}).resources;
+    if resources then
+        for _,nodes in pairs(resources.territories or {}) do nodes.Uranium=nil;end
+        for _,field in ipairs({"pendingBuilds","pendingOffers","activeTrades"})do
+            local list=resources[field] or {};
+            for i=#list,1,-1 do
+                local item=list[i];
+                if item.resource=="Uranium" then
+                    if field=="pendingBuilds" and item.paid==true and (tonumber(item.cost) or 0)>0 then
+                        local server=game.ServerGame;
+                        if server and server.SetPlayerResource and server.LatestTurnStanding and server.LatestTurnStanding.NumResources then
+                            local current=server.LatestTurnStanding.NumResources(item.playerID,WL.ResourceType.Gold);
+                            server.SetPlayerResource(item.playerID,WL.ResourceType.Gold,current+item.cost);
+                        end
+                        local nation=((data.globalEconomy or {}).nations or {})[item.playerID];
+                        if nation then nation.resourceBuildReservedGold=math.max(0,(tonumber(nation.resourceBuildReservedGold) or 0)-(tonumber(item.cost) or 0));end
+                    end
+                    table.remove(list,i);
+                end
+            end
+        end
+    end
+    UFPublishResourceCatalog(game,data);
     Mod.PublicGameData=data;
+end
+
+function UFPublishResourceCatalog(game,data)
+    local resources=(data.globalEconomy or {}).resources;if not resources then return;end
+    resources.owners=resources.owners or {};
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;if not standing then return;end
+    for tid,nodes in pairs(resources.territories or {}) do
+        nodes.Uranium=nil;local id=tonumber(tid) or tid;local terr=standing.Territories[id];
+        if terr then resources.owners[tid]=terr.OwnerPlayerID;resources.owners[id]=terr.OwnerPlayerID;end
+    end
 end
 
 local function liveCount(game,playerID,name)
@@ -71,8 +105,7 @@ function UFQueueConventionalUnit(game,data,playerID,state,kind,territoryID,canSp
     if terr==nil or terr.OwnerPlayerID~=playerID then return false,"Select a territory you currently own."; end
     if kind=="Drone" then
         local base=setting("AirbasesEnabled",true)==true and (tonumber((state.airbases or {})[territoryID] or (state.airbases or {})[tostring(territoryID)]) or 0)>0;
-        local strip=setting("ForwardAirstripsEnabled",true)==true and (tonumber((state.forwardAirstrips or {})[territoryID] or (state.forwardAirstrips or {})[tostring(territoryID)]) or 0)>0;
-        if not base and not strip then return false,"Deploy Drones at an owned Airbase or Forward Airstrip."; end
+        if not base then return false,"Deploy Drones at an owned Airport."; end
     end
     local total=liveCount(game,playerID,cfg.name or kind);
     state[cfg.pending]=state[cfg.pending] or {};

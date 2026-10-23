@@ -2930,7 +2930,7 @@ end
 local RESOURCE_TYPES = {
     ["Oil"] = true,
     ["Gas"] = true,
-    ["Uranium"] = true,
+
     ["Iron"] = true,
     ["Food"] = true,
     ["Rare Earths"] = true,
@@ -3227,7 +3227,6 @@ end
 
 local UF_MILITARY_KIND_CONFIG = {
     Airbase={tableName="airbases", enabled="AirbasesEnabled", baseCost="AirbaseBaseCost", maxLevel="AirbaseMaxLevel", defaultCost=350, defaultMax=4},
-    ForwardAirstrip={tableName="forwardAirstrips", enabled="ForwardAirstripsEnabled", baseCost="ForwardAirstripBaseCost", maxLevel="ForwardAirstripMaxLevel", defaultCost=175, defaultMax=3},
 };
 
 local function UFEnsurePrivateMilitary(playerID)
@@ -3236,10 +3235,10 @@ local function UFEnsurePrivateMilitary(playerID)
     pd.strategicMilitary.byPlayer = pd.strategicMilitary.byPlayer or {};
     local state = pd.strategicMilitary.byPlayer[playerID];
     if state == nil then
-        state = {headquarters=nil, airbases={}, forwardAirstrips={}, samSites={}, airWings={}, specialForces={}, pendingAirWings={}, pendingSpecialForces={}, discoveredResourceTerritories={}, discoveredMilitary={}, lastResourceIntelScanTurn=nil, lastMilitaryIntelScanTurn=nil};
+        state = {headquarters=nil, airbases={}, samSites={}, airWings={}, specialForces={}, pendingAirWings={}, pendingSpecialForces={}, discoveredResourceTerritories={}, discoveredMilitary={}, lastResourceIntelScanTurn=nil, lastMilitaryIntelScanTurn=nil};
         pd.strategicMilitary.byPlayer[playerID] = state;
     end
-    state.airbases=state.airbases or {}; state.forwardAirstrips=state.forwardAirstrips or {};
+    state.airbases=state.airbases or {};
     state.samSites={}; state.headquarters=nil;
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
@@ -3269,7 +3268,7 @@ end
 
 
 local function UFMilitaryDisplayName(kind)
-    local names={Airbase="Airbase",ForwardAirstrip="Forward Airstrip"};
+    local names={Airbase="Airbase"};
     return names[kind] or kind;
 end
 
@@ -3293,51 +3292,11 @@ local function UFEnsurePlayerIntelTables(playerData, playerID)
     return playerData[playerID].strategicIntel;
 end
 
-local function UFPropagateResourceDiscovery(data, privateData, playerData, discovererID, territoryID, ownerID, nodes)
-    privateData.strategicMilitary = privateData.strategicMilitary or {byPlayer={}};
-    privateData.strategicMilitary.byPlayer = privateData.strategicMilitary.byPlayer or {};
-    local byPlayer = privateData.strategicMilitary.byPlayer;
-    for viewerID, _ in pairs((data.globalEconomy or {}).nations or {}) do
-        if viewerID == discovererID or UFPlayersShareIntelForDiscovery(data, discovererID, viewerID) then
-            byPlayer[viewerID] = byPlayer[viewerID] or {headquarters=nil,airbases={},forwardAirstrips={},samSites={},airWings={},specialForces={},pendingAirWings={},pendingSpecialForces={},discoveredResourceTerritories={},discoveredMilitary={}};
-            local viewerState = byPlayer[viewerID];
-            viewerState.discoveredResourceTerritories = viewerState.discoveredResourceTerritories or {};
-            viewerState.discoveredResourceTerritories[territoryID] = true;
-            local intel = UFEnsurePlayerIntelTables(playerData, viewerID);
-            intel.knownResources[territoryID] = {
-                ownerPlayerID = ownerID,
-                resources = nodes,
-                reason = viewerID == discovererID and "Strategic Intelligence" or "Shared Intelligence"
-            };
-        end
-    end
-end
 
-local function UFPropagateMilitaryDiscovery(data, privateData, playerData, discovererID, ownerID, kind, territoryID, level, count)
-    local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
-    local discoveryKey = tostring(ownerID) .. ":" .. tostring(kind) .. ":" .. tostring(territoryID);
-    for viewerID, _ in pairs((data.globalEconomy or {}).nations or {}) do
-        if viewerID == discovererID or UFPlayersShareIntelForDiscovery(data, discovererID, viewerID) then
-            byPlayer[viewerID] = byPlayer[viewerID] or {headquarters=nil,airbases={},forwardAirstrips={},samSites={},airWings={},specialForces={},pendingAirWings={},pendingSpecialForces={},discoveredResourceTerritories={},discoveredMilitary={}};
-            local viewerState = byPlayer[viewerID];
-            viewerState.discoveredMilitary = viewerState.discoveredMilitary or {};
-            viewerState.discoveredMilitary[discoveryKey] = true;
-            local intel = UFEnsurePlayerIntelTables(playerData, viewerID);
-            intel.knownMilitary[discoveryKey] = {
-                ownerPlayerID=ownerID, kind=kind, territoryID=territoryID,
-                level=level or 1, count=count or 1,
-                reason=viewerID == discovererID and "HQ Intelligence" or "Shared Intelligence"
-            };
-        end
-    end
-end
 
-local function UFShuffleList(list)
-    for i=#list,2,-1 do
-        local j=math.random(i);
-        list[i],list[j]=list[j],list[i];
-    end
-end
+
+
+
 
 
 local function UFAssetConditionKey(kind, territoryID)
@@ -3352,13 +3311,13 @@ local function UFGetAssetCondition(state, kind, territoryID)
 end
 
 local function UFStructureTableAndLevel(state, kind, territoryID)
-    local map={Airbase="airbases",ForwardAirstrip="forwardAirstrips"};
+    local map={Airbase="airbases"};
     local tbl=state[map[kind] or ""] or {};
     return tbl, tonumber(tbl[territoryID] or tbl[tostring(territoryID)]) or 0;
 end
 
 local function UFRepairBaseCost(kind)
-    local map={Airbase={"AirbaseBaseCost",350},ForwardAirstrip={"ForwardAirstripBaseCost",175}};
+    local map={Airbase={"AirbaseBaseCost",350}};
     local d=map[kind] or {nil,250};
     return math.max(25, math.floor(tonumber(d[1] and GetSetting(d[1],d[2]) or d[2]) or d[2]));
 end
@@ -3394,7 +3353,7 @@ end
 
 local function UFResourceRequirementText(kind)
     if kind=="Airbase" then return tostring(GetSetting("AirbaseOilPerLevel",1)).." Oil + "..tostring(GetSetting("AirbaseIronPerLevel",1)).." Iron"; end
-    if kind=="ForwardAirstrip" then return tostring(GetSetting("ForwardAirstripOilPerLevel",1)).." Oil"; end
+
     return "";
 end
 
@@ -7093,75 +7052,6 @@ end
 -- =========================================================
 -- HEADQUARTERS SHARING (ALLIANCES)
 -- =========================================================
-
-if payload.type == "requestHeadquartersSharing" then
-    local targetPlayerID = MakeInteger(payload.targetPlayerID);
-    local shareType = tostring(payload.shareType or "");
-    if targetPlayerID == nil or targetPlayerID == playerID then
-        setReturn({success=false, message="Invalid allied nation."}); return;
-    end
-    if shareType ~= "SharedIntelligence" then
-        setReturn({success=false, message="Invalid strategic-intelligence sharing option."}); return;
-    end
-    local diplomacy = GetDiplomacyData(data);
-    local pairKey = PairKey(playerID, targetPlayerID);
-    local alliance = diplomacy.alliances[pairKey];
-    if alliance == nil or alliance.active ~= true then
-        setReturn({success=false, message="Strategic-intelligence sharing can only be requested from an active ally."}); return;
-    end
-    if shareType == "SharedIntelligence" and alliance.sharedIntelligence == true then
-        setReturn({success=false, message="Shared Intelligence is already active with this ally."}); return;
-    end
-    diplomacy.pendingHeadquartersShareRequests = diplomacy.pendingHeadquartersShareRequests or {};
-    for _, request in ipairs(diplomacy.pendingHeadquartersShareRequests) do
-        if request.fromPlayerID == playerID and request.toPlayerID == targetPlayerID and request.shareType == shareType then
-            setReturn({success=false, message="That strategic-intelligence sharing request is already pending."}); return;
-        end
-    end
-    table.insert(diplomacy.pendingHeadquartersShareRequests, {
-        fromPlayerID=playerID,
-        toPlayerID=targetPlayerID,
-        shareType=shareType,
-        createdTurn=GetCurrentEconomyTurn(data)
-    });
-    CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
-    setReturn({success=true, message="Strategic-intelligence sharing request sent."}); return;
-end
-
-if payload.type == "respondHeadquartersSharing" then
-    local fromPlayerID = MakeInteger(payload.fromPlayerID);
-    local shareType = tostring(payload.shareType or "");
-    local accept = payload.accept == true;
-    if fromPlayerID == nil or fromPlayerID == playerID then
-        setReturn({success=false, message="Invalid strategic-intelligence sharing request."}); return;
-    end
-    local diplomacy = GetDiplomacyData(data);
-    local foundIndex = nil;
-    for i, request in ipairs(diplomacy.pendingHeadquartersShareRequests or {}) do
-        if request.fromPlayerID == fromPlayerID and request.toPlayerID == playerID and request.shareType == shareType then
-            foundIndex=i; break;
-        end
-    end
-    if foundIndex == nil then
-        setReturn({success=false, message="That strategic-intelligence sharing request is no longer pending."}); return;
-    end
-    table.remove(diplomacy.pendingHeadquartersShareRequests, foundIndex);
-    local pairKey = PairKey(playerID, fromPlayerID);
-    local alliance = diplomacy.alliances[pairKey];
-    if accept then
-        if alliance == nil or alliance.active ~= true then
-            CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
-            setReturn({success=false, message="The alliance is no longer active."}); return;
-        end
-        if shareType == "SharedIntelligence" then
-            alliance.sharedIntelligence = true;
-        else
-            setReturn({success=false, message="Invalid strategic-intelligence sharing option."}); return;
-        end
-    end
-    CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
-    setReturn({success=true, message=accept and "Strategic-intelligence sharing accepted. Intelligence access refreshes with the strategic-intelligence update." or "Strategic-intelligence sharing request declined."}); return;
-end
 
 -- =========================================================
 -- CREATE FACTION
@@ -12091,7 +11981,7 @@ end
         local consume={};
 
         if kind=="Airbase" then consume.Oil=math.max(0,math.floor(tonumber(GetSetting("AirbaseOilPerLevel",1)) or 1)); consume.Iron=math.max(0,math.floor(tonumber(GetSetting("AirbaseIronPerLevel",1)) or 1)); end
-        if kind=="ForwardAirstrip" then consume.Oil=math.max(0,math.floor(tonumber(GetSetting("ForwardAirstripOilPerLevel",1)) or 1)); end
+
         for r,need in pairs(consume) do local have=tonumber(nation.resourceStockpile[r]) or 0; if have<need then setReturn({success=false,message=UFMilitaryDisplayName(kind).." level "..tostring(newLevel).." requires "..UFResourceRequirementText(kind)..". Your "..r.." stockpile has "..tostring(have).."."}); return; end end
         for r,need in pairs(consume) do nation.resourceStockpile[r]=(tonumber(nation.resourceStockpile[r]) or 0)-need; end
         RemoveGold(game,playerID,cost);
@@ -12291,10 +12181,7 @@ end
         local cost = currentLevel <= 0
             and (baseCost * 3)
             or (baseCost * newLevel);
-        if resourceName == "Uranium" then
-            local uraniumMultiplier = math.max(100, math.min(500, tonumber(GetSetting("UraniumFacilityCostMultiplier", 200)) or 200));
-            cost = math.max(1, math.floor(cost * uraniumMultiplier / 100 + 0.5));
-        end
+
         local nation = EnsureNation(data, game, playerID);
         EnsureNationResourceFields(nation);
         local availableGold = GetStoredGold(game, playerID);

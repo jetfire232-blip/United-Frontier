@@ -12913,7 +12913,7 @@ function AIHasWarPreparedness(game, data, aiPlayerID)
     local privateData = Mod.PrivateGameData or {};
     local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
     local state = byPlayer[aiPlayerID] or {
-        airbases={}, forwardAirstrips={}, };
+        airbases={}, };
 
     local missing = {};
     local checks = 0;
@@ -12934,7 +12934,6 @@ function AIHasWarPreparedness(game, data, aiPlayerID)
     -- become war-ready without building a Power Grid or air infrastructure.
     local airWingsEnabled = GetSetting("AirWingsEnabled", true) == true;
     local airbasesEnabled = GetSetting("AirbasesEnabled", true) == true;
-    local airstripsEnabled = GetSetting("ForwardAirstripsEnabled", true) == true;
 
 
 
@@ -12956,7 +12955,7 @@ function AIHasWarPreparedness(game, data, aiPlayerID)
     end
 
     -- Air logistics is required only when Air Wings are actually enabled.
-    if airWingsEnabled and (airbasesEnabled or airstripsEnabled) then
+    if airWingsEnabled and airbasesEnabled then
         local hasAirport = false;
         if airbasesEnabled then
             for tid, lvl in pairs(state.airbases or {}) do
@@ -14644,7 +14643,7 @@ end
 -- =========================================================
 
 local RESOURCE_NAMES = {
-    "Oil", "Gas", "Uranium", "Iron", "Food", "Rare Earths",
+    "Oil", "Gas", "Iron", "Food", "Rare Earths",
     "Coal", "Copper", "Lithium"
 };
 
@@ -14704,7 +14703,7 @@ local function ResourceTerritoryBordersAnotherPlayer(game, standing, territoryID
 end
 
 local function ShouldShowResourceIcon(game, standing, territoryID, resourceName)
-    return false;
+    return resourceName~="Uranium";
 end
 
 local function IsResourceCustomStructure(structureType)
@@ -14900,8 +14899,8 @@ end
 local function BuildRecruiterStructures(existing, level)
     local result = {};
     for structureType, amount in pairs(existing or {}) do
-        local key = tostring(structureType);
-        if string.find(key, "ArmyRecruiter", 1, true) == nil then result[structureType] = amount; end
+        local recruiter=false; for i=1,5 do if structureType==WL.StructureType.Custom("ArmyRecruiter"..tostring(i)) then recruiter=true; break; end end
+        if not recruiter then result[structureType] = amount; end
     end
     if (tonumber(level) or 0) > 0 then result[WL.StructureType.Custom(RecruiterStructureName(level))] = 1; end
     return result;
@@ -17244,10 +17243,10 @@ local function UFEnsureStrategicAIState(playerID)
     pd.strategicMilitary.byPlayer=pd.strategicMilitary.byPlayer or {};
     local state=pd.strategicMilitary.byPlayer[playerID];
     if state==nil then
-        state={headquarters=nil,airbases={},forwardAirstrips={},samSites={},airWings={},specialForces={},pendingAirWings={},pendingSpecialForces={},discoveredResourceTerritories={},discoveredMilitary={}};
+        state={headquarters=nil,airbases={},samSites={},airWings={},specialForces={},pendingAirWings={},pendingSpecialForces={},discoveredResourceTerritories={},discoveredMilitary={}};
         pd.strategicMilitary.byPlayer[playerID]=state;
     end
-    state.airbases=state.airbases or {}; state.forwardAirstrips=state.forwardAirstrips or {};
+    state.airbases=state.airbases or {};
     state.samSites=state.samSites or {};
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
@@ -17331,10 +17330,7 @@ local function UFAIQueueResourceUpgradeFor(game,data,resourceChanges,playerID,re
     end
     if not bestTid then return false; end
     local cost=baseCost*(current+1);
-    if resourceName=="Uranium" then
-        local mult=math.max(100,math.min(500,tonumber(GetSetting("UraniumFacilityCostMultiplier",200)) or 200));
-        cost=math.max(1,math.floor(cost*mult/100+0.5));
-    end
+
     if not canSpend(cost) then return false; end
     for _,b in ipairs(resources.pendingBuilds or {}) do
         if b.playerID==playerID and b.territoryID==bestTid and b.resource==resourceName then return false; end
@@ -17379,10 +17375,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
                 end
                 if bestTid then
                     local cost=current<=0 and baseCost*3 or baseCost*(current+1);
-                    if resourceName=="Uranium" then
-                        local mult=math.max(100,math.min(500,tonumber(GetSetting("UraniumFacilityCostMultiplier",200)) or 200));
-                        cost=math.max(1,math.floor(cost*mult/100+0.5));
-                    end
+
                     if canSpend(cost) then
                         local duplicate=false; for _,b in ipairs(resources.pendingBuilds or {}) do if b.playerID==playerID and b.territoryID==bestTid and b.resource==resourceName then duplicate=true; break; end end
                         if not duplicate then
@@ -17430,7 +17423,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     end
 
     -- 4) Airport infrastructure supports Airlift Cards even when Air Wings are disabled.
-    if GetSetting("AirbasesEnabled",true)==true or GetSetting("ForwardAirstripsEnabled",true)==true then
+    if GetSetting("AirbasesEnabled",true)==true then
         if GetSetting("AirbasesEnabled",true)==true then
             local airbaseCount=0; for _,lvl in pairs(state.airbases or {}) do if (tonumber(lvl) or 0)>0 then airbaseCount=airbaseCount+1; end end
             local territoryCount=0; for _,terr in pairs(standing.Territories or {}) do if terr.OwnerPlayerID==playerID then territoryCount=territoryCount+1; end end
@@ -17446,15 +17439,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
                 elseif tid and canSpend(cost) then spend(cost); nation.resourceStockpile.Oil=oil-needOil; nation.resourceStockpile.Iron=iron-needIron; state.airbases[tid]=1; end
             end
         end
-        if GetSetting("ForwardAirstripsEnabled",true)==true then
-            local airstripCount=0; for _,lvl in pairs(state.forwardAirstrips or {}) do if (tonumber(lvl) or 0)>0 then airstripCount=airstripCount+1; end end
-            if airstripCount<1 then
-                local excluded={}; for tid,_ in pairs(state.forwardAirstrips or {}) do excluded[tonumber(tid) or tid]=true; end
-                local cost=math.max(25,math.floor(tonumber(GetSetting("ForwardAirstripBaseCost",175)) or 175));
-                local tid=UFPickAITerritory(game,standing,playerID,false,excluded); nation.resourceStockpile=nation.resourceStockpile or {}; local needOil=math.max(0,math.floor(tonumber(GetSetting("ForwardAirstripOilPerLevel",1)) or 1)); local oil=tonumber(nation.resourceStockpile.Oil) or 0;
-                if oil<needOil then UFAIQueueResourceUpgradeFor(game,data,resourceChanges,playerID,"Oil",standing,canSpend,spend); elseif tid and canSpend(cost) then spend(cost); nation.resourceStockpile.Oil=oil-needOil; state.forwardAirstrips[tid]=1; end
-            end
-        end
+
     end
 
     -- 5) War economy: aircraft and later strategic capability if affordable.
@@ -17486,7 +17471,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
                 local canResource=true; local consume={};
 
                 if kind=="Airbase" then consume.Oil=math.max(0,math.floor(tonumber(GetSetting("AirbaseOilPerLevel",1)) or 1)); consume.Iron=math.max(0,math.floor(tonumber(GetSetting("AirbaseIronPerLevel",1)) or 1)); end
-                if kind=="ForwardAirstrip" then consume.Oil=math.max(0,math.floor(tonumber(GetSetting("ForwardAirstripOilPerLevel",1)) or 1)); end
+
                 for rn,need in pairs(consume) do if (tonumber(nation.resourceStockpile[rn]) or 0)<need then canResource=false; break; end end
                 if canResource and canSpend(cost) then for rn,need in pairs(consume) do nation.resourceStockpile[rn]=(tonumber(nation.resourceStockpile[rn]) or 0)-need; end; spend(cost); tbl[bestTid]=bestLvl+1; return true; end
             end
@@ -17629,7 +17614,6 @@ UFStrategicTerritoryValue = function(data, ownerID, territoryID)
     local st=byPlayer[ownerID] or {};
     if (tonumber((st.samSites or {})[territoryID]) or 0)>0 then value=value+20; end
     if (tonumber((st.airbases or {})[territoryID]) or 0)>0 then value=value+22; end
-    if (tonumber((st.forwardAirstrips or {})[territoryID]) or 0)>0 then value=value+10; end
     local recruiters=((data.globalEconomy or {}).armyRecruiters or {}).territories or {};
     if (tonumber(recruiters[territoryID]) or 0)>0 then value=value+28; end
     local resources=((data.globalEconomy or {}).resources or {}).territories or {};
@@ -17649,10 +17633,10 @@ local function UFGenerateAIAirliftOrder(game,data,playerID,addNewOrder)
     end
     if airliftCardID==nil then return false; end
     local pd,state=UFEnsureStrategicAIState(playerID);
-    local airports={}; local infrastructureRequired=(GetSetting("AirbasesEnabled",true)==true or GetSetting("ForwardAirstripsEnabled",true)==true);
+    local airports={}; local infrastructureRequired=(GetSetting("AirbasesEnabled",true)==true);
     if infrastructureRequired then
         if GetSetting("AirbasesEnabled",true)==true then for tid,lvl in pairs(state.airbases or {}) do if (tonumber(lvl) or 0)>0 then airports[tonumber(tid) or tid]=true; end end end
-        if GetSetting("ForwardAirstripsEnabled",true)==true then for tid,lvl in pairs(state.forwardAirstrips or {}) do if (tonumber(lvl) or 0)>0 then airports[tonumber(tid) or tid]=true; end end end
+
     else
         -- Host disabled both airport systems: preserve normal War.app Airlift behavior.
         for tid,terr in pairs(standing.Territories or {}) do if terr and terr.OwnerPlayerID==playerID then airports[tonumber(tid) or tid]=true; end end
@@ -18616,15 +18600,14 @@ end
 -- AIRLIFT CARD -> AIRBASE / AIRSTRIP RESTRICTIONS
 -- =====================================================
 if order.proxyType == "GameOrderPlayCardAirlift" then
-    if GetSetting("AirbasesEnabled",true)==true or GetSetting("ForwardAirstripsEnabled",true)==true then
+    if GetSetting("AirbasesEnabled",true)==true then
         local fromID=order.FromTerritoryID; local toID=order.ToTerritoryID; local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
         local function hasAirport(tid)
             local st=game.ServerGame and game.ServerGame.LatestTurnStanding and game.ServerGame.LatestTurnStanding.Territories[tid] or nil;
             local owner=st and st.OwnerPlayerID or nil; local state=owner and byPlayer[owner] or nil;
             if state==nil then return false; end
             local airbaseOK=GetSetting("AirbasesEnabled",true)==true and (tonumber((state.airbases or {})[tid]) or 0)>0;
-            local stripOK=GetSetting("ForwardAirstripsEnabled",true)==true and (tonumber((state.forwardAirstrips or {})[tid]) or 0)>0;
-            return airbaseOK or stripOK;
+            return airbaseOK;
         end
         if not hasAirport(fromID) or not hasAirport(toID) then
             skipThisOrder(WL.ModOrderControl.Skip); return;
@@ -19012,32 +18995,10 @@ local function UFPlayersShareIntelligence(data, playerA, playerB)
         and alliance.sharedIntelligence == true;
 end
 
-local function UFBuildKnownResourcesForPlayer(game, data, standing, viewerID, privateState)
-    local known = {};
-    local resources = data.globalEconomy and data.globalEconomy.resources or {};
-    for territoryID, nodes in pairs(resources.territories or {}) do
-        local numericID = tonumber(territoryID) or territoryID;
-        local terr = standing.Territories[numericID];
-        local owner = terr and terr.OwnerPlayerID or nil;
-        local discovered = privateState and privateState.discoveredResourceTerritories
-            and privateState.discoveredResourceTerritories[numericID] == true;
-        local allowed = false;
-        local reason = nil;
-        if owner == viewerID then allowed = true; reason = "Owned";
-        elseif owner ~= nil and owner ~= WL.PlayerID.Neutral and owner ~= WL.PlayerID.Fogged then
-            if UFPlayersShareIntelligence(data, viewerID, owner) then
-                allowed = true; reason = "Shared Intelligence";
-            elseif UFPlayerOwnsAdjacentTerritory(game, standing, viewerID, numericID) then
-                allowed = true; reason = "Border";
-            elseif discovered then
-                allowed = true; reason = "Strategic Intelligence";
-            end
-        end
-        if allowed then
-            known[numericID] = {ownerPlayerID = owner, resources = nodes, reason = reason};
-        end
-    end
-    return known;
+local function UFBuildKnownResourcesForPlayer(game,data,standing,viewerID,privateState)
+    local known={};for tid,nodes in pairs((((data.globalEconomy or {}).resources or {}).territories) or {}) do
+        local id=tonumber(tid) or tid;local terr=standing.Territories[id];known[id]={ownerPlayerID=terr and terr.OwnerPlayerID,resources=nodes,reason="Public"};
+    end;return known;
 end
 
 local function UFBuildKnownMilitaryForPlayer(game, data, standing, viewerID, privateData)
@@ -19064,7 +19025,6 @@ local function UFBuildKnownMilitaryForPlayer(game, data, standing, viewerID, pri
                 end
             end
             for tid,lvl in pairs(state.airbases or {}) do maybe("Airbase", tonumber(tid) or tid, lvl); end
-            for tid,lvl in pairs(state.forwardAirstrips or {}) do maybe("Forward Airstrip", tonumber(tid) or tid, lvl); end
         end
     end
     return result;
@@ -19082,7 +19042,7 @@ local function UFRefreshAllPlayerStrategicIntel(game, data)
     UFPropagateSharedDiscoveries(data, privateData);
     for playerID, _ in pairs((data.globalEconomy or {}).nations or {}) do
         local state = privateData.strategicMilitary.byPlayer[playerID] or {
-            airbases={}, forwardAirstrips={}, samSites={}, airWings={}, specialForces={}, pendingAirWings={}, pendingSpecialForces={},
+            airbases={}, samSites={}, airWings={}, specialForces={}, pendingAirWings={}, pendingSpecialForces={},
             discoveredResourceTerritories={}, discoveredMilitary={}
         };
         privateData.strategicMilitary.byPlayer[playerID] = state;
@@ -19144,7 +19104,7 @@ local function UFReconcileStrategicMilitaryOwnership(game)
 
     for ownerID,state in pairs(byPlayer) do
         state.airbases = cleanOwnedMap(ownerID,state.airbases);
-        state.forwardAirstrips = cleanOwnedMap(ownerID,state.forwardAirstrips);
+
         state.samSites = {};
         state.headquarters = nil;
 
@@ -19179,12 +19139,7 @@ local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
                 if terr and terr.OwnerPlayerID==ownerID then UFAddWantedStructure(wanted,ntid,"Airbase",lvl); end
             end
         end
-        if GetSetting("MilitaryExpansionEnabled",true)==true and GetSetting("ForwardAirstripsEnabled",true) == true then
-            for tid,lvl in pairs(state.forwardAirstrips or {}) do
-                local ntid=tonumber(tid) or tid; local terr=standing.Territories[ntid];
-                if terr and terr.OwnerPlayerID==ownerID then UFAddWantedStructure(wanted,ntid,"ForwardAirstrip",lvl); end
-            end
-        end
+
 
         -- Power Grids and Cyber Facilities are private intelligence assets.
         -- Do NOT publish them as standing custom-structure icons; UFIsVisibleMilitaryStructure
@@ -19200,8 +19155,17 @@ local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
             if UFIsVisibleMilitaryStructure(st) then hadUF=true; else desired[st]=cnt; end
         end
         for st,cnt in pairs(wanted[tid] or {}) do desired[st]=cnt; end
-
-        local changed = hadUF or wanted[tid] ~= nil;
+        local data=Mod.PublicGameData or {};
+        local resourceState=(data.globalEconomy or {}).resources or {};
+        local nodes=(resourceState.territories or {})[tid] or (resourceState.territories or {})[tostring(tid)] or {};
+        local show=resourceState.enabled==true and resourceState.mapIconsEnabled~=false and GetSetting("ResourceMapIconsEnabled",true)==true;
+        desired=BuildResourceIconStructureTable(game,standing,tid,desired,show and nodes or {});
+        local recruiters=((data.globalEconomy or {}).armyRecruiters or {});
+        if recruiters.enabled~=false and GetSetting("ArmyRecruitersEnabled",true)==true then
+            local level=(recruiters.territories or {})[tid] or (recruiters.territories or {})[tostring(tid)] or 0;
+            desired=BuildRecruiterStructures(desired,level);
+        end
+        local changed = true;
         if changed then
             local same = true;
             for st,cnt in pairs(existing) do if (desired[st] or 0) ~= cnt then same=false; break; end end
@@ -19419,9 +19383,11 @@ function Server_AdvanceTurn_End(
     UFReconcileStrategicMilitaryOwnership(game);
     UFRefreshVisibleSpecialUnits(game, addNewOrder);
     UFRefreshConventionalUnits(game, addNewOrder);
+    Mod.PublicGameData=data;
     UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder);
     UFRefreshAllPlayerStrategicIntel(game, data);
     UFUpdatePublicMarketRankings(game, data);
+    UFPublishResourceCatalog(game,data);
 
     CompactPublicGameData(data);
     Mod.PublicGameData =

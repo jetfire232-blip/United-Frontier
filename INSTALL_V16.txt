@@ -1,0 +1,28 @@
+UNITED FRONTIER V16 — RESOURCE DIRECTORY / AIRSTRIP REMOVAL
+
+Upload this build to UNITED FRONTIER only.
+
+1. Keep a backup of your existing source.
+2. Extract the ZIP.
+3. Upload all eight Lua files into your mod root, including
+   UF_ConventionalMilitary.lua.
+4. Upload both StructureImages and SpecialUnitImages with those exact names.
+5. Reload/update your mod code using your normal workflow.
+6. Open Resources: choose MY RESOURCES, NEIGHBORS, ALLY / FACTION or ALL NATIONS,
+   then choose a resource type. SHOW ON MAP highlights the selected territory.
+
+Airports, Air Wings, Special Forces, Tank Battalions and Drones remain.
+Forward Airstrips, Power Grids, missiles and agencies are removed.
+Airport artwork and its existing upgrade rules are unchanged from v15.
+Recruiter upgrades correctly replace the existing tier icon.
+Helicopter artwork remains a prepared asset; no Helicopter gameplay is added.
+
+Existing-game migration clears Uranium stockpiles/requirements/deposits, cancels
+its trade offers and contracts, and refunds paid pending Uranium construction
+once. It removes Forward Airstrip state. The next completed turn removes obsolete
+map icons. Historical completed construction/research is not refunded.
+
+Compatibility images remain only to allow old maps to load until cleanup.
+No new airport artwork or level badges are installed.
+
+Code and menu regression tests passed; live War.app verification remains.

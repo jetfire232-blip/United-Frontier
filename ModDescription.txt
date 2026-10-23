@@ -1,9 +1,9 @@
 United Frontier
 
-Build national power through Commerce, markets, private strategic resources, diplomacy, factions, Recruiters, airports, Airstrips, Air Wings, Special Forces, Tank Battalions, Drones, Smart AI and the United Nations.
+Build national power through Commerce, markets, resources, diplomacy, factions, Recruiters, Airports, Air Wings, Special Forces, Tank Battalions, Drones, Smart AI and the United Nations.
 
-Complete National Setup with live numerical policy previews. Trade shares, earn proportional dividends, acquire flagship companies, negotiate agreements and develop resources.
+Resource locations are public in the Resources directory. Filter by nation group and resource type; use SHOW ON MAP to find a territory. Review production, need, stockpile, net and shortage effects without an intelligence system.
 
-Airport infrastructure restricts Airlift Card endpoints when enabled by the host. Conventional units use normal combat and fog. Hosts configure unit costs, strength and national limits. No Power Grid is required.
+Airports support Airlift Cards, Air Wings and Drone deployment. Conventional units follow normal movement, combat and fog. Uranium, Forward Airstrips, Power Grids, missiles and agencies are removed.
 
-Includes mobile-friendly military controls, acquisition payout explanations, diplomacy filters, Recruiter upgrades, war-focused AI spending and How It Works.
+Includes live policy previews, resource-supported recruitment, acquisition payouts and proportional dividends, diplomacy filters, wartime AI spending and How It Works.

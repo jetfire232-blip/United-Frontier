@@ -1,0 +1,32 @@
+UNITED FRONTIER V16
+
+Resources are listed publicly in the menu. No Agency or intelligence discovery
+is required. Nation-group and resource-type filters, pagination, ownership labels,
+SHOW ON MAP and owned-facility upgrades are available.
+
+Uranium is removed from active resource generation, building, trade selection,
+stockpiles, maintenance and host settings. Legacy data is cleaned on the next
+server action/turn; paid pending Uranium builds are refunded exactly once.
+
+Remaining resources:
+Oil: Airport/Tank/Drone construction and military maintenance.
+Iron: Airport/Tank construction and military maintenance.
+Food: military maintenance and unrest.
+Gas: national readiness and Commerce maintenance.
+Coal/Copper: Commerce maintenance.
+Rare Earths/Lithium: readiness and Commerce maintenance.
+The menu explains current production, need, stockpile, net and shortage effects.
+Each Recruiter level adds 1 Oil, 1 Iron and 1 Food demand per turn.
+Tank purchase: 300 Commerce + 1 Oil + 1 Iron; default combat strength 8.
+Drone purchase: 150 Commerce + 1 Oil; deploy at Airport; default strength 2.
+
+Forward Airstrips are removed from building, AI, menus, settings and Airlift rules.
+Airports are the only eligible airfield for Airlift Cards when Airports are enabled.
+Power Grids remain removed. Airports do not require power infrastructure.
+Airport artwork and existing upgrade rules are unchanged.
+Recruiter icon replacement uses structure-type equality, preventing stacked tiers.
+A merged end-of-turn map update preserves resource, Airport and Recruiter icons
+on the same territory and clears obsolete structures.
+
+Missile, Agency, cyber, counterintelligence and sharing-request UI remain removed.
+How It Works, host controls and resource explanations match the current systems.

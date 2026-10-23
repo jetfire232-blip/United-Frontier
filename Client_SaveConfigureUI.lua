@@ -477,10 +477,6 @@ function Client_SaveConfigureUI(
     local airbaseMaxLevel = ReadNumber("AirbaseMaxLevel");
     local airbaseOilPerLevel = ReadNumber("AirbaseOilPerLevel");
     local airbaseIronPerLevel = ReadNumber("AirbaseIronPerLevel");
-    local forwardAirstripsEnabled = ReadBool("ForwardAirstripsEnabled");
-    local forwardAirstripBaseCost = ReadNumber("ForwardAirstripBaseCost");
-    local forwardAirstripMaxLevel = ReadNumber("ForwardAirstripMaxLevel");
-    local forwardAirstripOilPerLevel = ReadNumber("ForwardAirstripOilPerLevel");
     local airWingsEnabled = ReadBool("AirWingsEnabled");
     local airWingBaseCost = ReadNumber("AirWingBaseCost");
     local aircraftPerAirWing = ReadNumber("AircraftPerAirWing");
@@ -489,9 +485,6 @@ function Client_SaveConfigureUI(
     local specialForcesBaseCost = ReadNumber("SpecialForcesBaseCost");
     local specialForcesCombatStrength = ReadNumber("SpecialForcesCombatStrength");
     local specialForcesMaxPerPlayer = ReadNumber("SpecialForcesMaxPerPlayer");
-    local uraniumDistributionMode = ReadNumber("UraniumDistributionMode");
-    local uraniumFacilityCostMultiplier = ReadNumber("UraniumFacilityCostMultiplier");
-    local startingUraniumStockpile = ReadNumber("StartingUraniumStockpile");
 
 
     -- =====================================================
@@ -1342,10 +1335,6 @@ function Client_SaveConfigureUI(
     Mod.Settings.AirbaseMaxLevel = math.max(1, math.min(5, airbaseMaxLevel or 4));
     Mod.Settings.AirbaseOilPerLevel = math.max(0, math.min(20, airbaseOilPerLevel or 1));
     Mod.Settings.AirbaseIronPerLevel = math.max(0, math.min(20, airbaseIronPerLevel or 1));
-    Mod.Settings.ForwardAirstripsEnabled = forwardAirstripsEnabled;
-    Mod.Settings.ForwardAirstripBaseCost = math.max(25, math.min(3000, forwardAirstripBaseCost or 175));
-    Mod.Settings.ForwardAirstripMaxLevel = math.max(1, math.min(5, forwardAirstripMaxLevel or 3));
-    Mod.Settings.ForwardAirstripOilPerLevel = math.max(0, math.min(20, forwardAirstripOilPerLevel or 1));
     -- SAM Sites retired in the full patch.
     Mod.Settings.SAMSitesEnabled = false;
     Mod.Settings.AirWingsEnabled = airWingsEnabled;
@@ -1364,9 +1353,6 @@ function Client_SaveConfigureUI(
     Mod.Settings.DroneBaseCost=math.max(25,math.min(5000,ReadNumber("DroneBaseCost")));
     Mod.Settings.DroneCombatStrength=math.max(1,math.min(50,ReadNumber("DroneCombatStrength")));
     Mod.Settings.DroneMaxPerPlayer=math.max(1,math.min(100,ReadNumber("DroneMaxPerPlayer")));
-    Mod.Settings.UraniumDistributionMode = math.max(0, math.min(5, uraniumDistributionMode or 1));
-    Mod.Settings.UraniumFacilityCostMultiplier = math.max(100, math.min(500, uraniumFacilityCostMultiplier or 200));
-    Mod.Settings.StartingUraniumStockpile = math.max(0, math.min(1000, startingUraniumStockpile or 0));
 
 
     -- =====================================================

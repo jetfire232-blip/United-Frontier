@@ -691,7 +691,7 @@ end
 local RESOURCE_ORDER = {
     "Oil",
     "Gas",
-    "Uranium",
+
     "Iron",
     "Food",
     "Rare Earths",
@@ -762,61 +762,58 @@ local function ResourceTerritoryBordersAnotherPlayer(Game, Standing, territoryID
     return false;
 end
 
-local function ShouldShowResourceIcon(Game, Standing, territoryID, resourceName)
-    -- War.app standing structures are shared with every viewer.  United Frontier keeps
-    -- resource locations private and exposes permitted locations through
-    -- Mod.PlayerGameData + client map highlighting instead of global structures.
-    return false;
+local function ShouldShowResourceIcon(Game,Standing,territoryID,resourceName)
+    return resourceName~="Uranium";
 end
 
 -- Slot profiles are deliberately broad 2026 strategic-production strengths,
 -- not literal extraction tonnage.  They are used to decide how many deposits
 -- are seeded for a nation when the host chooses realistic placement.
 local RESOURCE_SLOT_PROFILES = {
-    {name="United States", Oil=5, Gas=5, Uranium=3, Iron=3, Food=5, ["Rare Earths"]=2, Coal=4, Copper=3, Lithium=2},
-    {name="China", Oil=2, Gas=2, Uranium=2, Iron=5, Food=5, ["Rare Earths"]=5, Coal=5, Copper=5, Lithium=4},
-    {name="Russia", Oil=5, Gas=5, Uranium=4, Iron=4, Food=3, ["Rare Earths"]=3, Coal=4, Copper=3, Lithium=2},
-    {name="India", Oil=2, Gas=1, Uranium=2, Iron=4, Food=5, ["Rare Earths"]=2, Coal=4, Copper=3, Lithium=2},
-    {name="Germany", Oil=1, Gas=1, Uranium=0, Iron=2, Food=3, ["Rare Earths"]=1, Coal=1, Copper=1, Lithium=0},
-    {name="Japan", Oil=0, Gas=0, Uranium=0, Iron=1, Food=2, ["Rare Earths"]=1, Coal=0, Copper=1, Lithium=0},
-    {name="Britain", Oil=2, Gas=2, Uranium=1, Iron=1, Food=3, ["Rare Earths"]=1, Coal=1, Copper=1, Lithium=0},
-    {name="France", Oil=1, Gas=0, Uranium=2, Iron=1, Food=4, ["Rare Earths"]=1, Coal=0, Copper=1, Lithium=1},
-    {name="Brazil", Oil=4, Gas=2, Uranium=2, Iron=5, Food=5, ["Rare Earths"]=3, Coal=1, Copper=3, Lithium=3},
-    {name="Saudi Arabia", Oil=5, Gas=4, Uranium=0, Iron=1, Food=1, ["Rare Earths"]=1, Coal=0, Copper=2, Lithium=0},
-    {name="Turkey", Oil=1, Gas=1, Uranium=1, Iron=3, Food=4, ["Rare Earths"]=2, Coal=3, Copper=3, Lithium=1},
-    {name="Italy", Oil=1, Gas=1, Uranium=0, Iron=1, Food=4, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
-    {name="Poland", Oil=1, Gas=1, Uranium=0, Iron=2, Food=4, ["Rare Earths"]=1, Coal=4, Copper=2, Lithium=0},
-    {name="Iran", Oil=5, Gas=5, Uranium=2, Iron=3, Food=3, ["Rare Earths"]=2, Coal=2, Copper=4, Lithium=1},
-    {name="Israel", Oil=0, Gas=3, Uranium=1, Iron=0, Food=2, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
-    {name="Australia", Oil=2, Gas=5, Uranium=5, Iron=5, Food=5, ["Rare Earths"]=5, Coal=5, Copper=4, Lithium=5},
-    {name="Indonesia", Oil=3, Gas=3, Uranium=0, Iron=2, Food=5, ["Rare Earths"]=2, Coal=5, Copper=4, Lithium=1},
-    {name="Spain", Oil=0, Gas=0, Uranium=1, Iron=2, Food=4, ["Rare Earths"]=1, Coal=1, Copper=2, Lithium=2},
-    {name="Pakistan", Oil=1, Gas=2, Uranium=2, Iron=2, Food=4, ["Rare Earths"]=1, Coal=3, Copper=2, Lithium=1},
-    {name="Ukraine", Oil=1, Gas=2, Uranium=3, Iron=4, Food=5, ["Rare Earths"]=2, Coal=4, Copper=2, Lithium=1},
-    {name="South Africa", Oil=0, Gas=1, Uranium=3, Iron=4, Food=3, ["Rare Earths"]=4, Coal=5, Copper=3, Lithium=2},
-    {name="Vietnam", Oil=2, Gas=2, Uranium=0, Iron=2, Food=5, ["Rare Earths"]=3, Coal=4, Copper=2, Lithium=1},
-    {name="Argentina", Oil=3, Gas=4, Uranium=2, Iron=2, Food=5, ["Rare Earths"]=2, Coal=1, Copper=3, Lithium=5},
-    {name="Norway", Oil=5, Gas=5, Uranium=0, Iron=1, Food=2, ["Rare Earths"]=1, Coal=1, Copper=2, Lithium=0},
-    {name="Algeria", Oil=4, Gas=5, Uranium=1, Iron=3, Food=2, ["Rare Earths"]=2, Coal=1, Copper=2, Lithium=0},
-    {name="Colombia", Oil=3, Gas=2, Uranium=0, Iron=1, Food=5, ["Rare Earths"]=1, Coal=4, Copper=2, Lithium=0},
-    {name="Chile", Oil=0, Gas=1, Uranium=0, Iron=3, Food=3, ["Rare Earths"]=2, Coal=1, Copper=5, Lithium=5},
-    {name="Kazakhstan", Oil=5, Gas=4, Uranium=5, Iron=4, Food=3, ["Rare Earths"]=3, Coal=4, Copper=4, Lithium=1},
-    {name="Nigeria", Oil=5, Gas=5, Uranium=0, Iron=2, Food=4, ["Rare Earths"]=1, Coal=2, Copper=1, Lithium=0},
-    {name="Iraq", Oil=5, Gas=3, Uranium=0, Iron=1, Food=2, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
-    {name="Peru", Oil=1, Gas=2, Uranium=1, Iron=3, Food=4, ["Rare Earths"]=2, Coal=1, Copper=5, Lithium=2},
-    {name="Venezuela", Oil=5, Gas=4, Uranium=1, Iron=3, Food=2, ["Rare Earths"]=1, Coal=3, Copper=2, Lithium=0},
-    {name="Libya", Oil=5, Gas=4, Uranium=0, Iron=1, Food=1, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
-    {name="Ethiopia", Oil=0, Gas=1, Uranium=0, Iron=1, Food=4, ["Rare Earths"]=1, Coal=1, Copper=2, Lithium=0},
-    {name="Myanmar", Oil=2, Gas=3, Uranium=1, Iron=2, Food=5, ["Rare Earths"]=4, Coal=2, Copper=3, Lithium=1},
-    {name="DR Congo", Oil=1, Gas=1, Uranium=2, Iron=3, Food=3, ["Rare Earths"]=5, Coal=1, Copper=5, Lithium=4},
-    {name="Mozambique", Oil=0, Gas=5, Uranium=1, Iron=2, Food=3, ["Rare Earths"]=2, Coal=4, Copper=1, Lithium=1},
-    {name="Taiwan", Oil=0, Gas=0, Uranium=0, Iron=1, Food=2, ["Rare Earths"]=2, Coal=0, Copper=2, Lithium=0}
+    {name="United States", Oil=5, Gas=5, Iron=3, Food=5, ["Rare Earths"]=2, Coal=4, Copper=3, Lithium=2},
+    {name="China", Oil=2, Gas=2, Iron=5, Food=5, ["Rare Earths"]=5, Coal=5, Copper=5, Lithium=4},
+    {name="Russia", Oil=5, Gas=5, Iron=4, Food=3, ["Rare Earths"]=3, Coal=4, Copper=3, Lithium=2},
+    {name="India", Oil=2, Gas=1, Iron=4, Food=5, ["Rare Earths"]=2, Coal=4, Copper=3, Lithium=2},
+    {name="Germany", Oil=1, Gas=1, Iron=2, Food=3, ["Rare Earths"]=1, Coal=1, Copper=1, Lithium=0},
+    {name="Japan", Oil=0, Gas=0, Iron=1, Food=2, ["Rare Earths"]=1, Coal=0, Copper=1, Lithium=0},
+    {name="Britain", Oil=2, Gas=2, Iron=1, Food=3, ["Rare Earths"]=1, Coal=1, Copper=1, Lithium=0},
+    {name="France", Oil=1, Gas=0, Iron=1, Food=4, ["Rare Earths"]=1, Coal=0, Copper=1, Lithium=1},
+    {name="Brazil", Oil=4, Gas=2, Iron=5, Food=5, ["Rare Earths"]=3, Coal=1, Copper=3, Lithium=3},
+    {name="Saudi Arabia", Oil=5, Gas=4, Iron=1, Food=1, ["Rare Earths"]=1, Coal=0, Copper=2, Lithium=0},
+    {name="Turkey", Oil=1, Gas=1, Iron=3, Food=4, ["Rare Earths"]=2, Coal=3, Copper=3, Lithium=1},
+    {name="Italy", Oil=1, Gas=1, Iron=1, Food=4, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
+    {name="Poland", Oil=1, Gas=1, Iron=2, Food=4, ["Rare Earths"]=1, Coal=4, Copper=2, Lithium=0},
+    {name="Iran", Oil=5, Gas=5, Iron=3, Food=3, ["Rare Earths"]=2, Coal=2, Copper=4, Lithium=1},
+    {name="Israel", Oil=0, Gas=3, Iron=0, Food=2, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
+    {name="Australia", Oil=2, Gas=5, Iron=5, Food=5, ["Rare Earths"]=5, Coal=5, Copper=4, Lithium=5},
+    {name="Indonesia", Oil=3, Gas=3, Iron=2, Food=5, ["Rare Earths"]=2, Coal=5, Copper=4, Lithium=1},
+    {name="Spain", Oil=0, Gas=0, Iron=2, Food=4, ["Rare Earths"]=1, Coal=1, Copper=2, Lithium=2},
+    {name="Pakistan", Oil=1, Gas=2, Iron=2, Food=4, ["Rare Earths"]=1, Coal=3, Copper=2, Lithium=1},
+    {name="Ukraine", Oil=1, Gas=2, Iron=4, Food=5, ["Rare Earths"]=2, Coal=4, Copper=2, Lithium=1},
+    {name="South Africa", Oil=0, Gas=1, Iron=4, Food=3, ["Rare Earths"]=4, Coal=5, Copper=3, Lithium=2},
+    {name="Vietnam", Oil=2, Gas=2, Iron=2, Food=5, ["Rare Earths"]=3, Coal=4, Copper=2, Lithium=1},
+    {name="Argentina", Oil=3, Gas=4, Iron=2, Food=5, ["Rare Earths"]=2, Coal=1, Copper=3, Lithium=5},
+    {name="Norway", Oil=5, Gas=5, Iron=1, Food=2, ["Rare Earths"]=1, Coal=1, Copper=2, Lithium=0},
+    {name="Algeria", Oil=4, Gas=5, Iron=3, Food=2, ["Rare Earths"]=2, Coal=1, Copper=2, Lithium=0},
+    {name="Colombia", Oil=3, Gas=2, Iron=1, Food=5, ["Rare Earths"]=1, Coal=4, Copper=2, Lithium=0},
+    {name="Chile", Oil=0, Gas=1, Iron=3, Food=3, ["Rare Earths"]=2, Coal=1, Copper=5, Lithium=5},
+    {name="Kazakhstan", Oil=5, Gas=4, Iron=4, Food=3, ["Rare Earths"]=3, Coal=4, Copper=4, Lithium=1},
+    {name="Nigeria", Oil=5, Gas=5, Iron=2, Food=4, ["Rare Earths"]=1, Coal=2, Copper=1, Lithium=0},
+    {name="Iraq", Oil=5, Gas=3, Iron=1, Food=2, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
+    {name="Peru", Oil=1, Gas=2, Iron=3, Food=4, ["Rare Earths"]=2, Coal=1, Copper=5, Lithium=2},
+    {name="Venezuela", Oil=5, Gas=4, Iron=3, Food=2, ["Rare Earths"]=1, Coal=3, Copper=2, Lithium=0},
+    {name="Libya", Oil=5, Gas=4, Iron=1, Food=1, ["Rare Earths"]=0, Coal=0, Copper=1, Lithium=0},
+    {name="Ethiopia", Oil=0, Gas=1, Iron=1, Food=4, ["Rare Earths"]=1, Coal=1, Copper=2, Lithium=0},
+    {name="Myanmar", Oil=2, Gas=3, Iron=2, Food=5, ["Rare Earths"]=4, Coal=2, Copper=3, Lithium=1},
+    {name="DR Congo", Oil=1, Gas=1, Iron=3, Food=3, ["Rare Earths"]=5, Coal=1, Copper=5, Lithium=4},
+    {name="Mozambique", Oil=0, Gas=5, Iron=2, Food=3, ["Rare Earths"]=2, Coal=4, Copper=1, Lithium=1},
+    {name="Taiwan", Oil=0, Gas=0, Iron=1, Food=2, ["Rare Earths"]=2, Coal=0, Copper=2, Lithium=0}
 };
 
 local function GetResourceProfile(slot)
     return RESOURCE_SLOT_PROFILES[slot] or {
         name = "Generic Slot " .. tostring(slot),
-        Oil = 1, Gas = 1, Uranium = 1, Iron = 2, Food = 3,
+        Oil = 1, Gas = 1, Iron = 2, Food = 3,
         ["Rare Earths"] = 1, Coal = 1, Copper = 1, Lithium = 1
     };
 end
@@ -905,7 +902,7 @@ local function InitializeStrategicResources(Game, Standing, economy)
                 if economy.resources.advancedEnabled == true
                     or resourceName == "Oil"
                     or resourceName == "Gas"
-                    or resourceName == "Uranium"
+
                     or resourceName == "Iron"
                     or resourceName == "Food"
                     or resourceName == "Rare Earths"
@@ -1221,7 +1218,6 @@ function Server_StartGame(
             or {
                 headquarters = nil,
                 airbases = {},
-                forwardAirstrips = {},
                 samSites = {},
                 airWings = {},
                 specialForces = {},

@@ -701,10 +701,6 @@ function Client_PresentConfigureUI(rootParent)
     local airbaseOilPerLevel = GetNumberSetting(settings, "AirbaseOilPerLevel", 1);
     local airbaseIronPerLevel = GetNumberSetting(settings, "AirbaseIronPerLevel", 1);
 
-    local forwardAirstripsEnabled = GetBoolSetting(settings, "ForwardAirstripsEnabled", true);
-    local forwardAirstripBaseCost = GetNumberSetting(settings, "ForwardAirstripBaseCost", 175);
-    local forwardAirstripMaxLevel = GetNumberSetting(settings, "ForwardAirstripMaxLevel", 3);
-    local forwardAirstripOilPerLevel = GetNumberSetting(settings, "ForwardAirstripOilPerLevel", 1);
 
     -- SAM Sites removed from United Frontier military infrastructure.
 
@@ -720,9 +716,6 @@ function Client_PresentConfigureUI(rootParent)
     local specialForcesCombatStrength = GetNumberSetting(settings, "SpecialForcesCombatStrength", 5);
     local specialForcesMaxPerPlayer = GetNumberSetting(settings, "SpecialForcesMaxPerPlayer", 4);
 
-    local uraniumDistributionMode = GetNumberSetting(settings, "UraniumDistributionMode", 1);
-    local uraniumFacilityCostMultiplier = GetNumberSetting(settings, "UraniumFacilityCostMultiplier", 200);
-    local startingUraniumStockpile = GetNumberSetting(settings, "StartingUraniumStockpile", 0);
 
 
     -- =====================================================
@@ -1484,10 +1477,10 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "ArmyRecruiterMaxLevel", "Maximum Recruiter Level", armyRecruiterMaxLevel, 1, 5, "Upgrades increase army output and strategic resource maintenance demand.");
 
 
-    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Airbases, Airstrips, Air Wings, Special Forces, Tanks, Drones, and strategic readiness.");
+    AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Airports, Air Wings, Special Forces, Tanks, Drones, and strategic readiness.");
 
     AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
-    AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Protect Military Asset Details Behind Intelligence", hiddenMilitaryInfrastructureEnabled);
+    AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Show Military Infrastructure Details", hiddenMilitaryInfrastructureEnabled);
 
     AddCheckBox(root, "AirbasesEnabled", "Enable Airbases", airbasesEnabled);
     AddNumberInput(root, "AirbaseBaseCost", "Airbase Base Cost (Commerce)", airbaseBaseCost, 25, 5000, "One icon per territory. Upgrading strengthens the same Airbase and raises its maximum HP.");
@@ -1495,10 +1488,6 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "AirbaseOilPerLevel", "Airbase Oil Required per Build/Upgrade", airbaseOilPerLevel, 0, 20, "Consumed from the national stockpile each time an Airbase gains a level.");
     AddNumberInput(root, "AirbaseIronPerLevel", "Airbase Iron Required per Build/Upgrade", airbaseIronPerLevel, 0, 20, "Consumed from the national stockpile each time an Airbase gains a level.");
 
-    AddCheckBox(root, "ForwardAirstripsEnabled", "Enable Forward Airstrips", forwardAirstripsEnabled);
-    AddNumberInput(root, "ForwardAirstripBaseCost", "Forward Airstrip Cost (Commerce)", forwardAirstripBaseCost, 25, 3000, "Cheaper limited-capacity airfield intended for forward areas.");
-    AddNumberInput(root, "ForwardAirstripMaxLevel", "Forward Airstrip Maximum Level", forwardAirstripMaxLevel, 1, 5, "Upgrading strengthens the same icon and raises maximum HP by 10 per level.");
-    AddNumberInput(root, "ForwardAirstripOilPerLevel", "Forward Airstrip Oil Required per Build/Upgrade", forwardAirstripOilPerLevel, 0, 20, "Consumed from the national stockpile each time the Airstrip gains a level.");
 
 
 
@@ -1518,13 +1507,9 @@ function Client_PresentConfigureUI(rootParent)
     AddNumberInput(root, "TankCombatStrength", "Tank Combat Strength", GetNumberSetting(settings,"TankCombatStrength",8),1,50,"Sets attack, defense, health and damage absorption.");
     AddNumberInput(root, "TankMaxPerPlayer", "Maximum Tanks per Player", GetNumberSetting(settings,"TankMaxPerPlayer",10),1,100,"Includes deployed units and pending purchases.");
     AddCheckBox(root, "DronesEnabled", "Enable Drones", GetBoolSetting(settings,"DronesEnabled",true));
-    AddNumberInput(root, "DroneBaseCost", "Drone Cost (Commerce)", GetNumberSetting(settings,"DroneBaseCost",150),25,5000,"Resource cost: 1 Oil; deployment requires an Airbase or Airstrip.");
+    AddNumberInput(root, "DroneBaseCost", "Drone Cost (Commerce)", GetNumberSetting(settings,"DroneBaseCost",150),25,5000,"Resource cost: 1 Oil; deployment requires an Airport.");
     AddNumberInput(root, "DroneCombatStrength", "Drone Combat Strength", GetNumberSetting(settings,"DroneCombatStrength",2),1,50,"Sets attack, defense, health and damage absorption.");
     AddNumberInput(root, "DroneMaxPerPlayer", "Maximum Drones per Player", GetNumberSetting(settings,"DroneMaxPerPlayer",10),1,100,"Includes deployed units and pending purchases.");
-    AddSection(root, "URANIUM STRATEGY", "Uranium is intentionally rarer and more expensive than ordinary resources. Players do not automatically receive Uranium based on Commerce or income.");
-    AddNumberInput(root, "UraniumDistributionMode", "Uranium Distribution (0=None, 1=Very Rare, 2=Rare, 3=Moderate, 4=Common, 5=Manual)", uraniumDistributionMode, 0, 5, "Distribution logic will be applied during the resource-generation upgrade phase.");
-    AddNumberInput(root, "UraniumFacilityCostMultiplier", "Uranium Facility Cost (% of normal resource facility)", uraniumFacilityCostMultiplier, 100, 500, "Default 200% makes Uranium the most expensive resource facility.");
-    AddNumberInput(root, "StartingUraniumStockpile", "Starting Uranium Stockpile", startingUraniumStockpile, 0, 1000, "Default 0. Uranium is not automatically granted based on national income.");
 
     -- =====================================================
     -- SMART AI
@@ -1696,13 +1681,13 @@ function Client_PresentConfigureUI(rootParent)
     AddCheckBox(
         root,
         "ResourceMapIconsEnabled",
-        "Enable Resource Location Intelligence",
+        "Show Resource Icons on Map",
         resourceMapIconsEnabled
     );
 
     UI.CreateLabel(root)
         .SetText(
-            "Resource deposits are not exposed as global map structures. Players learn locations through ownership, direct borders, or faction/shared intelligence. The Resources tab provides private filters and Show-on-Map highlighting."
+            "Resource locations and owners are public in the Resources directory. Filter by nation group and resource type; use SHOW to find a territory. Map icons follow normal game fog."
         );
 
 

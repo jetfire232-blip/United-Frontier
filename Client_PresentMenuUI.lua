@@ -220,7 +220,9 @@ if PlayerTabVisibility.military == nil then PlayerTabVisibility.military = true;
 ActiveMainTab = ActiveMainTab or "overview";
 MainTabsArea = nil;
 UFMenuClose = UFMenuClose or nil;
-ResourceIntelFilter = ResourceIntelFilter or "My Resources";
+ResourceCatalogFilter = ResourceCatalogFilter or "My Resources";
+ResourceCatalogType = ResourceCatalogType or "All";
+ResourceCatalogPage = ResourceCatalogPage or 1;
 MilitaryIntelFilter = MilitaryIntelFilter or "My Infrastructure";
 TradePartnerFilter = TradePartnerFilter or "ALL";
 DiplomacyPlayerFilter = DiplomacyPlayerFilter or "ALL";
@@ -372,7 +374,7 @@ UI.CreateLabel(area)
     );
 
 
-UI.CreateLabel(area).SetText("Factions share discovered strategic intelligence automatically; Faction and alliance intelligence sharing is managed here.").SetColor("#9CCBFF");
+UI.CreateLabel(area).SetText("Coordinate trade, military exercises, diplomacy and support with your Faction.").SetColor("#9CCBFF");
 
 if ourFaction == nil then
 
@@ -2345,23 +2347,6 @@ if isAllied then
 
     local alliedPlayerID =
         playerID;
-
-    local intelShared = activeAlliance.sharedIntelligence == true;
-    UI.CreateLabel(row)
-        .SetText("Shared resource/airport information: " .. (intelShared and "ON" or "OFF"))
-        .SetColor("#9CCBFF");
-
-    if not intelShared then
-        UI.CreateButton(row).SetText("REQUEST SHARED INTELLIGENCE").SetOnClick(function()
-            SafeSendGameCustomMessage(game, "Sending alliance intelligence-sharing request...", {
-                type="requestHeadquartersSharing", targetPlayerID=alliedPlayerID, shareType="SharedIntelligence"
-            }, function(result)
-                if result and result.message then UI.Alert(result.message); end
-                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
-            end);
-        end);
-    end
-
 
     UI.CreateButton(row)
         .SetText(
@@ -4337,14 +4322,13 @@ end
 -- =========================================================
 
 local RESOURCE_UI_TYPES = {
-    "Oil", "Gas", "Uranium", "Iron", "Food", "Rare Earths",
+    "Oil", "Gas", "Iron", "Food", "Rare Earths",
     "Coal", "Copper", "Lithium"
 };
 
 local RESOURCE_UI_COLORS = {
     Oil = "#D6A84B",
     Gas = "#64B5F6",
-    Uranium = "#C792EA",
     Iron = "#B0BEC5",
     Food = "#9CCC65",
     ["Rare Earths"] = "#4DD0E1",
@@ -4383,125 +4367,82 @@ function ShowResourcesMenu(parent, game)
     local nation = ourID ~= nil and (economy.nations or {})[ourID] or {};
 
     UI.CreateLabel(area).SetText("STRATEGIC RESOURCES").SetColor("#67D5FF");
-    local privateView = Mod.PlayerGameData or {};
-    local strategicIntel = privateView.strategicIntel or {};
-    local knownResources = strategicIntel.knownResources or {};
-    UI.CreateLabel(area).SetText("PRIVATE RESOURCE INTELLIGENCE").SetColor("#FFD166");
-    UI.CreateLabel(area).SetText("Resource locations are private. You know your own deposits, deposits directly bordering your nation, and intelligence shared by allies or your Faction.").SetColor("#BBBBBB");
-
-    local filterRow = UI.CreateHorizontalLayoutGroup(area);
-    local resourceFilters = {
-        {"My Resources", "MY RESOURCES"},
-        {"Neighboring", "NEIGHBORS"},
-        {"Shared Intel", "ALLY / FACTION"},
-        {"All Known", "ALL KNOWN"}
-    };
-    for _,filterDef in ipairs(resourceFilters) do
-        local key=filterDef[1]; local label=filterDef[2];
-        UI.CreateButton(filterRow).SetText((ResourceIntelFilter==key and "▶ " or "")..label).SetOnClick(function()
-            ResourceIntelFilter=key; ShowResourcesMenu(parent,game);
-        end);
+    UI.CreateLabel(area).SetText("RESOURCE DIRECTORY").SetColor("#FFD166");
+    UI.CreateLabel(area).SetText("Resource locations and owners are public. Filter the list, then tap SHOW to find a location.").SetColor("#BBBBBB");
+    local ownership=resources.owners or {};
+    local relations=economy.diplomacy or {}; local ownFaction=(relations.playerFaction or {})[ourID];
+    local function allied(pid)
+        if pid==nil or pid==ourID then return false; end
+        if ownFaction~=nil and (relations.playerFaction or {})[pid]==ownFaction then return true; end
+        local a=tostring(ourID);local b=tostring(pid);local key=a<b and (a.."|"..b) or (b.."|"..a);
+        return ((relations.alliances or {})[key] or {}).active==true;
     end
-
-    local function resourceReasonGroup(reason)
-        if reason == "Owned" or reason == "Your Resource" then return "My Resources"; end
-        if reason == "Border" or reason == "Neighboring Resource" then return "Neighboring"; end
-        if reason == "Shared Intelligence" or reason == "Ally Intel" or reason == "Faction Intel" then return "Shared Intel"; end
-        if reason == "Strategic Intelligence" then return "All Known"; end
-        return "All Known";
+    local function neighbor(tid)
+        for nid,_ in pairs((((game.Map or {}).Territories or {})[tid] or {}).ConnectedTo or {}) do
+            local nt=((game.LatestStanding or {}).Territories or {})[nid];if nt and nt.OwnerPlayerID==ourID then return true; end
+        end
+        return false;
     end
-    local reasonText = {
-        ["Owned"]="Your Resource", ["Your Resource"]="Your Resource",
-        ["Border"]="Neighboring Resource", ["Neighboring Resource"]="Neighboring Resource",
-        ["Shared Intelligence"]="Shared Intel", ["Ally Intel"]="Ally Intel", ["Faction Intel"]="Faction Intel",
-        ["Strategic Intelligence"]="Strategic Intel"
-    };
-    local reasonColor = {
-        ["Owned"]="#8FD694", ["Your Resource"]="#8FD694",
-        ["Border"]="#FFD166", ["Neighboring Resource"]="#FFD166",
-        ["Shared Intelligence"]="#62B6FF", ["Ally Intel"]="#62B6FF", ["Faction Intel"]="#62B6FF",
-        ["Strategic Intelligence"]="#C792EA"
-    };
-
-    local knownIDs = {};
-    for territoryID,_ in pairs(knownResources) do table.insert(knownIDs, tonumber(territoryID) or territoryID); end
-    table.sort(knownIDs, function(a,b) return tonumber(a) < tonumber(b); end);
-    local shownKnown = 0;
-    for _,territoryID in ipairs(knownIDs) do
-        local info = knownResources[territoryID];
-        local group = resourceReasonGroup(info.reason);
-        if ResourceIntelFilter == "All Known" or ResourceIntelFilter == group then
-            local details = game.Map and game.Map.Territories and game.Map.Territories[territoryID] or nil;
-            local parts = {};
-            for _,resourceName in ipairs(RESOURCE_UI_TYPES) do
-                local amount = info.resources and tonumber(info.resources[resourceName]) or 0;
-                if amount ~= nil and amount > 0 then table.insert(parts, resourceName .. " Lv." .. tostring(amount)); end
-            end
-            if #parts > 0 and shownKnown < 30 then
-                shownKnown = shownKnown + 1;
-                local row = UI.CreateHorizontalLayoutGroup(area);
-                local why = reasonText[info.reason] or tostring(info.reason or "Known");
-                UI.CreateLabel(row).SetText((details and details.Name or ("Territory " .. tostring(territoryID))) .. " | " .. table.concat(parts, ", ") .. " | " .. why).SetColor(reasonColor[info.reason] or "#DDEEFF");
-                local capturedID = territoryID;
-                UI.CreateButton(row).SetText("SHOW").SetOnClick(function()
-                    if UFMenuClose ~= nil then UFMenuClose(); end
-                    game.HighlightTerritories({capturedID});
-                    -- Keep only a tiny return control over the map instead of the full mod menu.
-                    game.CreateDialog(function(backRoot, setMaxSize, setScrollable, dialogGame, closeDialog)
-                        setMaxSize(340, 165); setScrollable(false);
-                        UI.CreateLabel(backRoot).SetText(details and details.Name or ("Territory "..tostring(capturedID))).SetColor("#67D5FF");
-                        UI.CreateButton(backRoot).SetText("← BACK TO RESOURCES").SetOnClick(function()
-                            closeDialog();
-                            dialogGame.CreateDialog(function(resourceRoot, sm, ss, resourceGame, closeResource)
-                                sm(900, 760); ss(true);
-                                local oldClose = UFMenuClose; UFMenuClose = closeResource;
-                                ShowResourcesMenu(resourceRoot, resourceGame);
-                                UFMenuClose = oldClose;
-                            end);
+    local groups={{"My Resources","MY RESOURCES"},{"Neighboring","NEIGHBORS"},{"Allies","ALLY / FACTION"},{"All","ALL NATIONS"}};
+    if ResourceCatalogFilter~="My Resources" and ResourceCatalogFilter~="Neighboring" and ResourceCatalogFilter~="Allies" and ResourceCatalogFilter~="All" then ResourceCatalogFilter="My Resources"; end
+    local row;
+    for i,item in ipairs(groups) do
+        if (i-1)%2==0 then row=UI.CreateHorizontalLayoutGroup(area); end
+        local value,label=item[1],item[2];
+        UI.CreateButton(row).SetText((ResourceCatalogFilter==value and "▶ " or "")..label).SetFlexibleWidth(1).SetPreferredHeight(40).SetOnClick(function() ResourceCatalogFilter=value;ResourceCatalogPage=1;ShowResourcesMenu(parent,game);end);
+    end
+    UI.CreateLabel(area).SetText("FILTER RESOURCE TYPE").SetColor("#82CFFF");
+    local types={"All"};for _,name in ipairs(RESOURCE_UI_TYPES) do if ResourceTypeAvailable(name) then table.insert(types,name); end end
+    for i,name in ipairs(types) do
+        if (i-1)%3==0 then row=UI.CreateHorizontalLayoutGroup(area);end
+        local value=name;UI.CreateButton(row).SetText((ResourceCatalogType==name and "▶ " or "")..name).SetFlexibleWidth(1).SetPreferredHeight(38).SetOnClick(function()ResourceCatalogType=value;ResourceCatalogPage=1;ShowResourcesMenu(parent,game);end);
+    end
+    local matches={};
+    for tid,nodes in pairs(resources.territories or {}) do
+        tid=tonumber(tid) or tid;local terr=((game.LatestStanding or {}).Territories or {})[tid];
+        local owner=ownership[tid] or ownership[tostring(tid)] or (terr and terr.OwnerPlayerID);
+        local show=ResourceCatalogFilter=="All" or (ResourceCatalogFilter=="My Resources" and owner==ourID) or (ResourceCatalogFilter=="Neighboring" and owner~=ourID and neighbor(tid)) or (ResourceCatalogFilter=="Allies" and allied(owner));
+        local parts={};
+        for _,name in ipairs(RESOURCE_UI_TYPES) do if ResourceTypeAvailable(name) and (ResourceCatalogType=="All" or ResourceCatalogType==name) then local level=tonumber(nodes[name]) or 0;if level>0 then table.insert(parts,name.." Lv."..tostring(level));end end end
+        if show and #parts>0 then table.insert(matches,{tid=tid,owner=owner,nodes=nodes,parts=parts});end
+    end
+    table.sort(matches,function(a,b)return tonumber(a.tid)<tonumber(b.tid);end);
+    local pageSize=20;local pages=math.max(1,math.ceil(#matches/pageSize));ResourceCatalogPage=math.max(1,math.min(pages,ResourceCatalogPage));
+    UI.CreateLabel(area).SetText(tostring(#matches).." locations | Page "..tostring(ResourceCatalogPage).." / "..tostring(pages)).SetColor("#8FD694");
+    for i=(ResourceCatalogPage-1)*pageSize+1,math.min(#matches,ResourceCatalogPage*pageSize) do
+        local item=matches[i];local tid=item.tid;local details=((game.Map or {}).Territories or {})[tid];
+        UI.CreateLabel(area).SetText(details and details.Name or ("Territory "..tostring(tid))).SetColor("#82CFFF");
+        local ownerName=(economy.nations or {})[item.owner] and GetPlayerName(game,item.owner) or "Neutral / Unclaimed";
+        UI.CreateLabel(area).SetText("Owner: "..ownerName.." | "..table.concat(item.parts,", ")).SetColor(item.owner==ourID and "#8FD694" or "#BBBBBB");
+        local actions=UI.CreateHorizontalLayoutGroup(area);
+        UI.CreateButton(actions).SetText("SHOW ON MAP").SetFlexibleWidth(1).SetPreferredHeight(40).SetOnClick(function()if UFMenuClose then UFMenuClose();end;game.HighlightTerritories({tid});end);
+        if item.owner==ourID then
+            local upgrades={};local max=math.max(1,math.min(5,tonumber(GetClientSetting("ResourceFacilityMaxLevel",5)) or 5));
+            for _,name in ipairs(RESOURCE_UI_TYPES)do local lvl=tonumber(item.nodes[name]) or 0;if ResourceTypeAvailable(name) and lvl>0 and lvl<max then table.insert(upgrades,{name=name,level=lvl});end end
+            if #upgrades>0 then UI.CreateButton(actions).SetText("UPGRADE").SetFlexibleWidth(1).SetPreferredHeight(40).SetOnClick(function()
+                game.CreateDialog(function(upRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
+                    setMaxSize(500,480);setScrollable(false,true);local box=UI.CreateVerticalLayoutGroup(upRoot);
+                    UI.CreateLabel(box).SetText("CHOOSE RESOURCE UPGRADE").SetColor("#82CFFF");
+                    for _,u in ipairs(upgrades)do local name,level=u.name,u.level;local cost=GetClientSetting("ResourceFacilityBaseCost",100)*(level+1);
+                        UI.CreateButton(box).SetText(name.." L"..tostring(level).." → L"..tostring(level+1).." — "..tostring(cost).." Commerce").SetPreferredHeight(40).SetOnClick(function()
+                            SafeSendGameCustomMessage(dialogGame,"Upgrading resource...",{type="buildResourceFacility",territoryID=tid,resource=name},function(r)if r and r.message then UI.Alert(r.message);end;closeDialog();end);
                         end);
-                    end);
+                    end
                 end);
-
-                if group == "My Resources" then
-                    local maxLvl = math.max(1, math.min(5, math.floor(tonumber(GetClientSetting("ResourceFacilityMaxLevel",5)) or 5)));
-                    local upgradable = {};
-                    for _,resourceName in ipairs(RESOURCE_UI_TYPES) do
-                        local lvl = info.resources and tonumber(info.resources[resourceName]) or 0;
-                        if lvl > 0 and lvl < maxLvl then table.insert(upgradable,{name=resourceName,level=lvl}); end
-                    end
-                    if #upgradable > 0 then
-                        UI.CreateButton(row).SetText("UPGRADE").SetOnClick(function()
-                            if #upgradable == 1 then
-                                local item=upgradable[1];
-                                SafeSendGameCustomMessage(game,"Scheduling resource upgrade...",{type="buildResourceFacility",territoryID=capturedID,resource=item.name},function(result)
-                                    if result and result.message then UI.Alert(result.message); end
-                                    ShowResourcesMenu(parent,game);
-                                end);
-                            else
-                                game.CreateDialog(function(upRoot,setMaxSize,setScrollable,dialogGame,closeDialog)
-                                    setMaxSize(420,340); setScrollable(true);
-                                    UI.CreateLabel(upRoot).SetText("UPGRADE RESOURCE — "..(details and details.Name or tostring(capturedID))).SetColor("#67D5FF");
-                                    for _,item in ipairs(upgradable) do
-                                        local rname=item.name; local rlvl=item.level;
-                                        UI.CreateButton(upRoot).SetText(rname.." L"..tostring(rlvl).." → L"..tostring(rlvl+1)).SetOnClick(function()
-                                            SafeSendGameCustomMessage(dialogGame,"Scheduling resource upgrade...",{type="buildResourceFacility",territoryID=capturedID,resource=rname},function(result)
-                                                if result and result.message then UI.Alert(result.message); end
-                                                closeDialog();
-                                            end);
-                                        end);
-                                    end
-                                end);
-                            end
-                        end);
-                    else
-                        UI.CreateLabel(row).SetText("MAX").SetColor("#79D279");
-                    end
-                end
-            end
+            end);end
         end
     end
-    if shownKnown == 0 then UI.CreateLabel(area).SetText("No resource locations match this filter.").SetColor("#AAAAAA"); end
-    UI.CreateLabel(area).SetText("----------------------------------------");
+    if #matches==0 then UI.CreateLabel(area).SetText("No locations match. Try ALL NATIONS or another resource type.").SetColor("#BBBBBB");end
+    if pages>1 then
+        local nav=UI.CreateHorizontalLayoutGroup(area);
+        UI.CreateButton(nav).SetText("PREVIOUS").SetInteractable(ResourceCatalogPage>1).SetOnClick(function()ResourceCatalogPage=ResourceCatalogPage-1;ShowResourcesMenu(parent,game);end);
+        UI.CreateButton(nav).SetText("NEXT").SetInteractable(ResourceCatalogPage<pages).SetOnClick(function()ResourceCatalogPage=ResourceCatalogPage+1;ShowResourcesMenu(parent,game);end);
+    end
+    UI.CreateLabel(area).SetText("RESOURCE USES").SetColor("#FFD166");
+    UI.CreateLabel(area).SetText("Oil + Iron: Airports and Tanks. Oil: Drones. Each Recruiter level: +1 Oil, +1 Food, +1 Iron maintenance per turn.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Gas and Coal support the economy. Copper, Rare Earths and Lithium support industry/electronics. Losing baseline supply causes the shortage effects shown below; surplus fills your stockpile or can be traded.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Production − Need = Net. Stockpiles cover a negative Net before a shortage penalty applies.").SetColor("#82CFFF");
+    UI.CreateLabel(area).SetText("Per uncovered unit: Oil −15 readiness; Food −10 readiness and +3 unrest; Iron −12 readiness. Gas −5 readiness and −"..tostring(GetClientSetting("ResourceShortagePenaltyPercent",3)).."% Commerce; Coal/Copper −2% Commerce; Rare Earths −3 readiness / −1% Commerce; Lithium −2 readiness / −1% Commerce. National caps still apply.").SetColor("#FFB366");
 
     if IsViewerMode(game) then
         ShowViewerModeNotice(area, "Viewer mode: resource production exists normally, but personal stockpiles, trades, Recruiters, and facility actions require an active player.");
@@ -4543,9 +4484,7 @@ function ShowResourcesMenu(parent, game)
                 statusColor = "#72D572";
             end
 
-            if resourceName == "Uranium" and status ~= "SHORTAGE" then
-                statusColor = "#C792EA";
-            end
+
 
             local prefix = balance > 0 and "+" or "";
             UI.CreateLabel(area).SetText(
@@ -4555,6 +4494,7 @@ function ShowResourcesMenu(parent, game)
                 .. "  |  " .. prefix .. tostring(balance)
                 .. "  " .. status
             ).SetColor(ResourceUIColor(resourceName));
+            UI.CreateLabel(area).SetText("Status: "..status).SetColor(statusColor);
         end
     end
 
@@ -4634,7 +4574,6 @@ function ShowResourcesMenu(parent, game)
     UI.CreateLabel(area).SetText(
         "Development Costs | " .. table.concat(costParts, " | ")
     );
-    UI.CreateLabel(area).SetText("Uranium facilities use the host's Uranium cost multiplier and are normally the most expensive strategic resource.").SetColor("#C792EA");
 
     local selectedResource = "Oil";
     local selectedLabel = UI.CreateLabel(area).SetText("Selected Resource: Oil").SetColor(ResourceUIColor("Oil"));
@@ -4683,10 +4622,7 @@ function ShowResourcesMenu(parent, game)
                     local maxLvl=math.max(1,math.floor(tonumber(GetClientSetting("ResourceFacilityMaxLevel",5)) or 5));
                     local nextLvl=current+1;
                     local cost=current<=0 and base*3 or base*nextLvl;
-                    if chosenResource=="Uranium" then
-                        local mult=math.max(100,math.min(500,tonumber(GetClientSetting("UraniumFacilityCostMultiplier",200)) or 200));
-                        cost=math.max(1,math.floor(cost*mult/100+0.5));
-                    end
+
                     UI.CreateLabel(box).SetText("Selected: "..chosenResource.." | Current Lv."..tostring(current).." → Lv."..tostring(nextLvl)).SetColor(ResourceUIColor(chosenResource));
                     if current>=maxLvl then
                         UI.CreateLabel(box).SetText("This facility is already at the host maximum level (Lv."..tostring(maxLvl)..").").SetColor("#FF8A80");
@@ -4729,7 +4665,7 @@ function ShowResourcesMenu(parent, game)
 
         local rrow = nil;
         local resourceButtonIndex = 0;
-        for _, resourceName in ipairs({"Oil","Gas","Iron","Food","Uranium","Rare Earths","Coal","Copper","Lithium"}) do
+        for _, resourceName in ipairs({"Oil","Gas","Iron","Food","Rare Earths","Coal","Copper","Lithium"}) do
             if ResourceTypeAvailable(resourceName) then
                 resourceButtonIndex = resourceButtonIndex + 1;
                 if (resourceButtonIndex - 1) % 3 == 0 then
@@ -4881,7 +4817,7 @@ end
 
 function UFPrivateMilitaryState()
     return (Mod.PlayerGameData or {}).ownMilitary or {
-        airbases={}, forwardAirstrips={}, airWings={}, specialForces={}, tanks={}, drones={}, assetCondition={}
+        airbases={}, airWings={}, specialForces={}, tanks={}, drones={}, assetCondition={}
     };
 end
 
@@ -4903,12 +4839,11 @@ local function UFShowTerritorySelector(parent,game,waitText,payloadBase)
             UI.CreateLabel(box).SetText("REVIEW PURCHASE — "..name).SetColor("#8FD694");
             local cost=0; local text="";
             if action=="buildStrategicMilitary" then
-                local map={Airbase="airbases",ForwardAirstrip="forwardAirstrips"};
+                local map={Airbase="airbases"};
                 local level=tonumber((state[map[kind] or ""] or {})[tid]) or 0;
-                local base=GetClientSetting(kind=="Airbase" and "AirbaseBaseCost" or "ForwardAirstripBaseCost",kind=="Airbase" and 350 or 175);
-                cost=base*(level+1); text=(kind=="Airbase" and "Airbase" or "Forward Airstrip").." | Level "..tostring(level).." → "..tostring(level+1);
-                if kind=="Airbase" then text=text.." | "..tostring(GetClientSetting("AirbaseOilPerLevel",1)).." Oil + "..tostring(GetClientSetting("AirbaseIronPerLevel",1)).." Iron";
-                else text=text.." | "..tostring(GetClientSetting("ForwardAirstripOilPerLevel",1)).." Oil"; end
+                local base=GetClientSetting("AirbaseBaseCost",350);
+                cost=base*(level+1); text="Airport".." | Level "..tostring(level).." → "..tostring(level+1);
+                text=text.." | "..tostring(GetClientSetting("AirbaseOilPerLevel",1)).." Oil + "..tostring(GetClientSetting("AirbaseIronPerLevel",1)).." Iron";
             elseif action=="buildArmyRecruiter" then
                 local r=(((Mod.PublicGameData or {}).globalEconomy or {}).armyRecruiters or {}).territories or {};
                 local level=tonumber(r[tid] or r[tostring(tid)]) or 0;
@@ -5871,7 +5806,7 @@ function ShowOverview(
         for _,alliance in pairs(diplomacy.alliances or {}) do
             if alliance and alliance.active == true and (alliance.player1 == ourID or alliance.player2 == ourID) then
                 local other = alliance.player1 == ourID and alliance.player2 or alliance.player1;
-                local suffix = alliance.sharedIntelligence == true and " [Intel]" or "";
+                local suffix = alliance.sharedIntelligence == true and " [Sharing]" or "";
                 table.insert(allianceNames,GetPlayerName(game,other)..suffix);
             end
         end
@@ -13767,14 +13702,14 @@ local function UFV4AssetHP(state,kind,tid,level)
 end
 
 local function UFV4StructureName(kind)
-    local n={Airbase="Airbase",ForwardAirstrip="Forward Airstrip"};
+    local n={Airbase="Airport"};
     return n[kind] or tostring(kind);
 end
 
 local function UFV4MaxLevel(kind)
     local m={
         Airbase=GetClientSetting("AirbaseMaxLevel",4),
-        ForwardAirstrip=GetClientSetting("ForwardAirstripMaxLevel",3)
+
     };
     return math.max(1,math.floor(tonumber(m[kind]) or 1));
 end
@@ -13782,14 +13717,14 @@ end
 local function UFV4BaseCost(kind)
     local c={
         Airbase=GetClientSetting("AirbaseBaseCost",350),
-        ForwardAirstrip=GetClientSetting("ForwardAirstripBaseCost",175)
+
     };
     return math.max(0,math.floor(tonumber(c[kind]) or 0));
 end
 
 local function UFV4ResourceCostText(kind)
     if kind=="Airbase" then return " + "..tostring(GetClientSetting("AirbaseOilPerLevel",1)).." Oil + "..tostring(GetClientSetting("AirbaseIronPerLevel",1)).." Iron"; end
-    if kind=="ForwardAirstrip" then return " + "..tostring(GetClientSetting("ForwardAirstripOilPerLevel",1)).." Oil"; end
+
 
     return "";
 end
@@ -13828,7 +13763,7 @@ end
 
 function ShowFactionMenu(parent,game)
     local area=CreateContentArea(parent); local economy=((Mod.PublicGameData or {}).globalEconomy or {}); local dip=economy.diplomacy or {}; local factions=dip.factions or {}; local ourID=GetLocalPlayerID(game); local ourFID=(dip.playerFaction or {})[ourID]; local our=ourFID and factions[ourFID] or nil;
-    UI.CreateLabel(area).SetText("FACTIONS").SetColor("#D4AF37"); UI.CreateLabel(area).SetText("Public directory, membership, exercises, intelligence sharing, chat, and Faction wars.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("FACTIONS").SetColor("#D4AF37"); UI.CreateLabel(area).SetText("Public directory, membership, exercises, resource and airport information, chat, and Faction wars.").SetColor("#BBBBBB");
     local alerts=((dip.factionAlerts or {})[ourID]) or {}; for i=#alerts,1,-1 do local a=alerts[i]; if a and a.seen~=true then UI.CreateLabel(area).SetText("⚠ "..tostring(a.kind or "FACTION NOTICE").." | "..tostring(a.text or "New Faction event")).SetColor("#FFB366"); local aid=tostring(a.id or ""); UI.CreateButton(area).SetText("ACKNOWLEDGE").SetOnClick(function() SafeSendGameCustomMessage(game,"Acknowledging...",{type="ackFactionAlert",alertID=aid},function(r) ShowFactionMenu(parent,game); end); end); break; end end
     UI.CreateLabel(area).SetText("FACTION DIRECTORY").SetColor("#9CCBFF"); local ids={}; for id,_ in pairs(factions) do table.insert(ids,id); end; table.sort(ids,function(a,b) return tonumber(a or 0)<tonumber(b or 0); end);
     if #ids==0 then UI.CreateLabel(area).SetText("No Factions have been created yet.").SetColor("#888888"); end
@@ -13915,15 +13850,15 @@ function ShowHowItWorks(parent)
     Section("MARKET RANKINGS — WHAT THE NUMBERS MEAN", "Top 5 Growth ranks the largest percentage price increases from the previous turn. Example: 20 → 24 is +20%. Top 5 Dividend ranks dividend Commerce paid per share and shows yield. Example: a 2 Commerce dividend at a 40 Commerce stock price is a 5% displayed yield. A high yield can still carry price risk.", "#79D279");
     Section("EXAMPLE: FLAGSHIP ACQUISITION", "Illustrative host settings: target market cap 3,000 × 150% premium = 4,500 Commerce purchase price. With 100 total shares, the cash-out value is 45 per share. An investor holding 20 shares receives 900 Commerce automatically. All other shareholders are paid first; the seller receives the remaining sale value plus the cash-out on shares the seller held. With a 100-share buyer priced at 44 and a target worth 3,800, buyer stock becomes 82 after rounding. At the default acquired-business earnings rate of 5%, its dividend pool rises by 190/turn: +1.90/share. Owning 20 shares adds 38/turn, not 190 national income. A 5,700 purchase takes 150 payments to recover from those 20 shares alone. Unheld shares receive no payout; fractional dividends carry forward. Earnings are generated by the game, not taken from the seller. Prices/base dividends may change. The host sets the rate for new acquisitions.", "#FFB347");
     Section("EXAMPLE: RESOURCE SHORTAGE", "Production 4 minus need 7 leaves a deficit of 3. A stockpile of 5 covers this turn and leaves 2. Next turn, the same deficit would leave 1 uncovered. Increase production or arrange a resource contract before the reserve runs out.", "#FFD166");
-    Section("EXAMPLE: PLAYER ACTIONS", "Click a player name in Diplomacy. Their mobile overview shows relationship, Commerce/turn, policy, agreements, flagship, discovered strategic assets, and known airport infrastructure. Private assets are never exposed unless your nation legitimately discovered them. At peace, you may propose a pact or alliance; at war, you may offer peace.", "#C792EA");
+    Section("EXAMPLE: PLAYER ACTIONS", "Click a player name in Diplomacy. Their mobile overview shows relationship, Commerce/turn, policy, agreements, flagship, discovered strategic assets, and known airport infrastructure. Resource locations and airport locations are available without an Agency. At peace, you may propose a pact or alliance; at war, you may offer peace.", "#C792EA");
     Section("1. GETTING STARTED","Complete National Setup. Your ideology, economic strategy, taxes, and company strategy show hard numerical effects before you confirm. If setup is left incomplete through the host deadline, missing choices are assigned automatically. An unfinished target is never immune from war.","#FFD166");
     Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence directly affects flagship market movement. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
-    Section("3. RESOURCES","Resource locations are private. You learn them through ownership, borders, faction/alliance intelligence, or accepted sharing. Oil and Iron are used by Airbases; Oil by Forward Airstrips.","#67D5FF");
-    Section("4. MILITARY INFRASTRUCTURE","Recruiters appear in MY ASSETS and RECRUITMENT with direct upgrades. Recruiter upgrade cost is base cost × next level (default L2: 500, L3: 750 gold); production level changes are scheduled for turn advancement. Recruiters use production levels, not strategic-building HP. Upgrading strengthens the SAME installation; it does not create another icon. Lv.1 = 10 max HP, Lv.2 = 20, Lv.3 = 30, Lv.4 = 40. Existing damage carries into an upgrade, so upgrading is not a free repair. Airbases and Airstrips are the supported infrastructure.","#8FBF6F");
-    Section("5. AIR OPERATIONS & AIRLIFT","If Airbases or Forward Airstrips are enabled, War.app Airlift Cards require an enabled airport at BOTH origin and destination. If the host disables both airport systems, normal War.app Airlift behavior is restored. AI nations follow the same routing rule.","#62B6FF");
-    Section("6. COMBAT UNITS","Air Wings: 200 Commerce by default; 5 attack, 3 defense, 5 health; deploy at an Airbase, capacity 2 per level. Special Forces: 180 Commerce, strength 5 by default. Tanks: 300 Commerce + 1 Oil + 1 Iron, strength 8. Drones: 150 Commerce + 1 Oil, strength 2; deploy at an Airbase or Airstrip. Host settings change costs, strength and national limits. Tank/Drone strength sets attack, defense, health and absorption. Units appear on turn advance, move and fight through normal game orders, follow normal fog, and cannot be gifted or transferred to teammates. No separate Drone recon or strike missions are included.","#FFD166");
-    Section("8. DIPLOMACY & FACTIONS","Diplomacy handles nation-to-nation wars, peace, NAPs, alliances, and trade. Factions have a public directory, leader/member management, join requests, chat, shared intelligence, Military Exercises, and Faction wars. A Faction leader may declare war on another Faction; all members are notified and member wars propagate automatically.","#D4AF37");
-    Section("AI VOLUNTARY WAR REQUIREMENTS","AI needs 70%+ military readiness and no Oil/Food/Iron shortage. With recruitment enabled: 1 Recruiter for nations of up to 3 territories, otherwise 2 (limited by the host station cap). Air Wings require an Airbase/Airstrip for AI logistics readiness. Targets must share a land border and cannot have an active alliance, NAP, peace cooldown, or pending war. Same-faction targets are excluded. Host AI war chance 0 disables voluntary AI war rolls. Passing requirements makes war possible, not certain. Defensive wars and faction/coalition joins use separate rules.","#FFB366");
+    Section("3. RESOURCES","Resource locations are public in Resources. Filter My Resources, Neighbors, Ally / Faction, or All Nations, then select a resource type. Each location shows its owner and level and has a SHOW button. Oil and Iron build Airports; each Recruiter level needs 1 Oil, 1 Food and 1 Iron per turn. Tanks consume 1 Oil + 1 Iron; Drones consume 1 Oil per purchase. Uranium is removed.","#67D5FF");
+    Section("4. MILITARY INFRASTRUCTURE","Recruiters appear in MY ASSETS and RECRUITMENT with direct upgrades. Recruiter upgrade cost is base cost × next level (default L2: 500, L3: 750 gold); production level changes are scheduled for turn advancement. Recruiters use production levels, not strategic-building HP. Recruiter upgrades replace their existing map icon; they do not stack another Recruiter icon. Lv.1 = 10 max HP, Lv.2 = 20, Lv.3 = 30, Lv.4 = 40. Existing damage carries into an upgrade, so upgrading is not a free repair. Airports are the only airfield infrastructure. ","#8FBF6F");
+    Section("5. AIR OPERATIONS & AIRLIFT","When Airports are enabled, War.app Airlift Cards require an Airport at BOTH origin and destination. Airports cost 350 Commerce + 1 Oil + 1 Iron per level by default; each upgrade costs base × next level. They support 2 Air Wings per level and Drone deployment. They need no Power Grid. If Airports are disabled, normal War.app Airlift rules apply. AI follows the same routing rule.","#62B6FF");
+    Section("6. COMBAT UNITS","Air Wings: 200 Commerce by default; 5 attack, 3 defense, 5 health; deploy at an Airbase, capacity 2 per level. Special Forces: 180 Commerce, strength 5 by default. Tanks: 300 Commerce + 1 Oil + 1 Iron, strength 8. Drones: 150 Commerce + 1 Oil, strength 2; deploy at an Airport. Host settings change costs, strength and national limits. Tank/Drone strength sets attack, defense, health and absorption. Units appear on turn advance, move and fight through normal game orders, follow normal fog, and cannot be gifted or transferred to teammates. No separate Drone recon or strike missions are included.","#FFD166");
+    Section("8. DIPLOMACY & FACTIONS","Diplomacy handles nation-to-nation wars, peace, NAPs, alliances, and trade. Factions have a public directory, leader/member management, join requests, chat, Military Exercises, and Faction wars. A Faction leader may declare war on another Faction; all members are notified and member wars propagate automatically.","#D4AF37");
+    Section("AI VOLUNTARY WAR REQUIREMENTS","AI needs 70%+ military readiness and no Oil/Food/Iron shortage. With recruitment enabled: 1 Recruiter for nations of up to 3 territories, otherwise 2 (limited by the host station cap). Air Wings require an Airport for AI logistics readiness. Targets must share a land border and cannot have an active alliance, NAP, peace cooldown, or pending war. Same-faction targets are excluded. Host AI war chance 0 disables voluntary AI war rolls. Passing requirements makes war possible, not certain. Defensive wars and faction/coalition joins use separate rules.","#FFB366");
     Section("9. FACTION MILITARY EXERCISES","The Faction leader starts the exercise. Each member chooses a host-configured Commerce tier. The button shows hard troop numbers such as 10 → 14 troops/turn. The bonus applies only during the exercise; then a cooldown begins.","#D4AF37");
     Section("10. UNITED NATIONS","Security Council resolutions include sanctions, embargoes, aid, condemnation, and ceasefires. Aid uses an adjustable Commerce amount within host limits instead of a hidden fixed value. Resolution effects and durations are shown before submission.","#90CAF9");
     Section("12. AI MANAGER","Human players may authorize a recurring budget plus a one-time extra budget. The manager prioritizes urgent shortages, economy, resources/military, then market opportunities. AI nations use the same infrastructure/resource/airlift rules . At war, AI strategic spending comes first: Recruiters, resources, airports, Air Wings, Tanks and Drones. AI pauses new stock purchases, investment projects and city construction, while retaining stock selling and existing income. War spending keeps a limited reserve; disabled host systems are respected.","#62B6FF");
@@ -13933,7 +13868,7 @@ end
 function ShowMilitaryMenu(parent,game)
     local area=CreateContentArea(parent); local state=UFPrivateMilitaryState();
     UI.CreateLabel(area).SetText("MILITARY").SetColor("#8FD694");
-    UI.CreateLabel(area).SetText("Airports, Airstrips, Air Wings, Special Forces, Tanks and Drones.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Airports, Air Wings, Special Forces, Tank Battalions and Drones.").SetColor("#BBBBBB");
     UI.CreateButton(area).SetText("RECRUITMENT").SetPreferredHeight(40).SetOnClick(function() ShowArmyRecruitersMenu(parent,game); end);
     UI.CreateLabel(area).SetText("YOUR AIRPORTS").SetColor("#62B6FF");
     local shown=UFShowOwnedRecruiterAssets(area,parent,game,ShowMilitaryMenu);
@@ -13954,10 +13889,10 @@ function ShowMilitaryMenu(parent,game)
             end
         end
     end
-    airports("Airbase","airbases"); airports("ForwardAirstrip","forwardAirstrips");
+    airports("Airbase","airbases");
     if shown==0 then UI.CreateLabel(area).SetText("No infrastructure built yet.").SetColor("#888888"); end
     UI.CreateLabel(area).SetText("BUILD AIRPORTS").SetColor("#62B6FF");
-    for _,item in ipairs({{"Airbase","AirbasesEnabled"},{"ForwardAirstrip","ForwardAirstripsEnabled"}}) do
+    for _,item in ipairs({{"Airbase","AirbasesEnabled"}}) do
         local kind=item[1];
         if GetClientSetting(item[2],true)==true and GetClientSetting("MilitaryExpansionEnabled",true)==true then
             UI.CreateLabel(area).SetText(UFV4StructureName(kind).." — "..tostring(UFV4BaseCost(kind)).." Commerce"..UFV4ResourceCostText(kind)).SetColor("#BBBBBB");
@@ -13969,7 +13904,7 @@ function ShowMilitaryMenu(parent,game)
         {"Air Wing","AirWingsEnabled","AirWingBaseCost",200,"purchaseAirWing","5 attack / 3 defense | 5 health | deploy at Airbase","airWings"},
         {"Special Forces","SpecialForcesEnabled","SpecialForcesBaseCost",180,"purchaseSpecialForces","Combat strength "..tostring(GetClientSetting("SpecialForcesCombatStrength",5)),"specialForces"},
         {"Tank Battalion","TanksEnabled","TankBaseCost",300,"purchaseTank","+ 1 Oil + 1 Iron | Combat strength "..tostring(GetClientSetting("TankCombatStrength",8)),"tanks","pendingTanks"},
-        {"Drone","DronesEnabled","DroneBaseCost",150,"purchaseDrone","+ 1 Oil | Combat strength "..tostring(GetClientSetting("DroneCombatStrength",2)).." | deploy at airport","drones","pendingDrones"}
+        {"Drone","DronesEnabled","DroneBaseCost",150,"purchaseDrone","+ 1 Oil | Combat strength "..tostring(GetClientSetting("DroneCombatStrength",2)).." | deploy at Airport","drones","pendingDrones"}
     };
     for _,item in ipairs(choices) do
         if GetClientSetting(item[2],true)==true and GetClientSetting("MilitaryExpansionEnabled",true)==true then

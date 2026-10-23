@@ -1,13 +1,13 @@
-# United Frontier — v15
+# United Frontier — v16
 
-United Frontier adds national economics, markets, resources, diplomacy, factions, the United Nations, Recruiters, airports and conventional combat units to War.app.
+This build includes public resource locations and filters, Airports, Air Wings, Special Forces, Tank Battalions, Drones, Recruiters, markets, diplomacy, factions and the United Nations.
 
-Military infrastructure is now limited to Airbases and Forward Airstrips. Air Wings, Special Forces, Tank Battalions and Drones use normal game movement, combat and fog. Power Grids are no longer required. Tank/Drone costs, combat strength and national limits are configurable by the host.
+Forward Airstrips, Power Grids, missiles, agencies, cyber operations, counterintelligence and Uranium are removed. Resource locations and owners are available directly in Resources. Map icons follow normal game fog.
 
-Missiles, nuclear/EMP strikes, interceptors, agencies, cyber operations, espionage and counterintelligence are removed. Existing-game migration cancels their queued actions and clears their private state. Map structures from those systems are removed on turn completion; old structure artwork is retained solely for compatibility until cleanup.
+Airport artwork and existing airport upgrade rules are unchanged. Recruiter upgrades replace the existing tier icon. The final map update preserves Airport, resource and Recruiter structures on the same territory.
 
-Markets, acquisition settlement and proportional dividends, resource stockpiles, Recruiter upgrades, policy previews, Gift Card restrictions, diplomacy filters, factions and the UN retain the previous fixes.
+Read INSTALL_V16.txt for upload instructions and V16_PATCH_NOTES.txt for current behavior and resource uses. Upload all eight Lua files and both image folders. Compatibility images are retained only so old maps can load until obsolete structures are cleaned.
 
-See INSTALL_V15.txt for upload instructions and V15_PATCH_NOTES.txt for costs, migration details and verification. Upload all eight Lua files and both image folders.
+New Air Wing, Tank Battalion and Drone unit artwork is included from v15. Helicopter artwork is a prepared asset only; Helicopters are not playable in this source.
 
-New map icons cover Air Wings, Tank Battalions and Drones. Helicopter artwork is included as an unused asset, ready for future Helicopter gameplay. Resource types have not been removed.
+Lua parsing, resource filters, Uranium retirement/refunds, removal enforcement, host settings, icon synchronization, acquisition settlement, diplomacy, Gift Card restrictions and crash-guard regression checks passed. Live game testing remains.

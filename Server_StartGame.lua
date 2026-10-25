@@ -1235,7 +1235,7 @@ function Server_StartGame(
     Mod.PrivateGameData = privateData;
     Mod.PlayerGameData = playerData;
 
-    UFConventionalMigration(game);
+    UFConventionalMigration(Game);
     print(
         "Global Economy initialization complete."
     );

@@ -1,0 +1,13 @@
+United Frontier v16 - startup hotfix
+
+Fixed Server_StartGame passing an undefined lowercase game variable into
+UFConventionalMigration. The hook receives Game (uppercase); Lua treats these
+as different variables. This caused the new-game startup path to fail.
+
+Replace Server_StartGame.lua in the mod root with the version in this package.
+All other files are included for a complete installation.
+
+Validation: full Server_StartGame hook with 40 players and resource generation
+enabled and disabled, plus the existing resource, economy and UI regressions.
+These are local mocked-engine checks. Live War.app tests remain required
+before requesting public approval.

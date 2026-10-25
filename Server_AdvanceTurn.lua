@@ -13199,15 +13199,18 @@ local function GetPerformanceCadence(game, data, workType)
         if workType == "diplomacy" then return 4; end
         if workType == "trade" then return 4; end
         if workType == "city" then return 4; end
+        if workType == "military" then return 4; end
         if workType == "economy" then return 2; end
     elseif count >= 50 then
         if workType == "diplomacy" then return 2; end
         if workType == "trade" then return 2; end
         if workType == "city" then return 2; end
+        if workType == "military" then return 2; end
     elseif count >= 25 then
         if workType == "diplomacy" then return 2; end
         if workType == "trade" then return 2; end
         if workType == "city" then return 2; end
+        if workType == "military" then return 2; end
     end
 
     return 1;
@@ -14931,6 +14934,7 @@ local function ProcessArmyRecruiterProduction(game, data, addNewOrder)
     if standing == nil then return; end
     for _, nation in pairs(economy.nations or {}) do nation.armyRecruiterCount=0; nation.armyRecruiterLevels=0; nation.armyRecruiterArmiesGeneratedThisTurn=0; end
     local base = math.max(1, math.floor(tonumber(GetSetting("ArmyRecruiterArmiesPerTurn", 4)) or 4));
+    local productionMods = {};
     for territoryID, level in pairs(r.territories or {}) do
         level = math.max(0, math.floor(tonumber(level) or 0));
         local terr = standing.Territories[territoryID]; local owner = terr and terr.OwnerPlayerID or nil; local nation = owner and economy.nations[owner] or nil;
@@ -14948,10 +14952,25 @@ local function ProcessArmyRecruiterProduction(game, data, addNewOrder)
             local productionMultiplier=math.max(0,100 + ideologyRecruiterModifier - recruiterPenalty + exerciseBonus);
             local armies = math.max(0, math.floor(base * level * readiness / 100 * productionMultiplier / 100 + 0.5));
             if armies > 0 then
-                addNewOrder(WL.GameOrderDeploy.Create(owner, armies, territoryID, true));
+                -- A separate deploy order for every Recruiter made large games wait
+                -- on dozens of server round trips.  AddArmies preserves the same
+                -- territory production while submitting the whole system once.
+                local mod = WL.TerritoryModification.Create(territoryID);
+                mod.AddArmies = armies;
+                table.insert(productionMods, mod);
                 nation.armyRecruiterArmiesGeneratedThisTurn = (nation.armyRecruiterArmiesGeneratedThisTurn or 0) + armies;
             end
         end
+    end
+    if #productionMods > 0 then
+        addNewOrder(WL.GameOrderEvent.Create(
+            WL.PlayerID.Neutral,
+            "Army Recruiters produced reinforcements",
+            {},
+            productionMods,
+            nil,
+            nil
+        ));
     end
 end
 
@@ -18058,6 +18077,7 @@ TrimMarketNews(
 
     local aiEconomyCadence = GetPerformanceCadence(game, data, "economy");
     local aiCityCadence = GetPerformanceCadence(game, data, "city");
+    local aiMilitaryCadence = GetPerformanceCadence(game, data, "military");
 
     for playerID, player
         in pairs(
@@ -18086,9 +18106,11 @@ UpdateAIStrategicReserve(
 UFAIJoinAlliedWars(game, data, playerID);
 UFRunStrategicAI(game, data, resourceChanges, playerID);
 UFAIConsiderAlliance(game, data, playerID);
-UFGenerateAIAirliftOrder(game, data, playerID, addNewOrder);
-UFAIUseGiftCardToSupportAlly(game, data, playerID, addNewOrder);
-UFGenerateAIMilitaryOrders(game, data, playerID, addNewOrder);
+if ShouldRunAIWork(data, playerID, aiMilitaryCadence) then
+    UFGenerateAIAirliftOrder(game, data, playerID, addNewOrder);
+    UFAIUseGiftCardToSupportAlly(game, data, playerID, addNewOrder);
+    UFGenerateAIMilitaryOrders(game, data, playerID, addNewOrder);
+end
 
 if not UFAIAtWar(data,playerID) and ShouldRunAIWork(data, playerID, aiCityCadence) then
     AIConsiderCityConstruction(game, data, playerID, addNewOrder);

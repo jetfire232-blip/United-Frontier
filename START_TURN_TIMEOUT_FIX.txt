@@ -2,6 +2,11 @@ United Frontier v16 - Start Turn Timeout Fix
 
 The screenshot identified ModContainerTimeout in Server_AdvanceTurn_Start.
 This update reduces the major repeated map work in that hook:
+- All Army Recruiters now add their reinforcements through one batched event.
+  A 40-player match can therefore replace up to 120 separate deploy submissions
+  with one server submission while producing the same armies on the same land.
+- In matches with 25 or more players, the mod's extra AI military orders are
+  divided evenly between turns. War.app's normal AI still acts every turn.
 - AI wartime routing builds one route map per nation instead of running a new
   breadth-first map search from every strong interior territory.
 - Existing turn cache supplies owned territories and war status to military,
@@ -13,8 +18,9 @@ AI behavior remains: choose its strongest worthwhile attack, then move one
 strong interior stack one step toward the nearest frontline. Economy, resource,
 diplomacy and unit rules are unchanged.
 
-Local route regression confirms the attack and transfer remain correct and the
-route search is near-linear. This is not a live War.app timing measurement.
+Local regression confirms Recruiter production is batched, large-match military
+work is staggered, the attack and transfer remain correct, and the route search
+is near-linear. This is not a live War.app timing measurement.
 Test the current game through at least two advances before approval.
 
 Includes the End timeout fix, AI Manager payment fix, startup capitalization

@@ -17275,8 +17275,10 @@ end
 
 local function UFPickAITerritory(game, standing, ownerID, wantInterior, excluded)
     local best=nil; local bestScore=-999999;
-    for tid,terr in pairs(standing.Territories or {}) do
-        if terr.OwnerPlayerID==ownerID and not (excluded and excluded[tid]) then
+    local owned=(ADVANCE_TURN_PERFORMANCE_CACHE and ADVANCE_TURN_PERFORMANCE_CACHE.ownedTerritories[ownerID]) or {};
+    for _,tid in ipairs(owned) do
+        local terr=standing.Territories[tid];
+        if terr and terr.OwnerPlayerID==ownerID and not (excluded and excluded[tid]) then
             local score=UFOwnedTerritoryStrategicScore(game,standing,ownerID,tid,wantInterior);
             if score>bestScore then bestScore=score; best=tid; end
         end
@@ -17285,6 +17287,8 @@ local function UFPickAITerritory(game, standing, ownerID, wantInterior, excluded
 end
 
 UFAIAtWar = function(data, playerID)
+    local cached=ADVANCE_TURN_PERFORMANCE_CACHE;
+    if cached~=nil and cached.turn==(data.tradeTurn or 0) then return cached.atWar[playerID]==true;end
     local diplomacy=data.globalEconomy and data.globalEconomy.diplomacy or {};
     for _,relationship in pairs(diplomacy.relationships or {}) do
         if relationship and relationship.status=="war" and (relationship.player1==playerID or relationship.player2==playerID) then return true; end
@@ -17345,6 +17349,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil then return; end
     local nation=((data.globalEconomy or {}).nations or {})[playerID]; if nation==nil then return; end
     local atWar=UFAIAtWar(data,playerID);
+    local ownedTerritories=(BuildAdvanceTurnPerformanceCache(game,data).ownedTerritories[playerID]) or {};
     nation.aiStrategicState=atWar and "war" or "stable";
     nation.aiDoctrine=atWar and "War Economy" or "Peace Economy";
     local available=GetAvailableGold(game,resourceChanges,playerID);
@@ -17426,7 +17431,7 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     if GetSetting("AirbasesEnabled",true)==true then
         if GetSetting("AirbasesEnabled",true)==true then
             local airbaseCount=0; for _,lvl in pairs(state.airbases or {}) do if (tonumber(lvl) or 0)>0 then airbaseCount=airbaseCount+1; end end
-            local territoryCount=0; for _,terr in pairs(standing.Territories or {}) do if terr.OwnerPlayerID==playerID then territoryCount=territoryCount+1; end end
+            local territoryCount=#ownedTerritories;
             local targetAirbases=(atWar and territoryCount>=8) and 2 or 1;
             if airbaseCount<targetAirbases then
                 local excluded={}; for tid,_ in pairs(state.airbases or {}) do excluded[tonumber(tid) or tid]=true; end
@@ -17487,8 +17492,9 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
 
     if atWar then
         for _,kind in ipairs({"Tank","Drone"}) do
-            for tid,terr in pairs(standing.Territories) do
-                if terr.OwnerPlayerID==playerID then
+            for _,tid in ipairs(ownedTerritories) do
+                local terr=standing.Territories[tid];
+                if terr and terr.OwnerPlayerID==playerID then
                     local ok=UFQueueConventionalUnit(game,data,playerID,state,kind,tid,canSpend,spend);
                     if ok then break; end
                 end
@@ -17639,7 +17645,8 @@ local function UFGenerateAIAirliftOrder(game,data,playerID,addNewOrder)
 
     else
         -- Host disabled both airport systems: preserve normal War.app Airlift behavior.
-        for tid,terr in pairs(standing.Territories or {}) do if terr and terr.OwnerPlayerID==playerID then airports[tonumber(tid) or tid]=true; end end
+        local owned=(BuildAdvanceTurnPerformanceCache(game,data).ownedTerritories[playerID]) or {};
+        for _,tid in ipairs(owned) do airports[tonumber(tid) or tid]=true;end
     end
     local function isFront(tid)
         local d=game.Map.Territories[tid];
@@ -17682,6 +17689,7 @@ local function UFAIUseGiftCardToSupportAlly(game,data,playerID,addNewOrder)
     end
     if giftCardID==nil then return false; end
     local diplomacy=(data.globalEconomy or {}).diplomacy or {}; local pf=diplomacy.playerFaction or {}; local ownFaction=pf[playerID];
+    local turnCache=BuildAdvanceTurnPerformanceCache(game,data);
     local function allied(a,b) return (ownFaction~=nil and pf[b]==ownFaction and b~=a) or UFIsActiveAlliance(diplomacy,a,b); end
     for allyID,ally in pairs(game.Game.Players or {}) do
         if allyID~=playerID and ally and not ally.Surrendered and allied(playerID,allyID) then
@@ -17693,7 +17701,8 @@ local function UFAIUseGiftCardToSupportAlly(game,data,playerID,addNewOrder)
             end
             if enemyID~=nil then
                 local allyBordersEnemy=false;
-                for tid,terr in pairs(standing.Territories or {}) do
+                for _,tid in ipairs(turnCache.ownedTerritories[allyID] or {}) do
+                    local terr=standing.Territories[tid];
                     if terr.OwnerPlayerID==allyID then
                         local d=game.Map.Territories[tid];
                         for nid,_ in pairs((d and d.ConnectedTo) or {}) do local nt=standing.Territories[nid]; if nt and nt.OwnerPlayerID==enemyID then allyBordersEnemy=true; break; end end
@@ -17702,7 +17711,8 @@ local function UFAIUseGiftCardToSupportAlly(game,data,playerID,addNewOrder)
                 end
                 if not allyBordersEnemy then
                     local candidate=nil; local candidateScore=999999;
-                    for tid,terr in pairs(standing.Territories or {}) do
+                    for _,tid in ipairs(turnCache.ownedTerritories[playerID] or {}) do
+                        local terr=standing.Territories[tid];
                         if terr.OwnerPlayerID==playerID then
                             local d=game.Map.Territories[tid]; local bordersEnemy=false;
                             for nid,_ in pairs((d and d.ConnectedTo) or {}) do local nt=standing.Territories[nid]; if nt and nt.OwnerPlayerID==enemyID then bordersEnemy=true; break; end end
@@ -17730,8 +17740,10 @@ end
 local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if standing==nil or standing.Territories==nil then return; end
     local atWar=UFAIAtWar(data,playerID); local bestAttack=nil; local bestScore=-999999; local frontFriendly={};
-    for tid,terr in pairs(standing.Territories) do
-        if terr.OwnerPlayerID==playerID then
+    local owned=(BuildAdvanceTurnPerformanceCache(game,data).ownedTerritories[playerID]) or {};
+    for _,tid in ipairs(owned) do
+        local terr=standing.Territories[tid];
+        if terr and terr.OwnerPlayerID==playerID then
             local details=game.Map.Territories[tid]; local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0; local hostileNeighbors={};
             for nid,_ in pairs((details and details.ConnectedTo) or {}) do
                 local nt=standing.Territories[nid]; local oid=nt and nt.OwnerPlayerID or nil;
@@ -17756,30 +17768,27 @@ local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
     -- Move one strong interior/recruiter stack one step toward the nearest frontline.
     if atWar and next(frontFriendly)~=nil then
         local recruiters=((data.globalEconomy or {}).armyRecruiters or {}).territories or {};
-        local function pathNext(startID)
-            if frontFriendly[startID] then return nil,0; end
-            local queue={startID}; local head=1; local prev={[startID]=false}; local goal=nil;
-            while head<=#queue and #queue<400 do
-                local cur=queue[head]; head=head+1;
-                if frontFriendly[cur] then goal=cur; break; end
-                local d=game.Map.Territories[cur];
-                for nid,_ in pairs((d and d.ConnectedTo) or {}) do
-                    local nt=standing.Territories[nid];
-                    if nt and nt.OwnerPlayerID==playerID and prev[nid]==nil then prev[nid]=cur; table.insert(queue,nid); end
+        -- One multi-source route map replaces a separate breadth-first search
+        -- from every strong interior territory.
+        local queue={};local head=1;local distance={};local towardFront={};
+        for tid in pairs(frontFriendly) do queue[#queue+1]=tid;distance[tid]=0;end
+        while head<=#queue do
+            local cur=queue[head];head=head+1;
+            local d=game.Map.Territories[cur];
+            for nid in pairs((d and d.ConnectedTo) or {}) do
+                local nt=standing.Territories[nid];
+                if nt and nt.OwnerPlayerID==playerID and distance[nid]==nil then
+                    distance[nid]=distance[cur]+1;towardFront[nid]=cur;queue[#queue+1]=nid;
                 end
             end
-            if goal==nil then return nil,999; end
-            local step=goal; local dist=0;
-            while prev[step] and prev[step]~=startID do step=prev[step]; dist=dist+1; end
-            if prev[step]==startID then return step,dist+1; end
-            return nil,999;
         end
         local bestMove=nil; local bestScore=-999999;
-        for tid,terr in pairs(standing.Territories) do
-            if terr.OwnerPlayerID==playerID and not frontFriendly[tid] then
+        for _,tid in ipairs(owned) do
+            local terr=standing.Territories[tid];
+            if terr and terr.OwnerPlayerID==playerID and not frontFriendly[tid] then
                 local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
                 if armies>6 then
-                    local nextID,dist=pathNext(tid);
+                    local nextID,dist=towardFront[tid],distance[tid] or 999;
                     if nextID then
                         local recruiterBonus=(tonumber(recruiters[tid]) or 0)>0 and 20 or 0;
                         local score=armies+recruiterBonus-dist*2;
@@ -17791,8 +17800,9 @@ local function UFGenerateAIMilitaryOrders(game,data,playerID,addNewOrder)
         if bestMove then addNewOrder(WL.GameOrderAttackTransfer.Create(playerID,bestMove.from,bestMove.to,WL.AttackTransferEnum.Transfer,false,WL.Armies.Create(bestMove.num),false)); end
     elseif not atWar then
         -- Peacetime doctrine: leave about five armies on peaceful international borders and stack excess one step behind them.
-        for tid,terr in pairs(standing.Territories) do
-            if terr.OwnerPlayerID==playerID then
+        for _,tid in ipairs(owned) do
+            local terr=standing.Territories[tid];
+            if terr and terr.OwnerPlayerID==playerID then
                 local d=game.Map.Territories[tid]; local peacefulBorder=false; local armies=terr.NumArmies and terr.NumArmies.NumArmies or 0;
                 for nid,_ in pairs((d and d.ConnectedTo) or {}) do local nt=standing.Territories[nid]; local oid=nt and nt.OwnerPlayerID or nil; if oid and oid~=playerID and oid~=WL.PlayerID.Neutral and not IsDiplomacyWar(data,playerID,oid) then peacefulBorder=true; break; end end
                 if peacefulBorder and armies>7 then
@@ -17876,7 +17886,8 @@ function Server_AdvanceTurn_Start(
         resourceChanges
     );
 
-    RefreshResourceMapVisibility(game, data, addNewOrder);
+    -- Resource/recruiter/airport icons are synchronized together once in the
+    -- End hook. Avoid a second full-map structure pass here.
 
     ProcessArmyRecruiterProduction(game, data, addNewOrder);
 

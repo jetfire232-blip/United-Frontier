@@ -1,0 +1,22 @@
+United Frontier v16 - Start Turn Timeout Fix
+
+The screenshot identified ModContainerTimeout in Server_AdvanceTurn_Start.
+This update reduces the major repeated map work in that hook:
+- AI wartime routing builds one route map per nation instead of running a new
+  breadth-first map search from every strong interior territory.
+- Existing turn cache supplies owned territories and war status to military,
+  Gift Card, Airlift, recruiter, airport, Tank and Drone planning.
+- Resource map icons are no longer refreshed in both Start and End; the unified
+  End refresh continues to synchronize resources, Recruiters and Airports.
+
+AI behavior remains: choose its strongest worthwhile attack, then move one
+strong interior stack one step toward the nearest frontline. Economy, resource,
+diplomacy and unit rules are unchanged.
+
+Local route regression confirms the attack and transfer remain correct and the
+route search is near-linear. This is not a live War.app timing measurement.
+Test the current game through at least two advances before approval.
+
+Includes the End timeout fix, AI Manager payment fix, startup capitalization
+fix and all eight resource icons. Image folders are PNG-only. Replace all eight
+Lua files for a clean synchronized installation.

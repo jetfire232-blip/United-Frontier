@@ -17852,6 +17852,10 @@ function Server_AdvanceTurn_Start(
     local resourceChanges =
         {};
 
+    -- Release prepaid manager funds into this turn's accounting. Purchases
+    -- deduct from that balance normally; unspent funds are returned, not lost.
+    UFReleaseAIManagerFunding(data,resourceChanges);
+
 
     -- =====================================================
     -- STRATEGIC RESOURCES

@@ -4185,11 +4185,14 @@ nation.stockCostBasis[
     if payload.type == "fundAIManagerOnce" then
         if GetSetting("PlayerAIManagerEnabled",true)~=true then setReturn({success=false,message="The host has disabled the AI Manager."}); return; end
         local nation=EnsureNation(data,game,playerID); local amount=math.max(0,math.min(100000,math.floor(tonumber(payload.amount) or 0)));
+        if (tonumber(nation.aiManagerOneTimeEscrow) or 0)>0 then setReturn({success=false,message="A one-time payment is already reserved for next turn. Wait for it to be processed before paying again."}); return; end
         if amount<25 then setReturn({success=false,message="Enter at least 25 Commerce for one-time AI Manager funding."}); return; end
         local available=GetStoredGold(game,playerID); if available<amount then setReturn({success=false,message="You currently have "..tostring(available).." Commerce. Lower the one-time amount."}); return; end
+        if not RemoveGold(game,playerID,amount) then setReturn({success=false,message="Insufficient Commerce for this payment."});return;end
+        nation.aiManagerOneTimeEscrow=amount;
         nation.aiManagerOneTimeBudget=amount; nation.aiManagerEnabled=true; nation.aiManagerCancelTurn=nil;
         data.globalEconomy.nations[playerID]=nation; CompactPublicGameDataForSave(data); Mod.PublicGameData=data;
-        setReturn({success=true,message="AI Manager authorized to use up to "..tostring(amount).." additional Commerce on its next turn. This is a one-time budget and does not repeat."}); return;
+        setReturn({success=true,message=tostring(amount).." Commerce deducted and reserved for the AI Manager next turn. Unspent funding returns to your available gold after processing. This payment does not repeat."}); return;
     end
 
     -- =====================================================

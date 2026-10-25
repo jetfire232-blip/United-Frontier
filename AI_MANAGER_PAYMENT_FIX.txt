@@ -1,0 +1,20 @@
+United Frontier v16 - AI Manager one-time payment
+
+PAY & RESERVE FOR NEXT TURN deducts gold immediately and records prepaid funds.
+Only one payment can be pending; repeated clicks do not charge again.
+At the next turn the payment is released into normal spending accounting once.
+Manager purchases deduct normally, so the player is not charged twice.
+Unspent money returns to available gold after processing. Paused managers or
+host-disabled managers return the funding during next-turn processing.
+Recurring budgets remain spending limits, not advance payments.
+Existing unpaid one-time authorizations remain spending limits until processed;
+only payments confirmed using this update create prepaid reserved funds.
+
+Example excluding other income/spending: start 1,000, pay 500 = 500 available
+and 500 reserved. Manager spends 300 total next turn = 700 available afterward.
+
+Required replacements: Client_PresentMenuUI.lua, Server_GameCustomMessage.lua,
+Server_AdvanceTurn.lua, UF_ConventionalMilitary.lua.
+Full package includes the prior timeout fix and all eight new resource icons.
+Image folders contain PNG only; remove old Tank.svg/Drone.svg from GitHub.
+Local regression checks passed; live War.app testing remains required.

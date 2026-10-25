@@ -1,4 +1,19 @@
 -- Shared conventional military rules. Imported independently by each server hook.
+function UFReleaseAIManagerFunding(data,resourceChanges)
+    local economy=data.globalEconomy or {};
+    for playerID,nation in pairs(economy.nations or {}) do
+        local reserved=math.max(0,math.floor(tonumber(nation.aiManagerOneTimeEscrow) or 0));
+        if reserved>0 then
+            resourceChanges[playerID]=(resourceChanges[playerID] or 0)+reserved;
+            nation.aiManagerOneTimeEscrow=0;
+            if (Mod.Settings or {}).PlayerAIManagerEnabled==false or nation.aiManagerEnabled~=true
+                or (nation.aiManagerCancelTurn and (economy.currentEconomyTurn or data.tradeTurn or 1)>=nation.aiManagerCancelTurn) then
+                nation.aiManagerOneTimeBudget=0;
+            end
+        end
+    end
+end
+
 local function setting(key,default)
     local value=(Mod.Settings or {})[key]; if value==nil then return default; end; return value;
 end

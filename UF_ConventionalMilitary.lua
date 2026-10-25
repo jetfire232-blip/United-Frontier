@@ -33,12 +33,12 @@ end
 
 local retiredFields={"headquarters","samSites","missileSilos","powerGrids","forwardAirstrips","cyberFacilities","missileInventory","interceptorInventory","pendingStrategicStrikes","pendingAirMissions","airMissionUsedTurn","intelligenceOperationsLevel","cyberOperationsLevel","counterIntelligenceLevel","intelligenceReports","counterIntelAlerts","strategicWarnings","lastAgencyOperationTurn","lastAgencyTargetTurn","lastCyberOperationTurn","hqRecentResults","disruptions","cityDamage"};
 
-function UFConventionalMigration(game)
-    local pd=Mod.PrivateGameData or {};
+function UFConventionalMigration(game,pd,pgd,data,deferSave)
+    pd=pd or Mod.PrivateGameData or {};
     pd.strategicMilitary=pd.strategicMilitary or {byPlayer={}};
     local military=pd.strategicMilitary; military.byPlayer=military.byPlayer or {};
     military.pendingCovertOps=nil; military.nextCovertOpID=nil;
-    local pgd=Mod.PlayerGameData or {};
+    pgd=pgd or Mod.PlayerGameData or {};
     for playerID,state in pairs(military.byPlayer) do
         for _,field in ipairs(retiredFields) do state[field]=nil; end
         state.airbases=state.airbases or {};
@@ -56,8 +56,7 @@ function UFConventionalMigration(game)
         pgd[playerID].strategicIntel=pgd[playerID].strategicIntel or {};
         pgd[playerID].strategicIntel.knownResources={};
     end
-    Mod.PrivateGameData=pd; Mod.PlayerGameData=pgd;
-    local data=Mod.PublicGameData or {};
+    data=data or Mod.PublicGameData or {};
     for _,nation in pairs((data.globalEconomy or {}).nations or {}) do
         if nation.military then
             for _,field in ipairs({"headquartersStatus","headquartersLevel","headquartersTerritoryID","headquartersBranches","samSiteCount","missileSiloCount","powerGridCount","forwardAirstripCount","jointStrategicWarningEnabled"}) do nation.military[field]=nil; end
@@ -91,7 +90,10 @@ function UFConventionalMigration(game)
         end
     end
     UFPublishResourceCatalog(game,data);
-    Mod.PublicGameData=data;
+    if deferSave~=true then
+        Mod.PrivateGameData=pd; Mod.PlayerGameData=pgd; Mod.PublicGameData=data;
+    end
+    return pd,pgd,data;
 end
 
 function UFPublishResourceCatalog(game,data)
@@ -182,7 +184,7 @@ end
 
 function UFRefreshConventionalUnits(game,addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if not standing then return; end
-    local pd=Mod.PrivateGameData or {}; local byPlayer=(pd.strategicMilitary or {}).byPlayer or {}; local pgd=Mod.PlayerGameData or {};
+    local pd=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {}; local byPlayer=(pd.strategicMilitary or {}).byPlayer or {}; local pgd=UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {};
     local add={};
     -- Count both unit types for every owner in a single standing scan.
     local actualByOwner={};
@@ -215,5 +217,6 @@ function UFRefreshConventionalUnits(game,addNewOrder)
     end
     local mods={}; for tid,units in pairs(add) do local tm=WL.TerritoryModification.Create(tid); tm.AddSpecialUnits=units; table.insert(mods,tm); end
     if #mods>0 then addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral,"United Frontier Tanks and Drones deployed",{},mods,nil,nil)); end
-    Mod.PrivateGameData=pd; Mod.PlayerGameData=pgd;
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData=pd; end
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE==nil then Mod.PlayerGameData=pgd; end
 end

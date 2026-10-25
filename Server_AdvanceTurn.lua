@@ -12910,7 +12910,7 @@ function AIHasWarPreparedness(game, data, aiPlayerID)
     local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
     if standing == nil or standing.Territories == nil then return false; end
 
-    local privateData = Mod.PrivateGameData or {};
+    local privateData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
     local state = byPlayer[aiPlayerID] or {
         airbases={}, };
@@ -13112,6 +13112,11 @@ end
 local ADVANCE_TURN_PERFORMANCE_CACHE = nil;
 local ADVANCE_TURN_ORDER_DATA_CACHE = nil;
 local ADVANCE_TURN_BORDER_CACHE = {};
+-- These are intentionally shared globals so the conventional-military helper
+-- file can use the same in-memory turn snapshot.  Serialized mod data is loaded
+-- once at Start and committed once after all Start work is complete.
+UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = nil;
+UF_ADVANCE_TURN_PLAYER_DATA_CACHE = nil;
 
 local function BuildAdvanceTurnPerformanceCache(game, data)
     local turn = data and data.tradeTurn or 0;
@@ -17257,7 +17262,7 @@ end
 -- resources and military infrastructure instead of hoarding everything.
 
 local function UFEnsureStrategicAIState(playerID)
-    local pd=Mod.PrivateGameData or {};
+    local pd=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     pd.strategicMilitary=pd.strategicMilitary or {byPlayer={}};
     pd.strategicMilitary.byPlayer=pd.strategicMilitary.byPlayer or {};
     local state=pd.strategicMilitary.byPlayer[playerID];
@@ -17270,7 +17275,7 @@ local function UFEnsureStrategicAIState(playerID)
     state.airWings=state.airWings or {}; state.specialForces=state.specialForces or {};
     state.pendingAirWings=state.pendingAirWings or {}; state.pendingSpecialForces=state.pendingSpecialForces or {};
     state.assetCondition=state.assetCondition or {}; state.samSites={}; state.headquarters=nil;
-    Mod.PrivateGameData=pd;
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData=pd; end
     return pd,state;
 end
 
@@ -17522,8 +17527,9 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
     end
     nation.aiMilitarySpentThisTurn=spent;
     nation.aiManagerMilitarySpentThisTurn=nation.aiManagerMilitarySpentThisTurn or 0;
-    Mod.PrivateGameData=pd;
-    local pgd=Mod.PlayerGameData or {}; pgd[playerID]=pgd[playerID] or {}; pgd[playerID].ownMilitary=state; Mod.PlayerGameData=pgd;
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData=pd; end
+    local pgd=UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {}; pgd[playerID]=pgd[playerID] or {}; pgd[playerID].ownMilitary=state;
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE==nil then Mod.PlayerGameData=pgd; end
     return spent;
 end
 
@@ -17634,7 +17640,7 @@ end
 
 UFStrategicTerritoryValue = function(data, ownerID, territoryID)
     local value=0;
-    local pd=Mod.PrivateGameData or {};
+    local pd=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
     local st=byPlayer[ownerID] or {};
     if (tonumber((st.samSites or {})[territoryID]) or 0)>0 then value=value+20; end
@@ -17847,9 +17853,21 @@ function Server_AdvanceTurn_Start(
     addNewOrder
 )
 
-    UFConventionalMigration(game);
     local data =
         GetEconomicData();
+
+    -- Serialized mod stores can yield while War.app fetches or writes them.
+    -- Load each once before the 40-player loops, then let every subsystem share
+    -- the same tables until the single save near the end of this hook.
+    UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = Mod.PrivateGameData or {};
+    UF_ADVANCE_TURN_PLAYER_DATA_CACHE = Mod.PlayerGameData or {};
+    UFConventionalMigration(
+        game,
+        UF_ADVANCE_TURN_PRIVATE_DATA_CACHE,
+        UF_ADVANCE_TURN_PLAYER_DATA_CACHE,
+        data,
+        true
+    );
 
     -- Compact first so an older large save gets headroom before this turn adds
     -- any new market, diplomacy, resource, or war records.
@@ -18300,6 +18318,8 @@ end
     -- =====================================================
 
     CompactPublicGameData(data);
+    Mod.PrivateGameData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE;
+    Mod.PlayerGameData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE;
     Mod.PublicGameData =
         data;
 
@@ -18638,7 +18658,7 @@ end
 -- =====================================================
 if order.proxyType == "GameOrderPlayCardAirlift" then
     if GetSetting("AirbasesEnabled",true)==true then
-        local fromID=order.FromTerritoryID; local toID=order.ToTerritoryID; local pd=Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
+        local fromID=order.FromTerritoryID; local toID=order.ToTerritoryID; local pd=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
         local function hasAirport(tid)
             local st=game.ServerGame and game.ServerGame.LatestTurnStanding and game.ServerGame.LatestTurnStanding.Territories[tid] or nil;
             local owner=st and st.OwnerPlayerID or nil; local state=owner and byPlayer[owner] or nil;
@@ -19072,10 +19092,10 @@ local UFPropagateSharedDiscoveries;
 local function UFRefreshAllPlayerStrategicIntel(game, data)
     local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
     if standing == nil or standing.Territories == nil then return; end
-    local privateData = Mod.PrivateGameData or {};
+    local privateData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     privateData.strategicMilitary = privateData.strategicMilitary or {byPlayer={}};
     privateData.strategicMilitary.byPlayer = privateData.strategicMilitary.byPlayer or {};
-    local playerData = Mod.PlayerGameData or {};
+    local playerData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {};
     UFPropagateSharedDiscoveries(data, privateData);
     for playerID, _ in pairs((data.globalEconomy or {}).nations or {}) do
         local state = privateData.strategicMilitary.byPlayer[playerID] or {
@@ -19092,8 +19112,8 @@ local function UFRefreshAllPlayerStrategicIntel(game, data)
         };
         playerData[playerID].ownMilitary = state;
     end
-    Mod.PrivateGameData = privateData;
-    Mod.PlayerGameData = playerData;
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData = privateData; end
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE==nil then Mod.PlayerGameData = playerData; end
 end
 
 local UF_VISIBLE_MILITARY_STRUCTURES = {
@@ -19121,11 +19141,11 @@ end
 local function UFReconcileStrategicMilitaryOwnership(game)
     local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
     if standing == nil or standing.Territories == nil then return; end
-    local privateData = Mod.PrivateGameData or {};
+    local privateData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     privateData.strategicMilitary = privateData.strategicMilitary or {byPlayer={}};
     local byPlayer = privateData.strategicMilitary.byPlayer or {};
     privateData.strategicMilitary.byPlayer = byPlayer;
-    local playerData = Mod.PlayerGameData or {};
+    local playerData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {};
 
     local function cleanOwnedMap(ownerID, tbl, pending)
         tbl = tbl or {};
@@ -19154,8 +19174,8 @@ local function UFReconcileStrategicMilitaryOwnership(game)
         playerData[ownerID] = playerData[ownerID] or {};
         playerData[ownerID].ownMilitary = state;
     end
-    Mod.PrivateGameData = privateData;
-    Mod.PlayerGameData = playerData;
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData = privateData; end
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE==nil then Mod.PlayerGameData = playerData; end
 end
 
 local function UFAddWantedStructure(wanted, territoryID, prefix, level)
@@ -19167,11 +19187,11 @@ end
 local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
     local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
     if standing == nil or standing.Territories == nil then return; end
-    local privateData = Mod.PrivateGameData or {};
+    local privateData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
     local wanted = {};
     -- Read serialized mod data and host settings once, not once per territory.
-    local data=Mod.PublicGameData or {};
+    local data=ADVANCE_TURN_ORDER_DATA_CACHE or Mod.PublicGameData or {};
     local economy=data.globalEconomy or {};
     local resourceState=economy.resources or {};
     local recruiters=economy.armyRecruiters or {};
@@ -19262,11 +19282,11 @@ end
 local function UFRefreshVisibleSpecialUnits(game, addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
     if standing==nil or standing.Territories==nil then return; end
-    local privateData=Mod.PrivateGameData or {};
+    local privateData=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
     privateData.strategicMilitary=privateData.strategicMilitary or {byPlayer={}};
     local byPlayer=privateData.strategicMilitary.byPlayer or {};
     privateData.strategicMilitary.byPlayer=byPlayer;
-    local playerData=Mod.PlayerGameData or {};
+    local playerData=UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {};
 
     local actualAir={}; local actualSF={}; local removeByTerr={};
     for tid,terr in pairs(standing.Territories) do
@@ -19326,7 +19346,8 @@ local function UFRefreshVisibleSpecialUnits(game, addNewOrder)
         local mod=WL.TerritoryModification.Create(tid); mod.AddSpecialUnits=units; table.insert(mods,mod);
     end
     if #mods>0 then addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral,"United Frontier special units updated",{},mods,nil,nil)); end
-    Mod.PrivateGameData=privateData; Mod.PlayerGameData=playerData;
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData=privateData; end
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE==nil then Mod.PlayerGameData=playerData; end
 end
 
 UFPropagateSharedDiscoveries = function(data, privateData)
@@ -19425,19 +19446,22 @@ function Server_AdvanceTurn_End(
     UFReconcileStrategicMilitaryOwnership(game);
     UFRefreshVisibleSpecialUnits(game, addNewOrder);
     UFRefreshConventionalUnits(game, addNewOrder);
-    Mod.PublicGameData=data;
     UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder);
     UFRefreshAllPlayerStrategicIntel(game, data);
     UFUpdatePublicMarketRankings(game, data);
     UFPublishResourceCatalog(game,data);
 
     CompactPublicGameData(data);
+    Mod.PrivateGameData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
+    Mod.PlayerGameData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {};
     Mod.PublicGameData =
         data;
 
     ADVANCE_TURN_ORDER_DATA_CACHE = nil;
     ADVANCE_TURN_BORDER_CACHE = {};
     ADVANCE_TURN_PERFORMANCE_CACHE = nil;
+    UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = nil;
+    UF_ADVANCE_TURN_PLAYER_DATA_CACHE = nil;
     TURN_COMMERCE_INCOME_CACHE = {};
     TURN_STORED_GOLD_CACHE = {};
 

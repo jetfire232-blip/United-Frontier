@@ -2,6 +2,11 @@ United Frontier v16 - Start Turn Timeout Fix
 
 The screenshot identified ModContainerTimeout in Server_AdvanceTurn_Start.
 This update reduces the major repeated map work in that hook:
+- PrivateGameData and PlayerGameData are now loaded once before the nation
+  loops and saved once after processing. Strategic AI no longer performs
+  serialized data reads and writes separately for every AI nation.
+- The conventional-system migration shares that same in-memory snapshot instead
+  of loading and saving all three mod data stores again at every turn start.
 - All Army Recruiters now add their reinforcements through one batched event.
   A 40-player match can therefore replace up to 120 separate deploy submissions
   with one server submission while producing the same armies on the same land.

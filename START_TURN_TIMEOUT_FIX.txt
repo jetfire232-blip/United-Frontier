@@ -2,6 +2,18 @@ United Frontier v16 - Start Turn Timeout Fix
 
 The screenshot identified ModContainerTimeout in Server_AdvanceTurn_Start.
 This update reduces the major repeated map work in that hook:
+- Matches with 25 or more active nations now use Large Game Safe Mode. Start
+  does not fetch PrivateGameData or PlayerGameData, which can become large
+  enough to consume the server timeout even when Lua reports only 4 ms of work.
+- Pending resource facilities, pending Recruiter construction and Recruiter
+  army production are each submitted as one batched event instead of one event
+  per territory. This specifically protects turns that resolve many AI builds.
+- The Start hook skips United Frontier's optional strategic purchasing, extra
+  military moves and city construction in Large Game Safe Mode. Normal War.app
+  AI still deploys, attacks and transfers every turn; public economy, markets,
+  resources, diplomacy, factions and Recruiter production continue normally.
+- End loads military data once and still resolves human-purchased Air Wings,
+  Special Forces, Tanks, Drones and map icons.
 - PrivateGameData and PlayerGameData are now loaded once before the nation
   loops and saved once after processing. Strategic AI no longer performs
   serialized data reads and writes separately for every AI nation.

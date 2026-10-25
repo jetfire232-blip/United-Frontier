@@ -12910,7 +12910,10 @@ function AIHasWarPreparedness(game, data, aiPlayerID)
     local standing = game.ServerGame and game.ServerGame.LatestTurnStanding;
     if standing == nil or standing.Territories == nil then return false; end
 
-    local privateData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
+    local privateData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or {};
+    if not UFIsLargeGame(game) and UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then
+        privateData = Mod.PrivateGameData or {};
+    end
     local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
     local state = byPlayer[aiPlayerID] or {
         airbases={}, };
@@ -12955,7 +12958,7 @@ function AIHasWarPreparedness(game, data, aiPlayerID)
     end
 
     -- Air logistics is required only when Air Wings are actually enabled.
-    if airWingsEnabled and airbasesEnabled then
+    if airWingsEnabled and airbasesEnabled and not UFIsLargeGame(game) then
         local hasAirport = false;
         if airbasesEnabled then
             for tid, lvl in pairs(state.airbases or {}) do
@@ -13117,6 +13120,15 @@ local ADVANCE_TURN_BORDER_CACHE = {};
 -- once at Start and committed once after all Start work is complete.
 UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = nil;
 UF_ADVANCE_TURN_PLAYER_DATA_CACHE = nil;
+UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE = false;
+
+function UFIsLargeGame(game)
+    local count=0;
+    for _,player in pairs((game and game.Game and game.Game.Players) or {}) do
+        if player~=nil and player.Surrendered~=true then count=count+1; end
+    end
+    return count>=25;
+end
 
 local function BuildAdvanceTurnPerformanceCache(game, data)
     local turn = data and data.tradeTurn or 0;
@@ -14835,6 +14847,7 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
     if standing == nil or standing.Territories == nil then return; end
 
     local remaining = {};
+    local modsByTerritory = {};
     for _, build in ipairs(resources.pendingBuilds or {}) do
         local nation = data.globalEconomy.nations[build.playerID];
         if nation ~= nil then EnsureNationResourceState(nation); end
@@ -14866,12 +14879,7 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
                     );
             end
 
-            local event = WL.GameOrderEvent.Create(
-                build.playerID,
-                build.resource .. " facility upgraded to level " .. tostring(build.toLevel),
-                {}, {terrMod}, nil, nil
-            );
-            addNewOrder(event);
+            modsByTerritory[build.territoryID] = terrMod;
             -- New builds are already paid when ordered. Keep legacy compatibility.
             if build.paid ~= true then
                 AddResourceChange(resourceChanges, build.playerID, -(build.cost or 0));
@@ -14888,6 +14896,10 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
         end
     end
     resources.pendingBuilds = remaining;
+    local buildMods={}; for _,mod in pairs(modsByTerritory) do table.insert(buildMods,mod); end
+    if #buildMods>0 then
+        addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral,"Strategic resource facilities completed",{},buildMods,nil,nil));
+    end
 end
 
 local function EnsureArmyRecruiterState(data)
@@ -14918,18 +14930,23 @@ local function ProcessPendingArmyRecruiters(game, data, resourceChanges, addNewO
     local r = EnsureArmyRecruiterState(data); if r == nil or r.enabled ~= true then return; end
     local standing = game.ServerGame and game.ServerGame.LatestTurnStanding; if standing == nil then return; end
     local pending = r.pendingBuilds or {}; r.pendingBuilds = {};
+    local modsByTerritory={};
     for _, build in ipairs(pending) do
         local terr = standing.Territories[build.territoryID];
         if terr ~= nil and terr.OwnerPlayerID == build.playerID then
             r.territories[build.territoryID] = build.toLevel;
             local mod = WL.TerritoryModification.Create(build.territoryID);
             mod.SetStructuresOpt = BuildRecruiterStructures(terr.Structures or {}, build.toLevel);
-            addNewOrder(WL.GameOrderEvent.Create(build.playerID, "Army Recruiter upgraded to level " .. tostring(build.toLevel), {}, {mod}, nil, nil));
+            modsByTerritory[build.territoryID]=mod;
         else
             -- The order was prepaid; refund if ownership was lost before construction resolved.
             r.territories[build.territoryID] = build.fromLevel or nil;
             if build.paid == true and (build.cost or 0) > 0 then AddResourceChange(resourceChanges, build.playerID, build.cost or 0); end
         end
+    end
+    local recruiterMods={}; for _,mod in pairs(modsByTerritory) do table.insert(recruiterMods,mod); end
+    if #recruiterMods>0 then
+        addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral,"Army Recruiter construction completed",{},recruiterMods,nil,nil));
     end
 end
 
@@ -17188,7 +17205,7 @@ local function TrimArrayKeepNewestFront(list, maxItems)
     end
 end
 
-local function CompactPublicGameData(data)
+local function CompactPublicGameData(data, aggressive)
     if type(data) ~= "table" then return; end
 
     TrimArrayKeepNewest(data.tradeHistory, 30);
@@ -17250,6 +17267,24 @@ local function CompactPublicGameData(data)
     local un = economy.unitedNations;
     if type(un) == "table" then
         TrimArrayKeepNewest(un.resolutionHistory, 25);
+    end
+
+    if aggressive==true then
+        TrimArrayKeepNewest(data.tradeHistory, 12);
+        TrimArrayKeepNewest(data.investmentHistory, 12);
+        TrimArrayKeepNewest(data.completedInvestmentProjects, 12);
+        TrimArrayKeepNewest(economy.worldEvents, 12);
+        TrimArrayKeepNewest(economy.pendingWorldReportEvents, 5);
+        TrimArrayKeepNewest(economy.transactionLedger, 12);
+        for _,nation in pairs(economy.nations or {}) do TrimArrayKeepNewest(nation.personalEventQueue,3); end
+        if type(market)=="table" then
+            TrimArrayKeepNewest(market.transactions,12); TrimArrayKeepNewest(market.news,12); TrimArrayKeepNewest(market.priceHistory,6);
+            for _,company in pairs(market.companies or {}) do if type(company)=="table" then TrimArrayKeepNewest(company.priceHistory,6); end end
+            if type(market.etf)=="table" then TrimArrayKeepNewest(market.etf.priceHistory,6); end
+        end
+        if type(diplomacy)=="table" then TrimArrayKeepNewest(diplomacy.history,20); TrimArrayKeepNewestFront(diplomacy.warEventHistory,12); end
+        if type(resources)=="table" then TrimArrayKeepNewest(resources.tradeHistory,10); end
+        if type(un)=="table" then TrimArrayKeepNewest(un.resolutionHistory,10); end
     end
 end
 
@@ -17856,22 +17891,32 @@ function Server_AdvanceTurn_Start(
     local data =
         GetEconomicData();
 
-    -- Serialized mod stores can yield while War.app fetches or writes them.
-    -- Load each once before the 40-player loops, then let every subsystem share
-    -- the same tables until the single save near the end of this hook.
-    UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = Mod.PrivateGameData or {};
-    UF_ADVANCE_TURN_PLAYER_DATA_CACHE = Mod.PlayerGameData or {};
-    UFConventionalMigration(
-        game,
-        UF_ADVANCE_TURN_PRIVATE_DATA_CACHE,
-        UF_ADVANCE_TURN_PLAYER_DATA_CACHE,
-        data,
-        true
-    );
+    UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE = UFIsLargeGame(game);
+
+    -- PlayerGameData and PrivateGameData can become large enough in mega games
+    -- that one serialized fetch consumes the whole server timeout.  The rescue
+    -- path leaves those optional military stores untouched during advancement;
+    -- normal War.app AI and every public economy/diplomacy system still run.
+    if UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE then
+        UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = nil;
+        UF_ADVANCE_TURN_PLAYER_DATA_CACHE = nil;
+        data.largeGameSafeMode = true;
+    else
+        UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = Mod.PrivateGameData or {};
+        UF_ADVANCE_TURN_PLAYER_DATA_CACHE = Mod.PlayerGameData or {};
+        UFConventionalMigration(
+            game,
+            UF_ADVANCE_TURN_PRIVATE_DATA_CACHE,
+            UF_ADVANCE_TURN_PLAYER_DATA_CACHE,
+            data,
+            true
+        );
+        data.largeGameSafeMode = false;
+    end
 
     -- Compact first so an older large save gets headroom before this turn adds
     -- any new market, diplomacy, resource, or war records.
-    CompactPublicGameData(data);
+    CompactPublicGameData(data, UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE);
 
     TURN_COMMERCE_INCOME_CACHE = {};
     TURN_STORED_GOLD_CACHE = {};
@@ -18122,15 +18167,17 @@ UpdateAIStrategicReserve(
 );
 
 UFAIJoinAlliedWars(game, data, playerID);
-UFRunStrategicAI(game, data, resourceChanges, playerID);
 UFAIConsiderAlliance(game, data, playerID);
-if ShouldRunAIWork(data, playerID, aiMilitaryCadence) then
+if UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE~=true then
+    UFRunStrategicAI(game, data, resourceChanges, playerID);
+end
+if UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE~=true and ShouldRunAIWork(data, playerID, aiMilitaryCadence) then
     UFGenerateAIAirliftOrder(game, data, playerID, addNewOrder);
     UFAIUseGiftCardToSupportAlly(game, data, playerID, addNewOrder);
     UFGenerateAIMilitaryOrders(game, data, playerID, addNewOrder);
 end
 
-if not UFAIAtWar(data,playerID) and ShouldRunAIWork(data, playerID, aiCityCadence) then
+if UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE~=true and not UFAIAtWar(data,playerID) and ShouldRunAIWork(data, playerID, aiCityCadence) then
     AIConsiderCityConstruction(game, data, playerID, addNewOrder);
 end
 
@@ -18273,7 +18320,7 @@ end
 
                         -- Use part of any remaining authorized budget for strategic resources and military infrastructure.
                         local strategicBefore = nation.aiManagerBudgetRemaining or 0;
-                        if strategicBefore >= 50 then
+                        if strategicBefore >= 50 and UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE~=true then
                             local strategicCap = math.max(0, math.floor(strategicBefore * 0.80));
                             local strategicSpent = UFRunStrategicAI(game, data, resourceChanges, playerID, strategicCap) or 0;
                             nation.aiManagerMilitarySpentThisTurn = math.max(0, strategicSpent);
@@ -18317,9 +18364,9 @@ end
     -- SAVE
     -- =====================================================
 
-    CompactPublicGameData(data);
-    Mod.PrivateGameData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE;
-    Mod.PlayerGameData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE;
+    CompactPublicGameData(data, UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE);
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE~=nil then Mod.PrivateGameData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE; end
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE~=nil then Mod.PlayerGameData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE; end
     Mod.PublicGameData =
         data;
 
@@ -18657,7 +18704,7 @@ end
 -- AIRLIFT CARD -> AIRBASE / AIRSTRIP RESTRICTIONS
 -- =====================================================
 if order.proxyType == "GameOrderPlayCardAirlift" then
-    if GetSetting("AirbasesEnabled",true)==true then
+    if not UFIsLargeGame(game) and GetSetting("AirbasesEnabled",true)==true then
         local fromID=order.FromTerritoryID; local toID=order.ToTerritoryID; local pd=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
         local function hasAirport(tid)
             local st=game.ServerGame and game.ServerGame.LatestTurnStanding and game.ServerGame.LatestTurnStanding.Territories[tid] or nil;
@@ -18941,7 +18988,7 @@ end
     -- Normally Server_AdvanceTurn_End persists accumulated war statistics once.
     -- Keep a fallback write only if this hook ever runs without the turn cache.
     if ADVANCE_TURN_ORDER_DATA_CACHE == nil then
-        CompactPublicGameData(data);
+        CompactPublicGameData(data, UFIsLargeGame(game));
         Mod.PublicGameData = data;
     end
 
@@ -19418,6 +19465,14 @@ function Server_AdvanceTurn_End(
         ADVANCE_TURN_ORDER_DATA_CACHE
         or GetEconomicData();
 
+    -- Hook globals may be recreated between Start and End. Load the military
+    -- stores once for End so purchased units and icons still resolve in large
+    -- games without repeating serialized reads inside every subsystem.
+    if UFIsLargeGame(game) then
+        UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = Mod.PrivateGameData or {};
+        UF_ADVANCE_TURN_PLAYER_DATA_CACHE = Mod.PlayerGameData or {};
+    end
+
 
     ProcessPendingWarDeclarations(
         game,
@@ -19451,9 +19506,9 @@ function Server_AdvanceTurn_End(
     UFUpdatePublicMarketRankings(game, data);
     UFPublishResourceCatalog(game,data);
 
-    CompactPublicGameData(data);
-    Mod.PrivateGameData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {};
-    Mod.PlayerGameData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE or Mod.PlayerGameData or {};
+    CompactPublicGameData(data, UFIsLargeGame(game));
+    if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE~=nil then Mod.PrivateGameData = UF_ADVANCE_TURN_PRIVATE_DATA_CACHE; end
+    if UF_ADVANCE_TURN_PLAYER_DATA_CACHE~=nil then Mod.PlayerGameData = UF_ADVANCE_TURN_PLAYER_DATA_CACHE; end
     Mod.PublicGameData =
         data;
 
@@ -19462,6 +19517,7 @@ function Server_AdvanceTurn_End(
     ADVANCE_TURN_PERFORMANCE_CACHE = nil;
     UF_ADVANCE_TURN_PRIVATE_DATA_CACHE = nil;
     UF_ADVANCE_TURN_PLAYER_DATA_CACHE = nil;
+    UF_ADVANCE_TURN_LARGE_GAME_SAFE_MODE = false;
     TURN_COMMERCE_INCOME_CACHE = {};
     TURN_STORED_GOLD_CACHE = {};
 

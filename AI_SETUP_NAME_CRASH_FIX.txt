@@ -1,0 +1,17 @@
+UNITED FRONTIER — AI SETUP NAME CRASH FIX
+
+Fixes the Turn 1 Server_AdvanceTurn_Start crash while automatic AI national setup creates company names.
+
+Cause:
+War.app exposes Player.DisplayName as a callable CallbackFunction object. Passing that object through Lua pcall caused the runtime type error / nil-call failure.
+
+Fix:
+Call DisplayName directly when it exists and use "Player <ID>" only when the callback is absent.
+
+Validation:
+- AI callback display-name regression passed.
+- Missing display-name fallback regression passed.
+- All 8 Lua files parsed successfully.
+- Large-game batching regression passed.
+
+Live validation still required: advance a new test game through Turn 1 and a 40-player test through several turns.

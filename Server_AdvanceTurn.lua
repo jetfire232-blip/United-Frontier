@@ -583,16 +583,15 @@ function GetEconomicPlayerName(
     end
 
 
-    -- Some older saves or incomplete player proxies may not expose the
-    -- DisplayName function during an advance-turn callback.  A missing display
-    -- helper must never stop the entire economy/diplomacy turn.
-    if type(player.DisplayName) == "function" then
-        local ok, name = pcall(
-            player.DisplayName,
+    -- War.app exposes DisplayName as a callback object rather than a normal
+    -- Lua function.  It is callable, but Lua's pcall helper is unavailable in
+    -- the mod sandbox.  Only use the fallback when the callback is absent.
+    if player.DisplayName ~= nil then
+        local name = player.DisplayName(
             nil,
             false
         );
-        if ok and name ~= nil and tostring(name) ~= "" then
+        if name ~= nil and tostring(name) ~= "" then
             return tostring(name);
         end
     end

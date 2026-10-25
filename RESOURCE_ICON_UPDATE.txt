@@ -1,0 +1,17 @@
+United Frontier v16 - Resource Icon Update
+
+Eight new transparent isometric resource miniatures replace the text artwork:
+Oil, Gas, Iron, Food, Coal, Copper, Rare Earths and Lithium.
+All existing Resource<Type>1.png through Resource<Type>5.png paths are replaced
+with the same resource illustration; level values remain visible in the menu.
+No resource rules, costs, upgrade mechanics or airport artwork were changed.
+The Server_StartGame capitalization fix is included.
+
+Upload all eight root Lua files plus both image folders, preserving names and
+capitalization. Replace the previous files rather than nesting this folder.
+Reload the mod and test a new game before requesting public approval.
+
+Artwork generated using the built-in image generator from the approved resource
+concept sheet. Prompt set: isolate each approved resource miniature, preserve
+isometric terrain-base style and colors, transparent background, no text;
+simplify details for mobile readability. Resized to 200x200 for game use.

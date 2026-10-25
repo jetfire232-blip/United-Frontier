@@ -19133,6 +19133,13 @@ local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
     local privateData = Mod.PrivateGameData or {};
     local byPlayer = privateData.strategicMilitary and privateData.strategicMilitary.byPlayer or {};
     local wanted = {};
+    -- Read serialized mod data and host settings once, not once per territory.
+    local data=Mod.PublicGameData or {};
+    local economy=data.globalEconomy or {};
+    local resourceState=economy.resources or {};
+    local recruiters=economy.armyRecruiters or {};
+    local show=resourceState.enabled==true and resourceState.mapIconsEnabled~=false and GetSetting("ResourceMapIconsEnabled",true)==true;
+    local showRecruiters=recruiters.enabled~=false and GetSetting("ArmyRecruitersEnabled",true)==true;
 
     for ownerID,state in pairs(byPlayer) do
         if GetSetting("MilitaryExpansionEnabled",true)==true and GetSetting("AirbasesEnabled",true) == true then
@@ -19157,13 +19164,9 @@ local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
             if UFIsVisibleMilitaryStructure(st) then hadUF=true; else desired[st]=cnt; end
         end
         for st,cnt in pairs(wanted[tid] or {}) do desired[st]=cnt; end
-        local data=Mod.PublicGameData or {};
-        local resourceState=(data.globalEconomy or {}).resources or {};
         local nodes=(resourceState.territories or {})[tid] or (resourceState.territories or {})[tostring(tid)] or {};
-        local show=resourceState.enabled==true and resourceState.mapIconsEnabled~=false and GetSetting("ResourceMapIconsEnabled",true)==true;
         desired=BuildResourceIconStructureTable(game,standing,tid,desired,show and nodes or {});
-        local recruiters=((data.globalEconomy or {}).armyRecruiters or {});
-        if recruiters.enabled~=false and GetSetting("ArmyRecruitersEnabled",true)==true then
+        if showRecruiters then
             local level=(recruiters.territories or {})[tid] or (recruiters.territories or {})[tostring(tid)] or 0;
             desired=BuildRecruiterStructures(desired,level);
         end

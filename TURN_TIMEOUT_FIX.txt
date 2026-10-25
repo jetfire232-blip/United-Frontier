@@ -1,0 +1,20 @@
+United Frontier v16 - Turn End Performance Fix
+
+Fixes repeated work in Server_AdvanceTurn_End:
+- Tank/Drone recount now scans the standing once for all owners/types, instead
+  of twice per player.
+- Map icon refresh reads PublicGameData and resource/recruiter settings once,
+  outside the territory loop.
+
+Local 40-player/2,000-territory fixture: Tank/Drone recount visits reduced from
+160,000 to 2,000; icon refresh PublicGameData reads from 2,000 to 1.
+These are operation counts, not measured live War.app seconds. Live testing
+must establish whether the complete turn stays within the engine time limit.
+No gameplay rules or AI decisions changed.
+
+Includes all eight new resource icons and the startup capitalization fix.
+Image folders contain PNG files only. Delete any existing Tank.svg and Drone.svg
+from GitHub; uploading this archive's files does not delete old repository files.
+
+Replace Server_AdvanceTurn.lua AND UF_ConventionalMilitary.lua for this fix.
+The archive includes the complete mod for a full installation.

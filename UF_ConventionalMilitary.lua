@@ -169,14 +169,24 @@ function UFRefreshConventionalUnits(game,addNewOrder)
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding; if not standing then return; end
     local pd=Mod.PrivateGameData or {}; local byPlayer=(pd.strategicMilitary or {}).byPlayer or {}; local pgd=Mod.PlayerGameData or {};
     local add={};
+    -- Count both unit types for every owner in a single standing scan.
+    local actualByOwner={};
+    local kindByName={};
+    for kind,cfg in pairs(UFConventionalUnitConfig) do kindByName[cfg.name or kind]=kind;end
+    for tid,terr in pairs(standing.Territories) do
+        for _,unit in ipairs((terr.NumArmies or {}).SpecialUnits or {}) do
+            local kind=unit.proxyType=="CustomSpecialUnit" and kindByName[unit.Name];
+            if kind and byPlayer[unit.OwnerID] then
+                local owner=unit.OwnerID;
+                actualByOwner[owner]=actualByOwner[owner] or {};
+                actualByOwner[owner][kind]=actualByOwner[owner][kind] or {};
+                local counts=actualByOwner[owner][kind];counts[tid]=(counts[tid] or 0)+1;
+            end
+        end
+    end
     for playerID,state in pairs(byPlayer) do
         for kind,cfg in pairs(UFConventionalUnitConfig) do
-            local actual={};
-            for tid,terr in pairs(standing.Territories) do
-                for _,unit in ipairs((terr.NumArmies or {}).SpecialUnits or {}) do
-                    if unit.proxyType=="CustomSpecialUnit" and unit.Name==(cfg.name or kind) and unit.OwnerID==playerID then actual[tid]=(actual[tid] or 0)+1; end
-                end
-            end
+            local actual=(actualByOwner[playerID] or {})[kind] or {};
             for tid,count in pairs(state[cfg.pending] or {}) do
                 tid=tonumber(tid) or tid; local terr=standing.Territories[tid];
                 if terr and terr.OwnerPlayerID==playerID then

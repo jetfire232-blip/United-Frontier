@@ -1,0 +1,20 @@
+UNITED FRONTIER — TURN 1 DIPLOMACY RUNTIME FIX
+
+Fixes the Server_AdvanceTurn_Start crash at UFRunProtectedTurnSystem, previously reported at Server_AdvanceTurn.lua line 13256.
+
+Cause:
+War.app's server mod sandbox does not expose Lua pcall. The diplomacy wrapper attempted to call pcall before running AI faction invitations, AI faction strategy, and war events.
+
+Fix:
+- Removed the executable pcall dependency.
+- Preserved validation for unavailable system functions.
+- AI faction invitation records are validated and corrupt/incomplete records are removed.
+- AI faction creation and invitation paths were exercised with two aligned AI nations.
+
+Validation completed:
+- No executable pcall or xpcall remains in the package.
+- All 8 Lua files parse successfully.
+- Turn-system direct invocation and missing-function handling pass.
+- AI faction creation, invitation acceptance, and corrupt-record cleanup pass.
+- AI takeover setup, manager payments, acquisition settlement/earnings, ideology/recruiters, diplomacy gifts, resources, large-map End performance, AI routing, storage limits, startup, spectator UI, and active-player UI regressions pass.
+- Air Wing combat strength 25 remains included.

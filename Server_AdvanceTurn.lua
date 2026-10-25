@@ -13246,37 +13246,24 @@ local function GetStaggeredAIPhase(data, playerID, cadence, phaseCount)
     return math.floor(((data.tradeTurn or 0) + id) / cadence) % phaseCount;
 end
 
--- Keep optional automation from taking down the entire turn.  The warning is
--- retained in PublicGameData for diagnosis while the rest of the mod continues.
+-- War.app's server sandbox does not expose Lua pcall.  Keep this compatibility
+-- wrapper for the existing call sites, validate that the system exists, and
+-- invoke it directly.
 function UFRunProtectedTurnSystem(data, label, fn, ...)
-    local ok = false;
-    local result = nil;
-
-    if type(fn) == "function" then
-        ok, result = pcall(fn, ...);
-    else
-        result = "system function is unavailable";
-    end
-
-    if ok then
-        return true, result;
-    end
-
-    data.systemWarnings = data.systemWarnings or {};
-    table.insert(
-        data.systemWarnings,
-        1,
-        {
+    if type(fn) ~= "function" then
+        data.systemWarnings = data.systemWarnings or {};
+        table.insert(data.systemWarnings, 1, {
             turn = data.tradeTurn or 0,
             system = tostring(label or "Unknown System"),
-            message = tostring(result or "Unknown error")
-        }
-    );
-    while #data.systemWarnings > 10 do
-        table.remove(data.systemWarnings);
+            message = "system function is unavailable"
+        });
+        while #data.systemWarnings > 10 do
+            table.remove(data.systemWarnings);
+        end
+        return false, "system function is unavailable";
     end
 
-    return false, result;
+    return true, fn(...);
 end
 
 -- =========================================================

@@ -479,6 +479,7 @@ function Client_SaveConfigureUI(
     local airbaseIronPerLevel = ReadNumber("AirbaseIronPerLevel");
     local airWingsEnabled = ReadBool("AirWingsEnabled");
     local airWingBaseCost = ReadNumber("AirWingBaseCost");
+    local airWingCombatStrength = ReadNumber("AirWingCombatStrength");
     local aircraftPerAirWing = ReadNumber("AircraftPerAirWing");
     local airWingMaxPerPlayer = ReadNumber("AirWingMaxPerPlayer");
     local specialForcesEnabled = ReadBool("SpecialForcesEnabled");
@@ -1339,6 +1340,7 @@ function Client_SaveConfigureUI(
     Mod.Settings.SAMSitesEnabled = false;
     Mod.Settings.AirWingsEnabled = airWingsEnabled;
     Mod.Settings.AirWingBaseCost = math.max(25, math.min(5000, airWingBaseCost or 200));
+    Mod.Settings.AirWingCombatStrength = math.max(1, math.min(50, airWingCombatStrength or 25));
     Mod.Settings.AircraftPerAirWing = math.max(1, math.min(500, aircraftPerAirWing or 25));
     Mod.Settings.AirWingMaxPerPlayer = math.max(1, math.min(100, airWingMaxPerPlayer or 10));
     Mod.Settings.SpecialForcesEnabled = specialForcesEnabled;

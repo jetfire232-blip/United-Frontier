@@ -4850,7 +4850,7 @@ local function UFShowTerritorySelector(parent,game,waitText,payloadBase)
                 local level=tonumber(r[tid] or r[tostring(tid)]) or 0;
                 cost=GetClientSetting("ArmyRecruiterBaseCost",250)*(level+1); text="Recruiter | Level "..tostring(level).." → "..tostring(level+1);
             else
-                local units={purchaseAirWing={"Air Wing","AirWingBaseCost",200,"5 attack / 3 defense / 5 health"},purchaseSpecialForces={"Special Forces","SpecialForcesBaseCost",180,"Strength "..tostring(GetClientSetting("SpecialForcesCombatStrength",5))},purchaseTank={"Tank","TankBaseCost",300,"1 Oil + 1 Iron | Strength "..tostring(GetClientSetting("TankCombatStrength",8))},purchaseDrone={"Drone","DroneBaseCost",150,"1 Oil | Strength "..tostring(GetClientSetting("DroneCombatStrength",2))}};
+                local units={purchaseAirWing={"Air Wing","AirWingBaseCost",200,"Combat strength "..tostring(GetClientSetting("AirWingCombatStrength",25))},purchaseSpecialForces={"Special Forces","SpecialForcesBaseCost",180,"Strength "..tostring(GetClientSetting("SpecialForcesCombatStrength",5))},purchaseTank={"Tank","TankBaseCost",300,"1 Oil + 1 Iron | Strength "..tostring(GetClientSetting("TankCombatStrength",8))},purchaseDrone={"Drone","DroneBaseCost",150,"1 Oil | Strength "..tostring(GetClientSetting("DroneCombatStrength",2))}};
                 local cfg=units[action]; if cfg then cost=GetClientSetting(cfg[2],cfg[3]); text=cfg[1].." | "..cfg[4]; end
             end
             UI.CreateLabel(box).SetText(text).SetColor("#BBBBBB");
@@ -13904,7 +13904,7 @@ function ShowMilitaryMenu(parent,game)
     end
     UI.CreateLabel(area).SetText("PURCHASE UNITS").SetColor("#FFD166");
     local choices={
-        {"Air Wing","AirWingsEnabled","AirWingBaseCost",200,"purchaseAirWing","5 attack / 3 defense | 5 health | deploy at Airbase","airWings"},
+        {"Air Wing","AirWingsEnabled","AirWingBaseCost",200,"purchaseAirWing","Combat strength "..tostring(GetClientSetting("AirWingCombatStrength",25)).." | deploy at Airbase","airWings"},
         {"Special Forces","SpecialForcesEnabled","SpecialForcesBaseCost",180,"purchaseSpecialForces","Combat strength "..tostring(GetClientSetting("SpecialForcesCombatStrength",5)),"specialForces"},
         {"Tank Battalion","TanksEnabled","TankBaseCost",300,"purchaseTank","+ 1 Oil + 1 Iron | Combat strength "..tostring(GetClientSetting("TankCombatStrength",8)),"tanks","pendingTanks"},
         {"Drone","DronesEnabled","DroneBaseCost",150,"purchaseDrone","+ 1 Oil | Combat strength "..tostring(GetClientSetting("DroneCombatStrength",2)).." | deploy at Airport","drones","pendingDrones"}

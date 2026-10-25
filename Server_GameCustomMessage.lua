@@ -12040,7 +12040,7 @@ end
         state.pendingAirWings=state.pendingAirWings or {};
         state.pendingAirWings[territoryID]=(tonumber(state.pendingAirWings[territoryID]) or 0)+1;
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        setReturn({success=true,message="Air Wing purchased. One Wing represents "..tostring(GetSetting("AircraftPerAirWing",25)).." aircraft. The unit will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."}); return;
+        setReturn({success=true,message="Air Wing purchased. Combat strength "..tostring(GetSetting("AirWingCombatStrength",25)).."; represents "..tostring(GetSetting("AircraftPerAirWing",25)).." aircraft. The unit will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."}); return;
     end
 
     if payload.type == "purchaseSpecialForces" then

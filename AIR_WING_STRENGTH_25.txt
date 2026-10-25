@@ -1,0 +1,9 @@
+UNITED FRONTIER — AIR WING COMBAT STRENGTH
+
+Air Wing combat strength now defaults to 25.
+
+One Air Wing now uses 25 attack, 25 defense, 25 health (damage to kill), and 25 damage absorption. It therefore fights and survives roughly like 25 normal armies.
+
+The host can change this from 1 to 50 using the new Air Wing Combat Strength setting.
+
+Aircraft Represented per Air Wing remains a separate display-only setting and defaults to 25 aircraft.

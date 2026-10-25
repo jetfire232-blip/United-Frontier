@@ -19290,14 +19290,15 @@ end
 
 local function UFMakeAirWing(ownerID)
     local builder=WL.CustomSpecialUnitBuilder.Create(ownerID);
+    local strength=math.max(1,math.min(50,math.floor(tonumber(GetSetting("AirWingCombatStrength",25)) or 25)));
     builder.Name="Air Wing";
     builder.IncludeABeforeName=true;
     builder.ImageFilename="AirWing.png";
-    builder.AttackPower=5;
-    builder.DefensePower=3;
+    builder.AttackPower=strength;
+    builder.DefensePower=strength;
     builder.CombatOrder=3385;
-    builder.DamageToKill=5;
-    builder.DamageAbsorbedWhenAttacked=5;
+    builder.DamageToKill=strength;
+    builder.DamageAbsorbedWhenAttacked=strength;
     builder.CanBeGiftedWithGiftCard=false;
     builder.CanBeTransferredToTeammate=false;
     builder.CanBeAirliftedToSelf=true;

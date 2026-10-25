@@ -708,6 +708,7 @@ function Client_PresentConfigureUI(rootParent)
 
     local airWingsEnabled = GetBoolSetting(settings, "AirWingsEnabled", true);
     local airWingBaseCost = GetNumberSetting(settings, "AirWingBaseCost", 200);
+    local airWingCombatStrength = GetNumberSetting(settings, "AirWingCombatStrength", 25);
     local aircraftPerAirWing = GetNumberSetting(settings, "AircraftPerAirWing", 25);
     local airWingMaxPerPlayer = GetNumberSetting(settings, "AirWingMaxPerPlayer", 10);
 
@@ -1494,6 +1495,7 @@ function Client_PresentConfigureUI(rootParent)
 
     AddCheckBox(root, "AirWingsEnabled", "Enable Air Wings", airWingsEnabled);
     AddNumberInput(root, "AirWingBaseCost", "Air Wing Cost (Commerce)", airWingBaseCost, 25, 5000, "Air Wings use normal fog visibility rather than global visibility. Purchasing requires capacity at an owned operational Airbase.");
+    AddNumberInput(root, "AirWingCombatStrength", "Air Wing Combat Strength", airWingCombatStrength, 1, 50, "Controls attack, defense, health and damage absorption. Default 25 means one Air Wing fights roughly like 25 normal armies.");
     AddNumberInput(root, "AircraftPerAirWing", "Aircraft Represented per Air Wing", aircraftPerAirWing, 1, 500, "Display scale only; example: one small Air Wing icon can represent 25 aircraft.");
     AddNumberInput(root, "AirWingMaxPerPlayer", "Maximum Air Wings per Player", airWingMaxPerPlayer, 1, 100, "Host-configurable national limit.");
 

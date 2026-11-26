@@ -1319,7 +1319,7 @@ function Client_SaveConfigureUI(
     Mod.Settings.ArmyRecruitersEnabled = armyRecruitersEnabled;
     Mod.Settings.ArmyRecruiterBaseCost = math.max(25, math.min(2000, armyRecruiterBaseCost or 250));
     Mod.Settings.ArmyRecruiterMaxPerPlayer = math.max(1, math.min(10, armyRecruiterMaxPerPlayer or 3));
-    Mod.Settings.ArmyRecruiterArmiesPerTurn = math.max(1, math.min(25, armyRecruiterArmiesPerTurn or 4));
+    Mod.Settings.ArmyRecruiterArmiesPerTurn = math.max(1, armyRecruiterArmiesPerTurn or 4);
     Mod.Settings.ArmyRecruiterMaxLevel = math.max(1, math.min(5, armyRecruiterMaxLevel or 3));
 
 
@@ -1328,6 +1328,7 @@ function Client_SaveConfigureUI(
     -- =====================================================
 
     Mod.Settings.MilitaryExpansionEnabled = militaryExpansionEnabled;
+    Mod.Settings.IndustrialSupplyEnabled = ReadBool("IndustrialSupplyEnabled");
     Mod.Settings.HiddenMilitaryInfrastructureEnabled = hiddenMilitaryInfrastructureEnabled;
     -- Headquarters retired. Keep the legacy toggle forced off for old saves.
     Mod.Settings.HeadquartersEnabled = false;

@@ -1464,7 +1464,7 @@ function Client_PresentConfigureUI(rootParent)
     AddCheckBox(root, "ArmyRecruitersEnabled", "Enable Army Recruiters", armyRecruitersEnabled);
     AddNumberInput(root, "ArmyRecruiterBaseCost", "Army Recruiter Base Cost (Commerce)", armyRecruiterBaseCost, 25, 2000, "Commerce is deducted immediately when a recruiter is built or upgraded.");
     AddNumberInput(root, "ArmyRecruiterMaxPerPlayer", "Maximum Recruiter Territories per Player", armyRecruiterMaxPerPlayer, 1, 10, "Captured recruiters can put a nation above this limit, but it cannot build another until below the limit.");
-    AddNumberInput(root, "ArmyRecruiterArmiesPerTurn", "Base Armies per Recruiter Level / Turn", armyRecruiterArmiesPerTurn, 1, 25, "Actual output is multiplied by Military Readiness.");
+    AddNumberInput(root, "ArmyRecruiterArmiesPerTurn", "Recruiter: Armies per Level per Turn", armyRecruiterArmiesPerTurn, 1, 100, "Type any positive whole number in the box. Level 2 produces twice the base; Level 3 produces triple, before in-game modifiers.");
     AddNumberInput(root, "FactionExerciseDurationTurns", "Faction Military Exercise Duration (turns)", factionExerciseDurationTurns, 1, 10, "Members who contribute Commerce receive their exact Recruiter production boost for this many turns.");
     AddNumberInput(root, "FactionExerciseCooldownTurns", "Faction Military Exercise Cooldown (turns)", factionExerciseCooldownTurns, 1, 20, "Starts when an exercise ends. The faction leader cannot begin another exercise until the cooldown expires.");
     AddNumberInput(root, "FactionExerciseTier1Cost", "Exercise Tier 1 Commerce", factionExerciseTier1Cost, 0, 5000, "Member contribution cost for Tier 1.");
@@ -1481,6 +1481,7 @@ function Client_PresentConfigureUI(rootParent)
     AddSection(root, "MILITARY & STRATEGIC SYSTEMS", "Core host controls for United Frontier military infrastructure, Airports, Air Wings, Special Forces, Tanks, Drones, and strategic readiness.");
 
     AddCheckBox(root, "MilitaryExpansionEnabled", "Enable United Frontier Military Systems", militaryExpansionEnabled);
+    AddCheckBox(root, "IndustrialSupplyEnabled", "Enable Power Grids and Chip Manufacturing (optional)", GetBoolSetting(settings, "IndustrialSupplyEnabled", false));
     AddCheckBox(root, "HiddenMilitaryInfrastructureEnabled", "Show Military Infrastructure Details", hiddenMilitaryInfrastructureEnabled);
 
     AddCheckBox(root, "AirbasesEnabled", "Enable Airbases", airbasesEnabled);

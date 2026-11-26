@@ -18,6 +18,69 @@ local function setting(key,default)
     local value=(Mod.Settings or {})[key]; if value==nil then return default; end; return value;
 end
 
+-- Optional civilian supply chain. Keep legacy power-grid state separate.
+UFIndustryBuildings={
+    Grid={name="Power Grid",field="grids",cost=150,materials={Copper=1}},
+    Fab={name="Chip Manufacturing",field="fabs",cost=250,materials={Iron=1}}
+};
+
+function UFIndustryEnabled()
+    return setting("IndustrialSupplyEnabled",false)==true and setting("ResourcesEnabled",true)==true
+        and setting("MilitaryExpansionEnabled",true)==true;
+end
+
+function UFIndustryBuild(game,data,pid,tid,kind,gold)
+    if not UFIndustryEnabled() then return false,"Industrial supply is disabled."; end
+    local building=UFIndustryBuildings[kind];
+    if not building then return false,"Choose a Power Grid or Chip Manufacturing."; end
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
+    local territory=standing and standing.Territories and standing.Territories[tid];
+    if not territory or territory.OwnerPlayerID~=pid then return false,"Select a territory you own."; end
+    local economy=data.globalEconomy;
+    local industry=economy.industry or {grids={},fabs={}};
+    local key=tostring(tid);
+    if industry[building.field][key] then return false,"This territory already has "..building.name.."."; end
+    if kind=="Fab" and not industry.grids[key] then return false,"Build a Power Grid here first."; end
+    if gold<building.cost then return false,"You need "..building.cost.." Commerce."; end
+    local nation=economy.nations[pid]; local stock=nation.resourceStockpile or {};
+    for resource,count in pairs(building.materials) do
+        if (tonumber(stock[resource]) or 0)<count then return false,"You need "..count.." "..resource.." in your stockpile."; end
+    end
+    for resource,count in pairs(building.materials) do stock[resource]=stock[resource]-count; end
+    nation.resourceStockpile=stock;
+    industry[building.field][key]=true;
+    economy.industry=industry;
+    return true,building.name.." built. "..building.cost.." Commerce spent.",building.cost;
+end
+
+function UFIndustryProduce(game,data)
+    if not UFIndustryEnabled() then return; end
+    local economy=data.globalEconomy; local industry=economy.industry;
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if not industry or not standing or not standing.Territories then return; end
+    for tid in pairs(industry.fabs) do
+        local terr=standing.Territories[tonumber(tid)];
+        local nation=terr and economy.nations[terr.OwnerPlayerID];
+        local stock=nation and nation.resourceStockpile;
+        local chips=nation and (tonumber(nation.industryChips) or 0) or 0;
+        if industry.grids[tid] and nation and not nation.eliminated and stock and chips<10
+            and (tonumber(stock["Rare Earths"]) or 0)>=1 then
+            stock["Rare Earths"]=stock["Rare Earths"]-1;
+            if nation.resourceStockpileChange then
+                nation.resourceStockpileChange["Rare Earths"]=(nation.resourceStockpileChange["Rare Earths"] or 0)-1;
+            end
+            nation.industryChips=chips+1;
+        end
+    end
+end
+
+function UFAirWingChipPrice(base,nation)
+    if UFIndustryEnabled() and nation and (tonumber(nation.industryChips) or 0)>=1 then
+        return math.max(1,math.ceil(base*0.75)),true;
+    end
+    return base,false;
+end
+
 UFConventionalUnitConfig={
     Tank={name="Tank Battalion",tableName="tanks",pending="pendingTanks",enabled="TanksEnabled",costKey="TankBaseCost",cost=300,strengthKey="TankCombatStrength",strength=8,maxKey="TankMaxPerPlayer",max=10,oil=1,iron=1,image="Tank.png",order=3383},
     Drone={tableName="drones",pending="pendingDrones",enabled="DronesEnabled",costKey="DroneBaseCost",cost=150,strengthKey="DroneCombatStrength",strength=2,maxKey="DroneMaxPerPlayer",max=10,oil=1,iron=0,image="Drone.png",order=3382}

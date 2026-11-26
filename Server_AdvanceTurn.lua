@@ -17476,7 +17476,13 @@ local function UFRunStrategicAI(game,data,resourceChanges,playerID,budgetCap)
                 local ntid=tonumber(tid) or tid; local here=tonumber(state.airWings[ntid]) or 0; local capacity=(tonumber(lvl) or 1)*2;
                 if here<capacity then
                     local cost=math.max(25,math.floor(tonumber(GetSetting("AirWingBaseCost",200)) or 200));
-                    if canSpend(cost) then spend(cost); state.airWings[ntid]=here+1; state.pendingAirWings[ntid]=(tonumber(state.pendingAirWings[ntid]) or 0)+1; end
+                    local wingNation=data.globalEconomy.nations[playerID];
+                    local useChip; cost,useChip=UFAirWingChipPrice(cost,wingNation);
+                    if canSpend(cost) then
+                        spend(cost);
+                        if useChip then wingNation.industryChips=wingNation.industryChips-1; end
+                        state.airWings[ntid]=here+1; state.pendingAirWings[ntid]=(tonumber(state.pendingAirWings[ntid]) or 0)+1;
+                    end
                     break;
                 end
             end
@@ -17928,6 +17934,8 @@ function Server_AdvanceTurn_Start(
         data,
         resourceChanges
     );
+
+    UFIndustryProduce(game,data);
 
     -- Resource/recruiter/airport icons are synchronized together once in the
     -- End hook. Avoid a second full-map structure pass here.
@@ -19130,6 +19138,7 @@ local UF_VISIBLE_MILITARY_STRUCTURES = {
     ForwardAirstrip = 5,
     MissileSilo = 5,
     PowerGrid = 5,
+    ChipFab = 1,
     CyberFacility = 5
 };
 
@@ -19216,9 +19225,11 @@ local function UFRefreshVisibleMilitaryStructureIcons(game, addNewOrder)
         end
 
 
-        -- Power Grids and Cyber Facilities are private intelligence assets.
-        -- Do NOT publish them as standing custom-structure icons; UFIsVisibleMilitaryStructure
-        -- still strips any legacy icons that may exist from an older build.
+    end
+    local industry=economy.industry;
+    if UFIndustryEnabled() and industry then
+        for key in pairs(industry.grids) do UFAddWantedStructure(wanted,tonumber(key),"PowerGrid",1); end
+        for key in pairs(industry.fabs) do UFAddWantedStructure(wanted,tonumber(key),"ChipFab",1); end
     end
 
     local mods = {};

@@ -12019,6 +12019,13 @@ end
         setReturn({success=ok,message=message}); return;
     end
 
+    if payload.type == "buildIndustrialSite" then
+        local territoryID=MakeInteger(payload.territoryID);
+        local ok,message,cost=UFIndustryBuild(game,data,playerID,territoryID,payload.kind,GetStoredGold(game,playerID));
+        if ok then RemoveGold(game,playerID,cost); Mod.PublicGameData=data; end
+        setReturn({success=ok,message=message}); return;
+    end
+
     if payload.type == "purchaseAirWing" then
         if GetSetting("MilitaryExpansionEnabled",true)~=true then setReturn({success=false,message="Military systems are disabled."}); return; end
         if GetSetting("AirWingsEnabled",true) ~= true then setReturn({success=false,message="Air Wings are disabled by the host."}); return; end
@@ -12034,13 +12041,19 @@ end
         local here=tonumber(state.airWings[territoryID]) or 0;
         if here>=capacity then setReturn({success=false,message="This Airbase is at Air Wing capacity. Upgrade the Airbase or use another base."}); return; end
         local cost=math.max(25,math.floor(tonumber(GetSetting("AirWingBaseCost",200)) or 200));
+        local nation=data.globalEconomy.nations[playerID];
+        local useChip; cost,useChip=UFAirWingChipPrice(cost,nation);
         if GetStoredGold(game,playerID)<cost then setReturn({success=false,message="You need "..tostring(cost).." Commerce for an Air Wing."}); return; end
         RemoveGold(game,playerID,cost);
+        if useChip then
+            nation.industryChips=nation.industryChips-1;
+            Mod.PublicGameData=data;
+        end
         state.airWings[territoryID]=here+1;
         state.pendingAirWings=state.pendingAirWings or {};
         state.pendingAirWings[territoryID]=(tonumber(state.pendingAirWings[territoryID]) or 0)+1;
         UFSaveOwnerMilitaryToPlayerData(playerID,pd,state);
-        setReturn({success=true,message="Air Wing purchased. Combat strength "..tostring(GetSetting("AirWingCombatStrength",25)).."; represents "..tostring(GetSetting("AircraftPerAirWing",25)).." aircraft. The unit will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."}); return;
+        setReturn({success=true,message="Air Wing purchased. Combat strength "..tostring(GetSetting("AirWingCombatStrength",25)).."; represents "..tostring(GetSetting("AircraftPerAirWing",25)).." aircraft. The unit will appear on the map when the turn advances. "..tostring(cost).." Commerce deducted."..(useChip and " 1 chip used." or "")}); return;
     end
 
     if payload.type == "purchaseSpecialForces" then

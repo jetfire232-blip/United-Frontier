@@ -4819,6 +4819,17 @@ end
 
 
 
+local function UFClientIndustryEnabled()
+    return GetClientSetting("IndustrialSupplyEnabled",false)==true and GetClientSetting("ResourcesEnabled",true)==true
+        and GetClientSetting("MilitaryExpansionEnabled",true)==true;
+end
+
+local function UFClientChipPrice(game,base)
+    local nation=GetOurNationState(game) or {};
+    local useChip=UFClientIndustryEnabled() and (tonumber(nation.industryChips) or 0)>0;
+    return useChip and math.ceil(base*0.75) or base,useChip;
+end
+
 local function UFShowTerritorySelector(parent,game,waitText,payloadBase)
     if IsViewerMode(game) then UI.Alert("Viewer mode cannot perform military purchases."); return; end
     UI.InterceptNextTerritoryClick(function(terrDetails)
@@ -4836,6 +4847,9 @@ local function UFShowTerritorySelector(parent,game,waitText,payloadBase)
                 local base=GetClientSetting("AirbaseBaseCost",350);
                 cost=base*(level+1); text="Airport".." | Level "..tostring(level).." → "..tostring(level+1);
                 text=text.." | "..tostring(GetClientSetting("AirbaseOilPerLevel",1)).." Oil + "..tostring(GetClientSetting("AirbaseIronPerLevel",1)).." Iron";
+            elseif action=="buildIndustrialSite" then
+                if kind=="Grid" then cost=150; text="Power Grid • 1 Copper";
+                else cost=250; text="Chip Manufacturing • 1 Iron • requires a Power Grid here"; end
             elseif action=="buildArmyRecruiter" then
                 local r=(((Mod.PublicGameData or {}).globalEconomy or {}).armyRecruiters or {}).territories or {};
                 local level=tonumber(r[tid] or r[tostring(tid)]) or 0;
@@ -4843,10 +4857,18 @@ local function UFShowTerritorySelector(parent,game,waitText,payloadBase)
             else
                 local units={purchaseAirWing={"Air Wing","AirWingBaseCost",200,"Combat strength "..tostring(GetClientSetting("AirWingCombatStrength",25))},purchaseSpecialForces={"Special Forces","SpecialForcesBaseCost",180,"Strength "..tostring(GetClientSetting("SpecialForcesCombatStrength",5))},purchaseTank={"Tank","TankBaseCost",300,"1 Oil + 1 Iron | Strength "..tostring(GetClientSetting("TankCombatStrength",8))},purchaseDrone={"Drone","DroneBaseCost",150,"1 Oil | Strength "..tostring(GetClientSetting("DroneCombatStrength",2))}};
                 local cfg=units[action]; if cfg then cost=GetClientSetting(cfg[2],cfg[3]); text=cfg[1].." | "..cfg[4]; end
+                if action=="purchaseAirWing" then
+                    local useChip; cost,useChip=UFClientChipPrice(dialogGame,math.max(25,cost));
+                    if useChip then text=text.." • uses 1 chip"; end
+                end
             end
             UI.CreateLabel(box).SetText(text).SetColor("#BBBBBB");
             UI.CreateLabel(box).SetText("Cost: "..tostring(cost).." Commerce").SetColor("#FFD166");
-            UI.CreateLabel(box).SetText("Units deploy when the turn advances. Server checks ownership, resources, limits and airport requirements before charging.").SetColor("#BBBBBB");
+            if action=="buildIndustrialSite" then
+                UI.CreateLabel(box).SetText("The building appears on the map when the turn advances.").SetColor("#BBBBBB");
+            else
+                UI.CreateLabel(box).SetText("Units deploy when the turn advances. Server checks ownership, resources, limits and airport requirements before charging.").SetColor("#BBBBBB");
+            end
             UI.CreateButton(box).SetText("CONFIRM PURCHASE").SetPreferredHeight(44).SetOnClick(function()
                 local payload={}; for k,v in pairs(payloadBase) do payload[k]=v; end; payload.territoryID=tid;
                 SafeSendGameCustomMessage(dialogGame,waitText,payload,function(result) if result and result.message then UI.Alert(result.message); end; closeDialog(); end);
@@ -13129,6 +13151,7 @@ function ShowHowItWorks(parent)
     Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence adds or subtracts 0.06 percentage points from flagship movement per point away from 50, capped at ±3 points. Example: 60 confidence adds 0.6 points. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
     Section("3. RESOURCES","Resource locations are public in Resources. Filter My Resources, Neighbors, Ally / Faction, or All Nations, then select a resource type. Each location shows its owner and level and has a SHOW button. Oil and Iron build Airports; each Recruiter level needs 1 Oil, 1 Food and 1 Iron per turn. Tanks consume 1 Oil + 1 Iron; Drones consume 1 Oil per purchase. Uranium is removed.","#67D5FF");
     Section("4. MILITARY INFRASTRUCTURE","Recruiters appear in MY ASSETS and RECRUITMENT with direct upgrades. Recruiter upgrade cost is base cost × next level (default L2: 500, L3: 750 gold); production level changes are scheduled for turn advancement. Recruiters use production levels, not strategic-building HP. Recruiter upgrades replace their existing map icon; they do not stack another Recruiter icon. Lv.1 = 10 max HP, Lv.2 = 20, Lv.3 = 30, Lv.4 = 40. Existing damage carries into an upgrade, so upgrading is not a free repair. Airports are the only airfield infrastructure. ","#8FBF6F");
+    Section("INDUSTRIAL SUPPLY (OPTIONAL)","Build a Power Grid, then build Chip Manufacturing on the same territory. Neither building has levels. Each powered factory uses 1 Rare Earths to make 1 chip per turn, up to 10 stored per nation. An Air Wing uses one chip automatically when available for a 25% Commerce discount. You can still buy Air Wings at regular cost without chips.","#62B6FF");
     Section("5. AIR OPERATIONS & AIRLIFT","When Airports are enabled, War.app Airlift Cards require an Airport at BOTH origin and destination. See Military for the current airport cost and deployment rules. They need no Power Grid. If Airports are disabled, normal War.app Airlift rules apply. AI follows the same routing rule.","#62B6FF");
     Section("6. COMBAT UNITS","Air Wings: 200 Commerce by default; 5 attack, 3 defense, 5 health; deploy at an Airbase, capacity 2 per level. Special Forces: 180 Commerce, strength 5 by default. Tanks: 300 Commerce + 1 Oil + 1 Iron, strength 8. Drones: 150 Commerce + 1 Oil, strength 2; deploy at an Airport. Host settings change costs, strength and national limits. Tank/Drone strength sets attack, defense, health and absorption. Units appear on turn advance, move and fight through normal game orders, follow normal fog, and cannot be gifted or transferred to teammates. No separate Drone recon or strike missions are included.","#FFD166");
     Section("8. DIPLOMACY & FACTIONS","Diplomacy handles nation-to-nation wars, peace, NAPs, alliances, and trade. Factions have a public directory, leader/member management, join requests, chat, Military Exercises, and Faction wars. A Faction leader may declare war on another Faction; all members are notified and member wars propagate automatically.","#D4AF37");
@@ -13173,6 +13196,27 @@ function ShowMilitaryMenu(parent,game)
             UI.CreateButton(area).SetText("SELECT TERRITORY — "..string.upper(UFV4StructureName(kind))).SetPreferredHeight(44).SetOnClick(function() UFShowTerritorySelector(parent,game,"Building airport...",{type="buildStrategicMilitary",kind=kind}); end);
         end
     end
+    if UFClientIndustryEnabled() then
+        local nation=GetOurNationState(game) or {};
+        UI.CreateLabel(area).SetText("Industrial supply").SetColor("#62B6FF");
+        UI.CreateLabel(area).SetText("Chips: "..tostring(nation.industryChips or 0).."/10");
+        UI.CreateLabel(area).SetText("Each powered factory turns 1 Rare Earths into 1 chip per turn. An Air Wing uses a chip if available and costs 25% less Commerce.");
+        local industry=((((Mod.PublicGameData or {}).globalEconomy or {}).industry) or {});
+        local standing=game.LatestStanding and game.LatestStanding.Territories or {};
+        for key in pairs(industry.grids or {}) do
+            local tid=tonumber(key); local terr=standing[tid];
+            if terr and terr.OwnerPlayerID==GetLocalPlayerID(game) then
+                local td=(game.Map.Territories or {})[tid];
+                UI.CreateLabel(area).SetText((td and td.Name or key).." — "..((industry.fabs or {})[key] and "Power Grid + Chip Manufacturing" or "Power Grid"));
+            end
+        end
+        UI.CreateButton(area).SetText("Power Grid — 150 Commerce + 1 Copper").SetPreferredHeight(44).SetOnClick(function()
+            UFShowTerritorySelector(parent,game,"Building Power Grid...",{type="buildIndustrialSite",kind="Grid"});
+        end);
+        UI.CreateButton(area).SetText("Chip Manufacturing — 250 Commerce + 1 Iron").SetPreferredHeight(44).SetOnClick(function()
+            UFShowTerritorySelector(parent,game,"Building Chip Manufacturing...",{type="buildIndustrialSite",kind="Fab"});
+        end);
+    end
     UI.CreateLabel(area).SetText("PURCHASE UNITS").SetColor("#FFD166");
     local choices={
         {"Air Wing","AirWingsEnabled","AirWingBaseCost",200,"purchaseAirWing","Combat strength "..tostring(GetClientSetting("AirWingCombatStrength",25)).." | deploy at Airbase","airWings"},
@@ -13185,7 +13229,9 @@ function ShowMilitaryMenu(parent,game)
             local name,action=item[1],item[5]; local count=0; local pending=0;
             for _,n in pairs(state[item[7]] or {}) do count=count+(tonumber(n) or 0); end
             for _,n in pairs(item[8] and state[item[8]] or {}) do pending=pending+(tonumber(n) or 0); end
-            UI.CreateLabel(area).SetText(name.." — "..tostring(GetClientSetting(item[3],item[4])).." Commerce").SetColor("#FFD166");
+            local price=GetClientSetting(item[3],item[4]); local useChip=false;
+            if action=="purchaseAirWing" then price,useChip=UFClientChipPrice(game,math.max(25,price)); end
+            UI.CreateLabel(area).SetText(name.." — "..tostring(price).." Commerce"..(useChip and " + 1 chip" or "")).SetColor("#FFD166");
             UI.CreateLabel(area).SetText(item[6]).SetColor("#BBBBBB");
             UI.CreateLabel(area).SetText("Deployed: "..tostring(count).." | Pending: "..tostring(pending)).SetColor("#82CFFF");
             UI.CreateButton(area).SetText("PURCHASE "..string.upper(name)).SetPreferredHeight(44).SetOnClick(function() UFShowTerritorySelector(parent,game,"Purchasing "..name.."...",{type=action}); end);

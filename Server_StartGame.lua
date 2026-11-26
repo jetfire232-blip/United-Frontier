@@ -722,7 +722,7 @@ local function ResourceIconStructure(resourceName)
 end
 
 local function GetPrimaryResource(nodes)
-    for _, name in ipairs(RESOURCE_NAMES) do
+    for _, name in ipairs(RESOURCE_ORDER) do
         if (tonumber((nodes or {})[name]) or 0)>0 then return name; end
     end
     return "Oil";

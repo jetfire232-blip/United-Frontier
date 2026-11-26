@@ -859,7 +859,8 @@ end
 function ShowDiplomacyMenu(
     parent,
     game,
-    focusPlayerID
+    focusPlayerID,
+    profilePage
 )
 
     local area;
@@ -974,9 +975,42 @@ local playerFaction =
         );
     end
 
-    local economyRow = UI.CreateHorizontalLayoutGroup(area);
-    UI.CreateButton(economyRow).SetText("TRADE AGREEMENTS").SetOnClick(function() ShowTradeAgreementsMenu(parent,game); end);
-    UI.CreateButton(economyRow).SetText("FACTIONS").SetOnClick(function() ShowFactionMenu(parent,game); end);
+    if focusPlayerID then
+        profilePage=profilePage or "Summary";
+        UI.CreateLabel(area).SetText(GetPlayerName(game,focusPlayerID)).SetColor("#67D5FF");
+        local row=UI.CreateHorizontalLayoutGroup(area);
+        for _,label in ipairs({"Summary","Portfolio","Relations"}) do
+            local tab=label;
+            UI.CreateButton(row).SetText((profilePage==tab and "✓ " or "")..tab).SetPreferredHeight(38).SetOnClick(function()
+                UI.Destroy(area); ShowDiplomacyMenu(parent,game,focusPlayerID,tab);
+            end);
+        end
+        if profilePage=="Portfolio" then
+            local target=(economy.nations or {})[focusPlayerID] or {};
+            local listings=(economy.market or {}).companies or {};
+            local holdings,total={},0;
+            for id,shares in pairs(target.stockHoldings or {}) do
+                local company=listings[id];
+                if company and shares>0 then
+                    local worth=shares*(tonumber(company.currentPrice or company.startingPrice) or 0);
+                    holdings[#holdings+1]={name=tostring(company.name or "Company"),shares=shares,worth=worth};
+                    total=total+worth;
+                end
+            end
+            table.sort(holdings,function(a,b) return a.name<b.name; end);
+            UI.CreateLabel(area).SetText(string.format("Holdings value: %.2f Commerce",total)).SetColor("#8FD694");
+            if #holdings==0 then UI.CreateLabel(area).SetText("No share holdings to display."); end
+            for _,h in ipairs(holdings) do
+                UI.CreateLabel(area).SetText(h.name).SetColor("#FFD166");
+                UI.CreateLabel(area).SetText(string.format("%d shares  •  %.2f Commerce",h.shares,h.worth));
+            end
+            return;
+        end
+    else
+        local row=UI.CreateHorizontalLayoutGroup(area);
+        UI.CreateButton(row).SetText("Trade agreements").SetOnClick(function() ShowTradeAgreementsMenu(parent,game); end);
+        UI.CreateButton(row).SetText("Factions").SetOnClick(function() ShowFactionMenu(parent,game); end);
+    end
 
 local ourFactionID =
     playerFaction[
@@ -1459,8 +1493,9 @@ local function RefreshPlayerSearchResults()
             game.CreateDialog(function(root, setMaxSize, setScrollable, dialogGame, closeDialog)
                 setMaxSize(850, 650);
                 setScrollable(true);
-                ShowDiplomacyMenu(root, dialogGame, targetID);
-                UI.CreateButton(root).SetText("CLOSE").SetOnClick(function()
+                local wrap=UI.CreateVerticalLayoutGroup(root);
+                ShowDiplomacyMenu(wrap, dialogGame, targetID);
+                UI.CreateButton(wrap).SetText("CLOSE").SetOnClick(function()
                     closeDialog();
                 end);
             end);
@@ -1546,7 +1581,8 @@ end
         selectedDiplomacyOverviewHost = UI.CreateVerticalLayoutGroup(area);
     end
     RefreshPlayerSearchResults();
-    RefreshSelectedDiplomacyOverview();
+    if not focusPlayerID or profilePage=="Summary" then RefreshSelectedDiplomacyOverview(); end
+    if focusPlayerID and profilePage=="Summary" then return; end
 
     if not focusPlayerID then
     UI.CreateLabel(area)
@@ -1786,7 +1822,7 @@ end
                             {type="joinWar", conflictID=joinConflictID, side="A"},
                             function(result)
                                 if result and result.message then UI.Alert(result.message); end
-                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
                             end
                         );
                     end);
@@ -1799,7 +1835,7 @@ end
                             {type="joinWar", conflictID=joinConflictID, side="B"},
                             function(result)
                                 if result and result.message then UI.Alert(result.message); end
-                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
                             end
                         );
                     end);
@@ -1975,7 +2011,7 @@ end
                         if result ~= nil and result.message ~= nil then
                             UI.Alert(result.message);
                         end
-                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
                     end
                 );
             end);
@@ -2003,7 +2039,7 @@ end
                         if result ~= nil and result.message ~= nil then
                             UI.Alert(result.message);
                         end
-                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
                     end
                 );
             end);
@@ -2029,7 +2065,7 @@ end
                         if result ~= nil and result.message ~= nil then
                             UI.Alert(result.message);
                         end
-                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
                     end
                 );
             end);
@@ -2307,7 +2343,7 @@ if activeNAP == nil
                                     result
                                 )
 
-                                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                                 end
                             );
@@ -2334,7 +2370,7 @@ UI.CreateButton(row)
                 result
             )
 
-                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
             end
         );
@@ -2377,7 +2413,7 @@ if isAllied then
                     end
 
 
-                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                 end
             );
@@ -2424,7 +2460,7 @@ if ourFaction ~= nil
                     end
 
 
-                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                    if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                 end
             );
@@ -2462,7 +2498,7 @@ end
                                 result
                             )
 
-                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                                if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                             end
                         );
@@ -2579,7 +2615,7 @@ local fromName =
                             result
                         )
 
-                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2609,7 +2645,7 @@ local fromName =
                             result
                         )
 
-                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2722,7 +2758,7 @@ UI.CreateLabel(group)
                             result
                         )
 
-                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2752,7 +2788,7 @@ UI.CreateLabel(group)
                             result
                         )
 
-                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                            if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                         end
                     );
@@ -2861,7 +2897,7 @@ for _, offer
                         end
 
 
-                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                     end
                 );
@@ -2899,7 +2935,7 @@ for _, offer
                         end
 
 
-                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID); else ShowDiplomacyMenu(parent, game); end;
+                        if focusPlayerID then UI.Destroy(area); ShowDiplomacyMenu(parent, game, focusPlayerID, profilePage); else ShowDiplomacyMenu(parent, game); end;
 
                     end
                 );
@@ -3042,7 +3078,8 @@ end
 
 function ShowMarketsMenu(
     parent,
-    game
+    game,
+    marketPage
 )
 
     local area =
@@ -3055,97 +3092,51 @@ function ShowMarketsMenu(
             "MARKETS"
         );
 
-    UI.CreateLabel(area)
-        .SetText(
-            "Stocks | Portfolio | Rankings | Price History"
-        );
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-    UI.CreateLabel(area).SetText("WHAT WOULD YOU LIKE TO DO?").SetColor("#FFD166");
-    UI.CreateLabel(area).SetText("Buy Shares: choose a company and quantity. My Portfolio: review or sell holdings. ETF: buy a fund covering the global market.").SetColor("#BBBBBB");
-    local marketActions = {
-        {"BUY SHARES", ShowStockMarket}, {"PORTFOLIO", ShowStockPortfolio},
-        {"OVERVIEW", ShowMarketOverview}, {"NEWS & ECONOMY", ShowMarketNews},
-        {"GLOBAL ETF", ShowMarketETF}, {"TRADE", ShowTradeAgreementsMenu},
-        {"INVESTMENTS", ShowInvestments}, {"AI MANAGER", ShowAIManagerMenu},
-        {"HOW IT WORKS", function(p,g) ShowHowItWorks(p,g); end}
-    };
-    local shortcutRow;
-    for index, entry in ipairs(marketActions) do
-        if (index-1)%2 == 0 then shortcutRow = UI.CreateHorizontalLayoutGroup(area); end
-        local action = entry[2];
-        UI.CreateButton(shortcutRow).SetText(entry[1]).SetFlexibleWidth(1).SetPreferredHeight(42).SetOnClick(function() action(parent,game); end);
+    local function menu(label, action)
+        UI.CreateButton(area).SetText(label).SetPreferredHeight(40).SetOnClick(action);
     end
-    UI.CreateLabel(area).SetText("Tap How It Works for simple purchase, profit, loss, and shortage examples.").SetColor("#BBBBBB");
-
-
-    -- WORLD TRENDS: compact public rankings.  Military and Commerce lists intentionally
-    -- show rank/name only, not exact opponent values.
-    local trendData = Mod.PublicGameData or {};
-    local trendEconomy = trendData.globalEconomy or {};
-    local trendMarket = trendEconomy.market or {};
-    UI.CreateLabel(area).SetText("WORLD TRENDS").SetColor("#67D5FF");
-
-    local companies={};
-    for _,company in pairs(trendMarket.companies or {}) do
-        if company and company.active==true and company.delisted~=true and company.status=="trading" then
-            local cp=tonumber(company.currentPrice or company.startingPrice) or 0;
-            local pp=tonumber(company.previousPrice) or cp;
-            local change=pp>0 and ((cp-pp)/pp)*100 or 0;
-            table.insert(companies,{name=tostring(company.name or "Company"),change=change,id=company.id});
-        end
-    end
-    table.sort(companies,function(a,b) return a.change>b.change; end);
-    UI.CreateLabel(area).SetText("TOP FLAGSHIP STOCKS").SetColor("#D4AF37");
-    if #companies==0 then UI.CreateLabel(area).SetText("No public flagship stocks are trading yet.").SetColor("#888888"); end
-    for i=1,math.min(10,#companies) do
-        local c=companies[i]; local sign=c.change>=0 and "+" or "";
-        UI.CreateLabel(area).SetText(tostring(i)..". "..c.name.." | "..sign..string.format("%.1f",c.change).."%").SetColor(c.change>=0 and "#79D279" or "#FF7B7B");
-    end
-
-    local milList={};
-    local storedRanks = trendMarket.rankings or {};
-    if storedRanks.strongestMilitaries and #storedRanks.strongestMilitaries>0 then
-        for _,pid in ipairs(storedRanks.strongestMilitaries) do table.insert(milList,{id=pid,value=0}); end
-    else
-        local militaryTotals={};
-        if game and game.LatestStanding and game.LatestStanding.Territories then
-            for tid,terr in pairs(game.LatestStanding.Territories) do
-                local oid=terr and terr.OwnerPlayerID or nil;
-                if oid and oid>=0 and game.Game.Players[oid]~=nil then
-                    local a=terr.NumArmies and terr.NumArmies.NumArmies or 0;
-                    militaryTotals[oid]=(militaryTotals[oid] or 0)+(tonumber(a) or 0);
-                end
+    local data=Mod.PublicGameData or {};
+    local trendEconomy=data.globalEconomy or {};
+    local market=trendEconomy.market or {};
+    if marketPage then
+        menu("Back to Markets",function() ShowMarketsMenu(parent,game); end);
+        if marketPage=="trade" then
+            menu("Trade agreements",function() ShowTradeAgreementsMenu(parent,game); end);
+            menu("Investment projects",function() ShowInvestments(parent,game); end);
+            menu("AI Manager",function() ShowAIManagerMenu(parent,game); end);
+        elseif marketPage=="stocks" then
+            menu("Buy shares",function() ShowStockMarket(parent,game); end);
+            menu("Global ETF",function() ShowMarketETF(parent,game); end);
+        else
+            menu("Stock leaders and prices",function() ShowMarketOverview(parent,game); end);
+            menu("News and economy",function() ShowMarketNews(parent,game); end);
+            local row=UI.CreateHorizontalLayoutGroup(area);
+            for _,entry in ipairs({{"Military","military"},{"Commerce reserves","commerce"}}) do
+                local key=entry[2];
+                UI.CreateButton(row).SetText((marketPage==key and "✓ " or "")..entry[1]).SetOnClick(function() ShowMarketsMenu(parent,game,key); end);
+            end
+            local ranks=market.rankings or {};
+            local military=marketPage~="commerce";
+            local ids=military and (ranks.strongestMilitaries or {}) or (ranks.commerceReserves or {});
+            local bands=military and (ranks.militaryBands or {}) or (ranks.commerceBands or {});
+            UI.CreateLabel(area).SetText(military and "Top 10 militaries • estimated armies" or "Top 10 reserves • estimated Commerce").SetColor("#67D5FF");
+            if #ids==0 then UI.CreateLabel(area).SetText("Rankings appear after the first economy update."); end
+            for i,id in ipairs(ids) do
+                local band=bands[i];
+                local estimate=band and (band[1].."–"..band[2]) or "Estimate pending";
+                UI.CreateLabel(area).SetText(i..". "..GetPlayerName(game,id).."  •  "..estimate).SetColor("#E4EAF0");
             end
         end
-        for pid,v in pairs(militaryTotals) do table.insert(milList,{id=pid,value=v}); end
-        table.sort(milList,function(a,b) return a.value>b.value; end);
+        return;
     end
-    local rankTurn = trendEconomy.currentEconomyTurn or trendData.tradeTurn or 0;
-    UI.CreateLabel(area).SetText("LIVE RANKINGS — recalculated each turn | Turn "..tostring(rankTurn)).SetColor("#67D5FF");
-    UI.CreateLabel(area).SetText("STRONGEST MILITARIES — exact troop totals hidden").SetColor("#FF9C66");
-    for i=1,math.min(10,#milList) do local x=milList[i]; UI.CreateLabel(area).SetText(tostring(i)..". "..GetPlayerName(game,x.id)).SetColor(GetPlayerUIColor(game,x.id,"#FFFFFF")); end
-
-    local cashList={};
-    if storedRanks.commerceReserves and #storedRanks.commerceReserves>0 then
-        for _,pid in ipairs(storedRanks.commerceReserves) do table.insert(cashList,{id=pid,value=0}); end
-    else
-        for pid,pl in pairs(game.Game.Players or {}) do
-            if pl and not pl.Surrendered then table.insert(cashList,{id=pid,value=GetPlayerGold(game,pid) or 0}); end
-        end
-        table.sort(cashList,function(a,b) return a.value>b.value; end);
-    end
-    UI.CreateLabel(area).SetText("LARGEST COMMERCE RESERVES — exact balances hidden").SetColor("#79D279");
-    for i=1,math.min(10,#cashList) do local x=cashList[i]; UI.CreateLabel(area).SetText(tostring(i)..". "..GetPlayerName(game,x.id)).SetColor(GetPlayerUIColor(game,x.id,"#FFFFFF")); end
-
-    UI.CreateLabel(area).SetText("----------------------------------------");
-
+    menu("Buy shares & funds",function() ShowMarketsMenu(parent,game,"stocks"); end);
+    menu("My portfolio",function() ShowStockPortfolio(parent,game); end);
+    menu("Rankings & news",function() ShowMarketsMenu(parent,game,"military"); end);
+    menu("Trade & investing tools",function() ShowMarketsMenu(parent,game,"trade"); end);
+    menu("How It Works",function() ShowHowItWorks(parent,game); end);
+    
     local ourNationForMarket = GetOurNationState(game) or {};
-    local marketTurn = trendEconomy.currentEconomyTurn or trendData.tradeTurn or 1;
+    local marketTurn = trendEconomy.currentEconomyTurn or data.tradeTurn or 1;
     if ourNationForMarket.setupComplete==true and (ourNationForMarket.flagshipCompanyID==nil or ourNationForMarket.flagshipCompanyCreated~=true) then
         local readyTurn=tonumber(ourNationForMarket.flagshipRebuildAvailableTurn) or 0;
         if marketTurn>=readyTurn then
@@ -3873,7 +3864,7 @@ function ShowUnitedNationsMenu(parent, game)
 
     UI.CreateLabel(area)
         .SetText(
-            "Permanent-member NO votes veto a resolution. Otherwise the configured YES-vote threshold determines passage."
+            "A permanent member’s manual NO or an AI permanent member’s NO can veto. If you miss the deadline, the game votes for you without using your veto. Vote ABSTAIN if you prefer to sit out."
         );
 
     local typeRow1 =
@@ -5789,10 +5780,22 @@ function ShowOverview(
         local unrest=math.max(0,math.min(100,tonumber(nation.resourceUnrest) or 0));
         local unrestCommercePenalty=(unrest>=80 and 20) or (unrest>=60 and 12) or (unrest>=40 and 7) or (unrest>=20 and 3) or 0;
         local unrestRecruiterPenalty=(unrest>=80 and 35) or (unrest>=60 and 20) or (unrest>=40 and 10) or (unrest>=20 and 5) or 0;
-        UI.CreateLabel(area).SetText("Commerce: "..tostring(commerce).." | Income: +"..tostring(income).." | Military Readiness: "..tostring(math.floor(readiness+0.5)).."% | Unrest: "..tostring(unrest).."/100").SetColor("#E0E0E0");
+        UI.CreateLabel(area).SetText("Treasury & income").SetColor("#67D5FF");
+        UI.CreateLabel(area).SetText(tostring(commerce).." Commerce available").SetColor("#E4EAF0");
+        UI.CreateLabel(area).SetText("+"..tostring(income).." Commerce per turn").SetColor("#8FD694");
+        UI.CreateLabel(area).SetText("Readiness & stability").SetColor("#67D5FF");
+        UI.CreateLabel(area).SetText("Military readiness: "..math.floor(readiness+0.5).."%");
+        UI.CreateLabel(area).SetText("Unrest: "..unrest.."/100").SetColor(unrest>=20 and "#FFB366" or "#E4EAF0");
+        local flagship=(((economy.market or {}).companies or {})[nation.flagshipCompanyID]);
+        if flagship then
+            local confidence=tonumber(flagship.effectiveConfidence or flagship.confidence) or 50;
+            local movement=math.max(-3,math.min(3,(confidence-50)*0.06));
+            UI.CreateLabel(area).SetText(string.format("Company confidence: %.0f/100",confidence));
+            UI.CreateLabel(area).SetText(string.format("Stock move from confidence: %+.1f points",movement)).SetColor(movement<0 and "#FF9696" or "#8FD694");
+        end
         local ideologyRecruiterModifier=GetClientIdeologyRecruiterModifierPercent(nation);
         UI.CreateLabel(area).SetText("Recruiter Ideology: "..tostring(nation.ideology or "None").." | "..(ideologyRecruiterModifier>0 and "+" or "")..tostring(ideologyRecruiterModifier).."% troop production").SetColor(ideologyRecruiterModifier>=0 and "#79D279" or "#FF7B7B");
-        UI.CreateLabel(area).SetText("Unrest Effects: Commerce -"..tostring(unrestCommercePenalty).."% | Recruiter Production -"..tostring(unrestRecruiterPenalty).."%").SetColor(unrest>=60 and "#FF7B7B" or (unrest>=20 and "#FFB366" or "#8FD694"));
+        UI.CreateLabel(area).SetText(unrestCommercePenalty==0 and "Unrest effects: none" or ("Unrest effects: −"..unrestCommercePenalty.."% Commerce, −"..unrestRecruiterPenalty.."% recruiter output")).SetColor(unrest>=60 and "#FF7B7B" or (unrest>=20 and "#FFB366" or "#8FD694"));
 
         if nation.aiManagerEnabled == true then
             UI.CreateLabel(area).SetText(
@@ -8335,10 +8338,7 @@ end
 
     end);
 
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
+    UI.CreateButton(area).SetText("Browse player portfolios").SetOnClick(function() ShowDiplomacyMenu(parent,game); end);
 
     for companyID, shares
         in pairs(
@@ -12609,839 +12609,109 @@ function ShowNationalSetup(
     end
 
 
-    -- =====================================================
-    -- TITLE
-    -- =====================================================
-
-    if isReform then
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "NATIONAL POLICY & ECONOMIC REFORM"
-            )
-            .SetColor("#FFD166");
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "You may change your nation's economic direction, but major policy changes create temporary economic uncertainty."
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Major Reform: -15% Economic Confidence for 3 turns."
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Changing only your tax policy does not trigger the full reform penalty."
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Your flagship company's name remains unchanged."
-            );
-
-
-    else
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "NATIONAL ECONOMIC SETUP"
-            )
-            .SetColor("#67D5FF");
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Establish your nation's starting economic identity."
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Choose an ideology, economic strategy, starting tax policy, flagship company, and company strategy."
-            );
-
+    local selectedIdeology = isReform and nation.ideology or nil;
+    local selectedEconomicStrategy = isReform and nation.economicStrategy or nil;
+    local selectedTaxPolicy = isReform and (nation.taxPolicy or "Standard") or "Standard";
+    local selectedCompanyStrategy = isReform and nation.companyStrategy or nil;
+    local companyName, nameInput = "", nil;
+    local companyNameInput = {GetText=function() return companyName; end};
+    local page, body, submit = 1, nil, nil;
+    local steps = {"Ideology", "Economic strategy", "Taxes", "Flagship company", "Company strategy", "Review"};
+    local first = isReform and {1,2,3,5,6} or {1,2,3,4,5,6};
+    local choose = {
+        [1]={{"Free Market","Stronger markets; fewer recruits"},{"Capitalist","Stronger investing; fewer recruits"},{"Social Democratic","Small boosts; recruiting stays the same"},{"State Capitalist","Higher income, investment and recruiting"},{"Socialist","More income and recruits; weaker markets"},{"Communist","Most recruits; weakest markets"},{"Fascist","More recruits; weaker markets"},{"Nationalist","More recruits; slightly weaker markets"}},
+        [2]={{"Growth","Higher income, market and investment modifiers"},{"Balanced","No change to economic modifiers"},{"Conservative","More confidence; lower income and investment"}},
+        [3]={{"Low","Less income; higher market and investment modifiers"},{"Standard","No tax modifiers"},{"High","More income; lower market and investment modifiers"}},
+        [5]={{"Growth","Higher price factor; 1% dividend pool"},{"Balanced","Standard price factor; 2% dividend pool"},{"Dividend","Lower price factor; 4–6% dividend pool"}}
+    };
+    local function value(step)
+        if step==1 then return selectedIdeology; elseif step==2 then return selectedEconomicStrategy;
+        elseif step==3 then return selectedTaxPolicy; elseif step==5 then return selectedCompanyStrategy; end
     end
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- SELECTION STATE
-    -- =====================================================
-
-    local selectedIdeology =
-        isReform
-        and nation.ideology
-        or nil;
-
-
-    local selectedEconomicStrategy =
-        isReform
-        and nation.economicStrategy
-        or nil;
-
-
-    local selectedTaxPolicy =
-        isReform
-        and (
-            nation.taxPolicy
-            or "Standard"
-        )
-        or "Standard";
-
-
-    local selectedCompanyStrategy =
-        isReform
-        and nation.companyStrategy
-        or nil;
-
-    local ideologyEffectsLabel =
-    nil;
-
-    local policyPreviewLabels =
-    nil;
-
-    local companyNameInput =
-        nil;
-
-
-    local ideologyLabel =
-        UI.CreateLabel(
-            area
-        ).SetColor("#C792EA");
-
-
-    local economicStrategyLabel =
-        UI.CreateLabel(
-            area
-        ).SetColor("#67D5FF");
-
-
-    local taxLabel =
-        UI.CreateLabel(
-            area
-        ).SetColor("#FFD166");
-
-
-    local companyStrategyLabel =
-        UI.CreateLabel(
-            area
-        ).SetColor("#79D279");
-
-local function GetIdeologyEffectsText(
-    ideology
-)
-
-    if ideology == "Free Market" then
-        return "Ideology Effects - Free Market\nGovernment Commerce: -3% | Market: +8% | Investment: +6% | Confidence: +2 | Recruiters: -15%";
-    elseif ideology == "Capitalist" then
-        return "Ideology Effects - Capitalist\nGovernment Commerce: -2% | Market: +6% | Investment: +5% | Confidence: +3 | Recruiters: -10%";
-    elseif ideology == "Social Democratic" then
-        return "Ideology Effects - Social Democratic\nGovernment Commerce: +2% | Market: +2% | Investment: +3% | Confidence: +2 | Recruiters: 0%";
-    elseif ideology == "State Capitalist" then
-        return "Ideology Effects - State Capitalist\nGovernment Commerce: +4% | Market: +1% | Investment: +5% | Confidence: +4 | Recruiters: +5%";
-    elseif ideology == "Socialist" then
-        return "Ideology Effects - Socialist\nGovernment Commerce: +5% | Market: -5% | Investment: +1% | Confidence: +1 | Recruiters: +10%";
-    elseif ideology == "Communist" then
-        return "Ideology Effects - Communist\nGovernment Commerce: +7% | Market: -9% | Investment: -2% | Confidence: +0 | Recruiters: +15%";
-    elseif ideology == "Fascist" then
-        return "Ideology Effects - Fascist\nGovernment Commerce: +3% | Market: -2% | Investment: +1% | Confidence: +3 | Recruiters: +10%";
-    elseif ideology == "Nationalist" then
-        return "Ideology Effects - Nationalist\nGovernment Commerce: +2% | Market: -1% | Investment: +0% | Confidence: +2 | Recruiters: +5%";
+    local function draw()
+        if body and not UI.IsDestroyed(body) then UI.Destroy(body); end
+        body=UI.CreateVerticalLayoutGroup(area);
+        local step=first[page]; local preview;
+        local function label(text,color)
+            return UI.CreateLabel(body).SetText(text).SetColor(color or "#E4EAF0");
+        end
+        label(isReform and "Economic reform" or "Build your nation","#67D5FF");
+        label(step==6 and "Review your choices" or ("Step "..page.." of "..(#first-1).."  •  "..steps[step]),"#67D5FF");
+        local function refresh()
+            local x=GetPolicyPreviewData(game,selectedTaxPolicy,selectedIdeology,selectedEconomicStrategy,selectedCompanyStrategy);
+            local function signed(n,ending) return (n>0 and "+" or "")..tostring(n)..(ending or ""); end
+            local function tone(a,b) return b>a and "#8FD694" or b<a and "#FF9696" or "#E4EAF0"; end
+            preview[1].SetText("Commerce / turn: "..x.currentCommerce.." → "..x.projectedCommerce.."  ("..signed(x.commerce,"%")..")").SetColor(tone(x.currentCommerce,x.projectedCommerce));
+            preview[2].SetText("Lv. "..x.recruiterLevel.." recruiter example: "..x.recruiterBaseOutput.." → "..x.recruiterOutput.." armies / turn").SetColor(tone(x.recruiterBaseOutput,x.recruiterOutput));
+            preview[3].SetText((isReform and "Live share price: " or "Share price reference: ")..string.format("%.2f",x.currentPrice).."  •  Market "..signed(x.market,"%"));
+            preview[4].SetText(string.format("Example after a +5%% move: %.2f → %.2f",x.baseMarketPrice,x.modifiedMarketPrice)).SetColor(tone(x.baseMarketPrice,x.modifiedMarketPrice));
+            preview[5].SetText(string.format("Example payout on 100: %.2f → %.2f",100+x.baseInvestmentReturn,100+x.modifiedInvestmentReturn)).SetColor(tone(x.baseInvestmentReturn,x.modifiedInvestmentReturn));
+            preview[6].SetText("Company confidence: "..signed(x.confidence," points")).SetColor(tone(0,x.confidence));
+        end
+        nameInput=nil;
+        if choose[step] then
+            local controls,choiceRow,selectedHelp={};
+            for index,entry in ipairs(choose[step]) do
+                if index%2==1 then choiceRow=UI.CreateHorizontalLayoutGroup(body); end
+                local option, description=entry[1],entry[2];
+                local button=UI.CreateButton(choiceRow).SetPreferredHeight(44).SetFlexibleWidth(1);
+                controls[#controls+1]={button,option,description};
+                button.SetOnClick(function()
+                    if step==1 then selectedIdeology=option; elseif step==2 then selectedEconomicStrategy=option;
+                    elseif step==3 then selectedTaxPolicy=option; else selectedCompanyStrategy=option; end
+                    for _,c in ipairs(controls) do c[1].SetText((value(step)==c[2] and "✓ " or "")..c[2]); end
+                    selectedHelp.SetText(description);
+                    refresh();
+                end);
+                button.SetText((value(step)==option and "✓ " or "")..option);
+            end
+            selectedHelp=label("Tap a choice to see what changes.","#B6C3CF");
+            for _,c in ipairs(controls) do if value(step)==c[2] then selectedHelp.SetText(c[3]); end end
+        elseif step==4 then
+            label("Choose a unique name, 2–40 characters.","#B6C3CF");
+            nameInput=CreateWideTextInput(body).SetPlaceholderText("Company name");
+            if companyName~="" then nameInput.SetText(companyName); end
+        else
+            label("Ideology: "..tostring(selectedIdeology));
+            label("Economy: "..tostring(selectedEconomicStrategy));
+            label("Taxes: "..tostring(selectedTaxPolicy));
+            label("Flagship: "..tostring(isReform and nation.flagshipCompanyName or companyName));
+            label("Company strategy: "..tostring(selectedCompanyStrategy));
+            if not isReform then
+                label("If formal diplomacy is enabled, declare war before attacking. Confirming accepts this rule.","#FFD166");
+            else
+                label("Major reform: −15% economic confidence for 3 turns. Tax-only changes do not trigger this penalty.","#FFD166");
+            end
+        end
+        if step~=4 then
+            label("Projected impact","#67D5FF");
+            preview={label(""),label(""),label(""),label(""),label(""),label("")};
+            refresh();
+        end
+        local row=UI.CreateHorizontalLayoutGroup(body);
+        if page>1 then UI.CreateButton(row).SetText("Back").SetPreferredHeight(44).SetOnClick(function()
+            if nameInput then companyName=nameInput.GetText() or ""; end
+            page=page-1; draw();
+        end); end
+        UI.CreateButton(row).SetText(step==6 and (isReform and "Confirm reform" or "Confirm setup") or "Continue").SetPreferredHeight(44).SetFlexibleWidth(1).SetOnClick(function()
+            if step==6 then submit(); return; end
+            if choose[step] and not value(step) then UI.Alert("Choose an option first."); return; end
+            if nameInput then
+                companyName=nameInput.GetText() or "";
+                if #companyName<2 or #companyName>40 then UI.Alert("Use a company name with 2–40 characters."); return; end
+            end
+            page=page+1; draw();
+        end);
+        UI.CreateButton(body).SetText("How It Works").SetOnClick(function()
+            game.CreateDialog(function(root,setMaxSize,setScrollable,dialogGame,closeDialog)
+                setMaxSize(620,650); setScrollable(true);
+                local wrap=UI.CreateVerticalLayoutGroup(root);
+                ShowHowItWorks(wrap);
+                UI.CreateButton(wrap).SetText("Close").SetOnClick(closeDialog);
+            end);
+        end);
     end
-
-    return "Ideology Effects: None";
-end
-
-    local function UpdateSelections()
-
-
-        ideologyLabel.SetText(
-            "Selected Ideology: " ..
-            tostring(
-                selectedIdeology
-                or "None"
-            )
-        );
-
-
-        economicStrategyLabel.SetText(
-            "Selected Economic Strategy: " ..
-            tostring(
-                selectedEconomicStrategy
-                or "None"
-            )
-        );
-
-
-        taxLabel.SetText(
-            "Selected Tax Policy: " ..
-            tostring(
-                selectedTaxPolicy
-                or "None"
-            )
-        );
-
-        if ideologyEffectsLabel ~= nil then
-
-    ideologyEffectsLabel.SetText(
-        GetIdeologyEffectsText(
-            selectedIdeology
-        )
-    );
-
-end
-
-if policyPreviewLabels ~= nil then
-    local p=GetPolicyPreviewData(game,selectedTaxPolicy,selectedIdeology,selectedEconomicStrategy,selectedCompanyStrategy);
-    local function sg(v,suf) return (v>0 and "+" or "")..tostring(v)..(suf or ""); end
-    policyPreviewLabels.commerce.SetText("COMMERCE / TURN | "..tostring(p.currentCommerce).." -> "..tostring(p.projectedCommerce).." | "..sg(p.commerce,"%"));
-    policyPreviewLabels.commerce.SetColor(p.commerce>=0 and "#79D279" or "#FF7B7B");
-    policyPreviewLabels.market.SetText("MARKET LIVE PRICE | "..string.format("%.2f",p.currentPrice).." | example +5.00% move: "..string.format("%.2f",p.baseMarketPrice).." -> "..string.format("%.2f",p.modifiedMarketPrice).." | modifier "..sg(p.market,"%"));
-    policyPreviewLabels.market.SetColor(p.market>=0 and "#67D5FF" or "#FF7B7B");
-    policyPreviewLabels.investment.SetText("INVESTMENT EXAMPLE | 100 at 25% base return | payout "..string.format("%.2f",100+p.baseInvestmentReturn).." -> "..string.format("%.2f",100+p.modifiedInvestmentReturn).." | modifier "..sg(p.investment,"%"));
-    policyPreviewLabels.investment.SetColor(p.investment>=0 and "#D98CFF" or "#FF7B7B");
-    policyPreviewLabels.recruiter.SetText("RECRUITER LEVEL "..tostring(p.recruiterLevel).." EXAMPLE | "..tostring(p.recruiterBaseOutput).." -> "..tostring(p.recruiterOutput).." armies/turn | ideology "..sg(p.recruiterModifier,"%"));
-    policyPreviewLabels.recruiter.SetColor(p.recruiterModifier>=0 and "#FFB366" or "#FF7B7B");
-    policyPreviewLabels.confidence.SetText("COMPANY CONFIDENCE | modifier "..sg(p.confidence,"").." | 10 confidence changes stock movement by 0.6 percentage points");
-    policyPreviewLabels.confidence.SetColor(p.confidence>=0 and "#FFD166" or "#FF7B7B");
-    local se=p.strategyEffects;
-    policyPreviewLabels.strategy.SetText("Selected Economic Strategy: "..tostring(selectedEconomicStrategy or "None").." | Commerce "..sg(se[1],"%").." | Market "..sg(se[2],"%").." | Investment "..sg(se[3],"%").." | Confidence "..sg(se[4],""));
-    local companyText="Select a company strategy";
-    if selectedCompanyStrategy=="Growth" then companyText="Growth Company | price fundamentals x1.35 | dividend pool 1% | volatility scale 30%";
-    elseif selectedCompanyStrategy=="Balanced" then companyText="Balanced Company | price fundamentals x1.00 | dividend pool 2% | volatility scale 25%";
-    elseif selectedCompanyStrategy=="Dividend" then companyText="Dividend Company | price fundamentals x0.45 | dividend pool 4%-6% | volatility scale 15%"; end
-    policyPreviewLabels.company.SetText(companyText);
-end
-
-        companyStrategyLabel.SetText(
-            "Selected Company Strategy: " ..
-            tostring(
-                selectedCompanyStrategy
-                or "None"
-            )
-        );
-
-    end
-
-
-    UpdateSelections();
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- IDEOLOGY
-    -- =====================================================
-
-    UI.CreateLabel(area)
-        .SetText(
-            "1. IDEOLOGY"
-        )
-        .SetColor("#C792EA");
-
-
-    local ideologyRow1 =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
-
-
-    UI.CreateButton(
-        ideologyRow1
-    )
-        .SetText(
-            "Free Market"
-        )
-        .SetOnClick(function()
-
-
-            selectedIdeology =
-                "Free Market";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        ideologyRow1
-    )
-        .SetText(
-            "Capitalist"
-        )
-        .SetOnClick(function()
-
-
-            selectedIdeology =
-                "Capitalist";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        ideologyRow1
-    )
-        .SetText(
-            "Social Democratic"
-        )
-        .SetOnClick(function()
-
-
-            selectedIdeology =
-                "Social Democratic";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    local ideologyRow2 =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
-
-
-    UI.CreateButton(
-        ideologyRow2
-    )
-        .SetText(
-            "State Capitalist"
-        )
-        .SetOnClick(function()
-
-
-            selectedIdeology =
-                "State Capitalist";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        ideologyRow2
-    )
-        .SetText(
-            "Socialist"
-        )
-        .SetOnClick(function()
-
-
-            selectedIdeology =
-                "Socialist";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    local ideologyRow3 =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
-
-    UI.CreateButton(ideologyRow3)
-        .SetText("Communist")
-        .SetOnClick(function()
-            selectedIdeology = "Communist";
-            UpdateSelections();
-        end);
-
-    UI.CreateButton(ideologyRow3)
-        .SetText("Fascist")
-        .SetOnClick(function()
-            selectedIdeology = "Fascist";
-            UpdateSelections();
-        end);
-
-    UI.CreateButton(ideologyRow3)
-        .SetText("Nationalist")
-        .SetOnClick(function()
-            selectedIdeology = "Nationalist";
-            UpdateSelections();
-        end);
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Free Market | Commerce -3% | Market +8% | Investment +6% | Confidence +2 | Recruiters -15%\n" ..
-            "Capitalist | Commerce -2% | Market +6% | Investment +5% | Confidence +3 | Recruiters -10%\n" ..
-            "Social Democratic | Commerce +2% | Market +2% | Investment +3% | Confidence +2 | Recruiters 0%\n" ..
-            "State Capitalist | Commerce +4% | Market +1% | Investment +5% | Confidence +4 | Recruiters +5%\n" ..
-            "Socialist | Commerce +5% | Market -5% | Investment +1% | Confidence +1 | Recruiters +10%\n" ..
-            "Communist | Commerce +7% | Market -9% | Investment -2% | Confidence +0 | Recruiters +15%\n" ..
-            "Fascist | Commerce +3% | Market -2% | Investment +1% | Confidence +3 | Recruiters +10%\n" ..
-            "Nationalist | Commerce +2% | Market -1% | Investment +0% | Confidence +2 | Recruiters +5%"
-        )
-        .SetColor("#D8C7FF");
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- ECONOMIC STRATEGY
-    -- =====================================================
-
-    UI.CreateLabel(area)
-        .SetText(
-            "2. ECONOMIC STRATEGY"
-        )
-        .SetColor("#67D5FF");
-
-
-    local strategyRow =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
-
-
-    UI.CreateButton(
-        strategyRow
-    )
-        .SetText(
-            "Growth"
-        )
-        .SetOnClick(function()
-
-
-            selectedEconomicStrategy =
-                "Growth";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        strategyRow
-    )
-        .SetText(
-            "Balanced"
-        )
-        .SetOnClick(function()
-
-
-            selectedEconomicStrategy =
-                "Balanced";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        strategyRow
-    )
-        .SetText(
-            "Conservative"
-        )
-        .SetOnClick(function()
-
-
-            selectedEconomicStrategy =
-                "Conservative";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Growth | Commerce +5% | Market +4% | Investment +5% | Confidence +2\n" ..
-            "Balanced | Commerce 0% | Market 0% | Investment 0% | Confidence +0\n" ..
-            "Conservative | Commerce -3% | Market -2% | Investment -3% | Confidence +4"
-        )
-        .SetColor("#A9E4FF");
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- TAX POLICY
-    -- =====================================================
-
-    UI.CreateLabel(area)
-        .SetText(
-            "3. TAX POLICY"
-        )
-        .SetColor("#FFD166");
-
-
-    local taxRow =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
-
-
-    UI.CreateButton(
-        taxRow
-    )
-        .SetText(
-            "Low"
-        )
-        .SetOnClick(function()
-
-
-            selectedTaxPolicy =
-                "Low";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        taxRow
-    )
-        .SetText(
-            "Standard"
-        )
-        .SetOnClick(function()
-
-
-            selectedTaxPolicy =
-                "Standard";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        taxRow
-    )
-        .SetText(
-            "High"
-        )
-        .SetOnClick(function()
-
-
-            selectedTaxPolicy =
-                "High";
-
-
-            UpdateSelections();
-
-        end);
-
-
-UI.CreateLabel(area)
-    .SetText(
-        "Low Tax\n" ..
-        "Commerce: -10% | Market: +10% | Investment: +10% | Company Confidence: +5\n\n" ..
-
-        "Standard Tax\n" ..
-        "Commerce: 0% | Market: 0% | Investment: 0% | Company Confidence: 0\n\n" ..
-
-        "High Tax\n" ..
-        "Commerce: +10% | Market: -10% | Investment: -10% | Company Confidence: -5"
-    )
-    .SetColor("#FFE49A");
-
-ideologyEffectsLabel =
-    UI.CreateLabel(area).SetColor("#C792EA");
-
-ideologyEffectsLabel.SetText(
-    GetIdeologyEffectsText(
-        selectedIdeology
-    )
-);
-
-UI.CreateLabel(area).SetText("LIVE NUMERICAL PREVIEW").SetColor("#FFFFFF");
-UI.CreateLabel(area).SetText("Tap any policy above. Percentages and their actual before -> after numbers update immediately.").SetColor("#AAAAAA");
-policyPreviewLabels={
-    commerce=UI.CreateLabel(area),
-    market=UI.CreateLabel(area),
-    investment=UI.CreateLabel(area),
-    recruiter=UI.CreateLabel(area),
-    confidence=UI.CreateLabel(area),
-    strategy=UI.CreateLabel(area).SetColor("#8FD694"),
-    company=UI.CreateLabel(area).SetColor("#8FD694")
-};
-UpdateSelections();
-
-UI.CreateLabel(area)
-    .SetText("WHAT CONFIDENCE & UNREST ACTUALLY DO")
-    .SetColor("#FFD166");
-UI.CreateLabel(area)
-    .SetText(
-        "Company Confidence directly changes flagship stock-price movement each turn around a neutral 50 baseline: " ..
-        "40 = -0.6 percentage points | 50 = 0.0 | 60 = +0.6 | 75 = +1.5 | 100 = +3.0. " ..
-        "The confidence component is capped at -3.0 to +3.0 percentage points per turn."
-    )
-    .SetColor("#79D279");
-UI.CreateLabel(area)
-    .SetText(
-        "Unrest penalties: 0-19 = no penalty | 20-39 = Commerce -3%, Recruiters -5% | " ..
-        "40-59 = Commerce -7%, Recruiters -10% | 60-79 = Commerce -12%, Recruiters -20% | " ..
-        "80-100 = Commerce -20%, Recruiters -35%. Overview always shows your current Unrest and exact active penalties."
-    )
-    .SetColor("#FFB366");
-UI.CreateLabel(area)
-    .SetText(
-        "Ideology Recruiter tradeoff: Free Market -15% | Capitalist -10% | Social Democratic 0% | " ..
-        "State Capitalist +5% | Socialist +10% | Communist +15% | Fascist +10% | Nationalist +5%. " ..
-        "The live result also includes Readiness, Unrest, and Faction exercise bonuses."
-    )
-    .SetColor("#D8C7FF");
-
-UI.CreateLabel(area)
-    .SetText(
-        "--------------------------------"
-    );
-
-    -- =====================================================
-    -- FLAGSHIP COMPANY
-    -- =====================================================
-
-    UI.CreateLabel(area)
-        .SetText(
-            "4. FLAGSHIP COMPANY"
-        )
-        .SetColor("#79D279");
-
-
-    if isReform then
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Current Company: " ..
-                tostring(
-                    nation.flagshipCompanyName
-                    or "Unknown"
-                )
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Corporate renaming will be handled separately from national economic reform."
-            );
-
-
-    else
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Enter a unique company name between 2 and 40 characters."
-            );
-
-
-        companyNameInput =
-            CreateWideTextInput(
-                area
-            )
-                .SetPlaceholderText(
-                    "Enter flagship company name..."
-                );
-
-    end
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- COMPANY STRATEGY
-    -- =====================================================
-
-    UI.CreateLabel(area)
-        .SetText(
-            "5. COMPANY STRATEGY"
-        )
-        .SetColor("#8FD694");
-
-
-    local companyStrategyRow =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
-
-
-    UI.CreateButton(
-        companyStrategyRow
-    )
-        .SetText(
-            "Growth"
-        )
-        .SetOnClick(function()
-
-
-            selectedCompanyStrategy =
-                "Growth";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        companyStrategyRow
-    )
-        .SetText(
-            "Balanced"
-        )
-        .SetOnClick(function()
-
-
-            selectedCompanyStrategy =
-                "Balanced";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateButton(
-        companyStrategyRow
-    )
-        .SetText(
-            "Dividend"
-        )
-        .SetOnClick(function()
-
-
-            selectedCompanyStrategy =
-                "Dividend";
-
-
-            UpdateSelections();
-
-        end);
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "Growth Company | Price fundamentals x1.35 | Dividend pool 1% of owner income | Random volatility scale 30%\n" ..
-            "Balanced Company | Price fundamentals x1.00 | Dividend pool 2% of owner income | Random volatility scale 25%\n" ..
-            "Dividend Company | Price fundamentals x0.45 | Dividend pool 4%-6% of owner income | Random volatility scale 15%"
-        )
-        .SetColor("#B9F6CA");
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- DIPLOMACY ACKNOWLEDGEMENT
-    -- =====================================================
-
-    if not isReform then
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "6. DIPLOMACY RULE"
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "When formal diplomacy is enabled, nations must officially declare WAR before attacking another nation. Confirming National Setup acknowledges this rule."
-            );
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "----------------------------------------"
-            );
-
-    end
-
-
-    -- =====================================================
-    -- FINAL REVIEW
-    -- =====================================================
-
-    UI.CreateLabel(area)
-        .SetText(
-            isReform
-            and "PROPOSED NATIONAL POLICY"
-            or "YOUR STARTING NATIONAL POLICY"
-        );
-
-
-    UpdateSelections();
-
-
-    if isReform then
-
-
-        UI.CreateLabel(area)
-            .SetText(
-                "Major Change: ideology, economic strategy, or company strategy.\n" ..
-                "Major Reform Penalty: -15% Economic Confidence for 3 turns.\n" ..
-                "Tax-only Change: no full economic reform penalty."
-            );
-
-    end
-
-
-    UI.CreateLabel(area)
-        .SetText(
-            "----------------------------------------"
-        );
-
-
-    -- =====================================================
-    -- SUBMIT
-    -- =====================================================
-
-    UI.CreateButton(area)
-        .SetText(
-            isReform
-            and "CONFIRM ECONOMIC REFORM"
-            or "CONFIRM NATIONAL SETUP"
-        )
-        .SetOnClick(function()
-
+    submit = function()
 
             if selectedIdeology
                 == nil then
@@ -13660,7 +12930,7 @@ UI.CreateLabel(area)
                 end
             );
 
-        end);
+        end;
 
 
     if isReform then
@@ -13681,6 +12951,7 @@ UI.CreateLabel(area)
             end);
 
     end
+    draw();
 
 end
 -- =========================================================
@@ -13848,17 +13119,17 @@ function ShowHowItWorks(parent)
     end
     UI.CreateLabel(area).SetText("HOW UNITED FRONTIER WORKS").SetColor("#67D5FF");
     UI.CreateLabel(area).SetText("Deep strategy, simple controls: every action shows its cost, effect, and result.").SetColor("#FFFFFF");
-    Section("MARKETS — START HERE", "BUY SHARES opens the company list. Choose a flagship, open VIEW / TRADE COMPANY, choose a quantity, and review the total before buying. PORTFOLIO shows holdings and selling options. OVERVIEW ranks Growth and Dividend stocks. NEWS & ECONOMY combines acquisitions, price events, dividends, trade, investments, and global activity.", "#67D5FF");
+    Section("MARKETS — START HERE", "Buy shares & funds opens Stocks and Global ETF. My portfolio shows your holdings and links to Diplomacy, where a player’s Portfolio tab shows their shares and market value. Rankings & news includes stock leaders, estimated military and Commerce bands, and one combined news feed. Trade & investing tools holds agreements, projects, and AI Manager.", "#67D5FF");
     Section("EXAMPLE: SHARE PURCHASE", "Illustrative prices: 5 shares at 20 Commerce cost 100 before any applicable fees. If the price later reaches 24, the holding is worth 120. If it falls to 16, it is worth 80. You realize the gain or loss by selling; dividends depend on the company and game settings.", "#79D279");
     Section("MARKET RANKINGS — WHAT THE NUMBERS MEAN", "Top 5 Growth ranks the largest percentage price increases from the previous turn. Example: 20 → 24 is +20%. Top 5 Dividend ranks dividend Commerce paid per share and shows yield. Example: a 2 Commerce dividend at a 40 Commerce stock price is a 5% displayed yield. A high yield can still carry price risk.", "#79D279");
     Section("EXAMPLE: FLAGSHIP ACQUISITION", "Illustrative host settings: target market cap 3,000 × 150% premium = 4,500 Commerce purchase price. With 100 total shares, the cash-out value is 45 per share. An investor holding 20 shares receives 900 Commerce automatically. All other shareholders are paid first; the seller receives the remaining sale value plus the cash-out on shares the seller held. With a 100-share buyer priced at 44 and a target worth 3,800, buyer stock becomes 82 after rounding. At the default acquired-business earnings rate of 5%, its dividend pool rises by 190/turn: +1.90/share. Owning 20 shares adds 38/turn, not 190 national income. A 5,700 purchase takes 150 payments to recover from those 20 shares alone. Unheld shares receive no payout; fractional dividends carry forward. Earnings are generated by the game, not taken from the seller. Prices/base dividends may change. The host sets the rate for new acquisitions.", "#FFB347");
     Section("EXAMPLE: RESOURCE SHORTAGE", "Production 4 minus need 7 leaves a deficit of 3. A stockpile of 5 covers this turn and leaves 2. Next turn, the same deficit would leave 1 uncovered. Increase production or arrange a resource contract before the reserve runs out.", "#FFD166");
     Section("EXAMPLE: PLAYER ACTIONS", "Click a player name in Diplomacy. Their mobile overview shows relationship, Commerce/turn, policy, agreements, flagship, discovered strategic assets, and known airport infrastructure. Resource locations and airport locations are available without an Agency. At peace, you may propose a pact or alliance; at war, you may offer peace.", "#C792EA");
     Section("1. GETTING STARTED","Complete National Setup. Your ideology, economic strategy, taxes, and company strategy show hard numerical effects before you confirm. If setup is left incomplete through the host deadline, missing choices are assigned automatically. An unfinished target is never immune from war.","#FFD166");
-    Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence directly affects flagship market movement. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
+    Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence adds or subtracts 0.06 percentage points from flagship movement per point away from 50, capped at ±3 points. Example: 60 confidence adds 0.6 points. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
     Section("3. RESOURCES","Resource locations are public in Resources. Filter My Resources, Neighbors, Ally / Faction, or All Nations, then select a resource type. Each location shows its owner and level and has a SHOW button. Oil and Iron build Airports; each Recruiter level needs 1 Oil, 1 Food and 1 Iron per turn. Tanks consume 1 Oil + 1 Iron; Drones consume 1 Oil per purchase. Uranium is removed.","#67D5FF");
     Section("4. MILITARY INFRASTRUCTURE","Recruiters appear in MY ASSETS and RECRUITMENT with direct upgrades. Recruiter upgrade cost is base cost × next level (default L2: 500, L3: 750 gold); production level changes are scheduled for turn advancement. Recruiters use production levels, not strategic-building HP. Recruiter upgrades replace their existing map icon; they do not stack another Recruiter icon. Lv.1 = 10 max HP, Lv.2 = 20, Lv.3 = 30, Lv.4 = 40. Existing damage carries into an upgrade, so upgrading is not a free repair. Airports are the only airfield infrastructure. ","#8FBF6F");
-    Section("5. AIR OPERATIONS & AIRLIFT","When Airports are enabled, War.app Airlift Cards require an Airport at BOTH origin and destination. Airports cost 350 Commerce + 1 Oil + 1 Iron per level by default; each upgrade costs base × next level. They support 2 Air Wings per level and Drone deployment. They need no Power Grid. If Airports are disabled, normal War.app Airlift rules apply. AI follows the same routing rule.","#62B6FF");
+    Section("5. AIR OPERATIONS & AIRLIFT","When Airports are enabled, War.app Airlift Cards require an Airport at BOTH origin and destination. See Military for the current airport cost and deployment rules. They need no Power Grid. If Airports are disabled, normal War.app Airlift rules apply. AI follows the same routing rule.","#62B6FF");
     Section("6. COMBAT UNITS","Air Wings: 200 Commerce by default; 5 attack, 3 defense, 5 health; deploy at an Airbase, capacity 2 per level. Special Forces: 180 Commerce, strength 5 by default. Tanks: 300 Commerce + 1 Oil + 1 Iron, strength 8. Drones: 150 Commerce + 1 Oil, strength 2; deploy at an Airport. Host settings change costs, strength and national limits. Tank/Drone strength sets attack, defense, health and absorption. Units appear on turn advance, move and fight through normal game orders, follow normal fog, and cannot be gifted or transferred to teammates. No separate Drone recon or strike missions are included.","#FFD166");
     Section("8. DIPLOMACY & FACTIONS","Diplomacy handles nation-to-nation wars, peace, NAPs, alliances, and trade. Factions have a public directory, leader/member management, join requests, chat, Military Exercises, and Faction wars. A Faction leader may declare war on another Faction; all members are notified and member wars propagate automatically.","#D4AF37");
     Section("AI VOLUNTARY WAR REQUIREMENTS","AI needs 70%+ military readiness and no Oil/Food/Iron shortage. With recruitment enabled: 1 Recruiter for nations of up to 3 territories, otherwise 2 (limited by the host station cap). Air Wings require an Airport for AI logistics readiness. Targets must share a land border and cannot have an active alliance, NAP, peace cooldown, or pending war. Same-faction targets are excluded. Host AI war chance 0 disables voluntary AI war rolls. Passing requirements makes war possible, not certain. Defensive wars and faction/coalition joins use separate rules.","#FFB366");

@@ -14662,24 +14662,16 @@ local RESOURCE_ICON_SAFE_NAMES = {
     Copper = "Copper", Lithium = "Lithium"
 };
 
-local function ResourceIconStructure(resourceName, facilityLevel)
+local function ResourceIconStructure(resourceName)
     local safe = RESOURCE_ICON_SAFE_NAMES[resourceName] or "Oil";
-    local maxLevel = math.max(1, math.min(5, math.floor(tonumber(GetSetting("ResourceFacilityMaxLevel", 3)) or 3)));
-    local level = math.max(1, math.min(maxLevel, math.floor(tonumber(facilityLevel) or 1)));
-    return WL.StructureType.Custom("Resource" .. safe .. tostring(level));
+    return WL.StructureType.Custom("Resource" .. safe .. "1");
 end
 
 local function GetPrimaryResource(nodes)
-    local bestName = nil;
-    local bestLevel = -1;
-    for _, resourceName in ipairs(RESOURCE_NAMES) do
-        local level = tonumber((nodes or {})[resourceName]) or 0;
-        if level > bestLevel then
-            bestName = resourceName;
-            bestLevel = level;
-        end
+    for _, name in ipairs(RESOURCE_NAMES) do
+        if (tonumber((nodes or {})[name]) or 0)>0 then return name; end
     end
-    return bestName or "Oil";
+    return "Oil";
 end
 
 local function GetTotalResourceLevel(nodes)
@@ -14833,7 +14825,6 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
     if standing == nil or standing.Territories == nil then return; end
 
     local remaining = {};
-    local modsByTerritory = {};
     for _, build in ipairs(resources.pendingBuilds or {}) do
         local nation = data.globalEconomy.nations[build.playerID];
         if nation ~= nil then EnsureNationResourceState(nation); end
@@ -14849,23 +14840,6 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
             resources.territories[build.territoryID] = nodes or {};
             nodes = resources.territories[build.territoryID];
             nodes[build.resource] = build.toLevel;
-            local terrMod = WL.TerritoryModification.Create(build.territoryID);
-
-            -- Refresh the single resource icon after the upgrade.  The dominant
-            -- resource chooses the icon and the total facility level is baked into
-            -- the icon badge, so the territory always shows exactly one resource icon.
-            if resources.mapIconsEnabled ~= false
-                and GetSetting("ResourceMapIconsEnabled", true) == true
-            then
-                terrMod.SetStructuresOpt =
-                    BuildResourceIconStructureTable(
-                        game, standing, build.territoryID,
-                        terr.Structures or {},
-                        nodes
-                    );
-            end
-
-            modsByTerritory[build.territoryID] = terrMod;
             -- New builds are already paid when ordered. Keep legacy compatibility.
             if build.paid ~= true then
                 AddResourceChange(resourceChanges, build.playerID, -(build.cost or 0));
@@ -14882,10 +14856,7 @@ local function ProcessPendingResourceBuilds(game, data, resourceChanges, addNewO
         end
     end
     resources.pendingBuilds = remaining;
-    local buildMods={}; for _,mod in pairs(modsByTerritory) do table.insert(buildMods,mod); end
-    if #buildMods>0 then
-        addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral,"Strategic resource facilities completed",{},buildMods,nil,nil));
-    end
+
 end
 
 local function EnsureArmyRecruiterState(data)
@@ -16658,7 +16629,8 @@ local function ProcessUnitedNations(
             resolution.votes
             or {};
 
-        -- AI council members vote automatically.
+        -- AI votes normally; missing human votes are filled only at the deadline.
+        resolution.automaticVotes = resolution.automaticVotes or {};
         for _, voterID
             in ipairs(
                 council
@@ -16671,7 +16643,8 @@ local function ProcessUnitedNations(
                 ];
 
             if player ~= nil
-                and player.IsAI == true
+                and UNPlayerAvailable(game, data, voterID)
+                and (player.IsAI == true or currentTurn >= (resolution.voteEndsTurn or currentTurn))
                 and resolution.votes[
                     tostring(
                         voterID
@@ -16722,6 +16695,7 @@ local function ProcessUnitedNations(
 
                 end
 
+                resolution.automaticVotes[tostring(voterID)] = player.IsAI == true and "AI" or "MISSED";
                 resolution.votes[
                     tostring(
                         voterID
@@ -16778,6 +16752,7 @@ local function ProcessUnitedNations(
                             + 1;
 
                     elseif vote == "NO"
+                        and resolution.automaticVotes[tostring(voterID)] ~= "MISSED"
                         and UNListContains(
                             un.permanentMembers,
                             voterID
@@ -18690,13 +18665,14 @@ end
 -- AIRLIFT CARD -> AIRBASE / AIRSTRIP RESTRICTIONS
 -- =====================================================
 if order.proxyType == "GameOrderPlayCardAirlift" then
-    if not UFIsLargeGame(game) and GetSetting("AirbasesEnabled",true)==true then
+    if GetSetting("AirbasesEnabled",true)==true then
         local fromID=order.FromTerritoryID; local toID=order.ToTerritoryID; local pd=UF_ADVANCE_TURN_PRIVATE_DATA_CACHE or Mod.PrivateGameData or {}; local byPlayer=pd.strategicMilitary and pd.strategicMilitary.byPlayer or {};
         local function hasAirport(tid)
-            local st=game.ServerGame and game.ServerGame.LatestTurnStanding and game.ServerGame.LatestTurnStanding.Territories[tid] or nil;
+            local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
+            local st=standing and standing.Territories and standing.Territories[tid] or nil;
             local owner=st and st.OwnerPlayerID or nil; local state=owner and byPlayer[owner] or nil;
             if state==nil then return false; end
-            local airbaseOK=GetSetting("AirbasesEnabled",true)==true and (tonumber((state.airbases or {})[tid]) or 0)>0;
+            local airbaseOK=GetSetting("AirbasesEnabled",true)==true and (tonumber((state.airbases or {})[tid] or (state.airbases or {})[tostring(tid)]) or 0)>0;
             return airbaseOK;
         end
         if not hasAirport(fromID) or not hasAirport(toID) then
@@ -19425,10 +19401,20 @@ local function UFUpdatePublicMarketRankings(game, data)
         if pl and not pl.Surrendered then table.insert(cl,{id=pid,value=GetStoredGold(game,pid) or 0}); end
     end
     table.sort(cl,function(a,b) if a.value==b.value then return a.id<b.id end return a.value>b.value end);
-    local mIDs={}; local cIDs={};
-    for i=1,math.min(10,#ml) do table.insert(mIDs,ml[i].id); end
-    for i=1,math.min(10,#cl) do table.insert(cIDs,cl[i].id); end
-    economy.market.rankings={turn=economy.currentEconomyTurn or data.tradeTurn or 1,strongestMilitaries=mIDs,commerceReserves=cIDs};
+    local function pack(list, minimum)
+        local ids, bands = {}, {};
+        for i=1,math.min(10,#list) do
+            local entry=list[i]; local value=math.max(0,entry.value);
+            local width=minimum;
+            while value>=width*10 do width=width*10; end
+            local lo=math.floor(value/width)*width;
+            ids[i]=entry.id; bands[i]={lo,lo+width-1};
+        end
+        return ids,bands;
+    end
+    local mIDs,mBands=pack(ml,100); local cIDs,cBands=pack(cl,100);
+    economy.market.rankings={turn=economy.currentEconomyTurn or data.tradeTurn or 1,
+        strongestMilitaries=mIDs,commerceReserves=cIDs,militaryBands=mBands,commerceBands=cBands};
     data.globalEconomy=economy;
 end
 

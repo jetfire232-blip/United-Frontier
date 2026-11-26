@@ -716,24 +716,16 @@ local RESOURCE_ICON_SAFE_NAMES = {
     Lithium = "Lithium"
 };
 
-local function ResourceIconStructure(resourceName, facilityLevel)
+local function ResourceIconStructure(resourceName)
     local safe = RESOURCE_ICON_SAFE_NAMES[resourceName] or "Oil";
-    local maxLevel = math.max(1, math.min(5, math.floor(tonumber(Mod.Settings.ResourceFacilityMaxLevel) or 3)));
-    local level = math.max(1, math.min(maxLevel, math.floor(tonumber(facilityLevel) or 1)));
-    return WL.StructureType.Custom("Resource" .. safe .. tostring(level));
+    return WL.StructureType.Custom("Resource" .. safe .. "1");
 end
 
 local function GetPrimaryResource(nodes)
-    local bestName = nil;
-    local bestLevel = -1;
-    for _, resourceName in ipairs(RESOURCE_ORDER) do
-        local level = tonumber((nodes or {})[resourceName]) or 0;
-        if level > bestLevel then
-            bestName = resourceName;
-            bestLevel = level;
-        end
+    for _, name in ipairs(RESOURCE_NAMES) do
+        if (tonumber((nodes or {})[name]) or 0)>0 then return name; end
     end
-    return bestName or "Oil";
+    return "Oil";
 end
 
 local function GetTotalResourceLevel(nodes)

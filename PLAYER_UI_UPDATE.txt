@@ -1,0 +1,14 @@
+United Frontier v16 — Player UI Update
+
+Based on: United-Frontier-v16-Turn1-Diplomacy-Runtime-Fix.
+Changed Lua files: Client_PresentMenuUI.lua, Server_AdvanceTurn.lua, Server_StartGame.lua.
+
+National setup uses five guided choices followed by review. Economic reform uses the same flow and preserves the flagship name. Illustrative stock and recruiter numbers are labeled as examples.
+Markets groups stock purchases and ETF, portfolio, rankings/news, and trade/investment tools. Once rankings refresh, the public board shows troop and Commerce reserve ranges; it does not publish exact ranking totals.
+Diplomacy player profiles have Summary, Portfolio, and Relations tabs. Portfolio shows holdings and market value; the other player's cost basis and performance are not shown on this screen.
+With Airports enabled, the Airlift Card requires a working airport at both ends, including in large matches. With Airports off, normal Airlift Card rules apply.
+Eligible UN council AIs vote automatically. A missing human council vote is filled at the deadline using the automatic vote rules, but an automatic human NO cannot exercise a veto. A submitted abstention counts as a choice and will not be changed.
+Resource facility levels affect production and remain visible in the resource directory. Map icons stay at one marker per resource territory with a fixed base icon. Legacy markers are reconciled during turn processing.
+Power Grid and chip manufacturing are not included in this build.
+
+Verification: all Lua syntax checks passed, with local callback simulations for setup, rankings and portfolios, Airlift, UN voting, unrest tiers, company confidence, and resource markers. Still needs a live War.app mobile/turn test before release.

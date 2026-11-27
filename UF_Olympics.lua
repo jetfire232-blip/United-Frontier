@@ -5,10 +5,30 @@ O.sports = {
     {id="football",name="Football"}, {id="cycling",name="Cycling"},
     {id="rowing",name="Rowing"}, {id="basketball",name="Basketball"}
 }
+O.presentation={
+    track={image="olympics-track.png",venue="THE RUNNING TRACK",finish="PHOTO FINISH",reveal="The finish-line officials confirm the medal order."},
+    swim={image="olympics-swim.png",venue="THE AQUATICS CENTER",finish="FINAL TOUCH",reveal="The pool scoreboard confirms the medal order."},
+    football={image="olympics-football.png",venue="THE FOOTBALL STADIUM",finish="FINAL WHISTLE",reveal="The final whistle marks the close of competition."},
+    cycling={image="olympics-cycling.png",venue="THE VELODROME",finish="FINAL LAP",reveal="The riders cross the line and the podium is confirmed."},
+    rowing={image="olympics-rowing.png",venue="THE REGATTA COURSE",finish="FINAL STROKES",reveal="The crews reach the finish and the medals are confirmed."},
+    basketball={image="olympics-basketball.png",venue="THE BASKETBALL ARENA",finish="FINAL BUZZER",reveal="The final buzzer sounds and the medal order is confirmed."}
+}
 O.medalNames={"Gold","Silver","Bronze"}
 O.commerceBoost={10,6,3}
 O.recruitBoost={15,10,5}
 O.minimum=4
+O.newTeamWeight=20
+function O.teamWeight(event,amount)
+    if amount<=0 then return 0 end
+    return math.sqrt(amount)+(event.baseTeamWeight or 0)
+end
+function O.minTeams(event) return event.minTeams or O.minimum end
+function O.maxTeams(event) return event.maxTeams or 0 end
+function O.occupiedSeats(event)
+    local seats=0
+    for _ in pairs(event.training) do seats=seats+1 end
+    return seats
+end
 local function whole(value)
     local n=tonumber(value)
     if not n or n~=n or n<0 or n>1000000000 or n~=math.floor(n) then return nil end
@@ -33,13 +53,19 @@ end
 function O.turn(data)
     return math.max(1,(tonumber(data.tradeTurn) or 0)+1)
 end
+function O.betWindow(games)
+    if not games.betting then return nil,nil end
+    return games.betOpens or games.closes+1,games.betCloses or games.results-1
+end
 function O.phase(games,turn)
     if not games then return "Awaiting host setup" end
     if games.settled then return "Results" end
     if turn<games.opens then return "Scheduled" end
     if turn<=games.closes then return "Training open" end
     if turn<games.results then
-        return games.betting and "Betting open" or "Training locked"
+        local first,last=O.betWindow(games)
+        if first and turn>=first and turn<=last then return "Betting open" end
+        return "Training locked"
     end
     return "Awaiting results"
 end
@@ -53,19 +79,46 @@ function O.publish(game,economy,turn,pid,payload)
         return false,"Choose valid turns: opening ≤ last training turn < results turn."
     end
     local enabled=payload.betting==true
-    if enabled and results<closes+2 then return false,"Leave at least one full turn for betting after training closes." end
+    local first,last
+    if enabled then
+        first=payload.betOpens~=nil and payload.betOpens~="" and whole(payload.betOpens) or nil
+        last=payload.betCloses~=nil and payload.betCloses~="" and whole(payload.betCloses) or nil
+        if (payload.betOpens~=nil and payload.betOpens~="" and not first) or (payload.betCloses~=nil and payload.betCloses~="" and not last) then
+            return false,"Betting turns must be whole numbers, or blank for automatic."
+        end
+        first,last=first or closes+1,last or results-1
+        if first<=closes or first>last or last>=results then
+            return false,"Betting must start after training closes and finish before results."
+        end
+    end
     if type(payload.events)~="table" then return false,"Choose at least one event." end
     local events={}
     for _,sport in ipairs(O.sports) do
-        local purse=payload.events[sport.id]
-        if purse~=nil then
-            purse=whole(purse)
-            if not purse or purse>10000 then return false,"Set each base purse from 0 to 10,000 Commerce." end
-            events[#events+1]={id=sport.id,name=sport.name,purse=purse,training={},bets={}}
+        local settings=payload.events[sport.id]
+        if settings~=nil then
+            local purse,minTeams,maxTeams
+            if type(settings)=="table" then
+                purse,minTeams,maxTeams=whole(settings.purse),whole(settings.minTeams),whole(settings.maxTeams)
+            else
+                purse,minTeams,maxTeams=whole(settings),O.minimum,0
+            end
+            if not purse or purse>10000 then return false,sport.name..": set the base prize from 0 to 10,000 Commerce." end
+            if not minTeams or minTeams<2 or not maxTeams or (maxTeams~=0 and maxTeams<minTeams) then
+                return false,sport.name..": use a minimum of at least 2 and a maximum of 0 (unlimited) or at least the minimum."
+            end
+            local possible=0
+            for _,player in pairs((game.Game or {}).Players or {}) do
+                if player.IsAI~=true and not player.Surrendered then possible=possible+1 end
+            end
+            if minTeams>possible and possible>1 then
+                return false,sport.name..": the minimum exceeds the number of active human nations ("..possible..")."
+            end
+            events[#events+1]={id=sport.id,name=sport.name,purse=purse,minTeams=minTeams,maxTeams=maxTeams,
+                baseTeamWeight=O.newTeamWeight,training={},bets={}}
         end
     end
     if #events==0 then return false,"Choose at least one event." end
-    economy.olympics={opens=opens,closes=closes,results=results,betting=enabled,events=events,boosts={}}
+    economy.olympics={opens=opens,closes=closes,results=results,betting=enabled,betOpens=first,betCloses=last,events=events,boosts={}}
     return true,"Olympic schedule published and locked."
 end
 function O.eligible(game,economy,pid)
@@ -78,7 +131,7 @@ function O.entries(game,economy,event)
     local sum=0
     for pid,amount in pairs(event.training) do
         if O.eligible(game,economy,pid) then
-            local weight=math.sqrt(amount)
+            local weight=O.teamWeight(event,amount)
             entries[#entries+1]={pid=pid,amount=amount,weight=weight}
             sum=sum+weight
         end
@@ -94,7 +147,10 @@ function O.pot(event,extra)
     for _,amount in pairs(event.training) do total=total+amount end
     return total
 end
-function O.prizes(pot)
+function O.prizes(pot,teams)
+    if teams==2 then
+        local first=math.floor(pot*0.6); return {first,pot-first}
+    end
     local gold=math.floor(pot/2)
     local silver=math.floor(pot*3/10)
     return {gold,silver,pot-gold-silver}
@@ -111,6 +167,10 @@ function O.commit(game,economy,turn,pid,payload,balance,debit)
     local phase=O.phase(games,turn)
     if payload.type=="olympicsTrain" then
         if phase~="Training open" then return false,"Training is closed." end
+        local cap=O.maxTeams(event)
+        if cap>0 and not event.training[pid] and O.occupiedSeats(event)>=cap then
+            return false,"All team spots for this event are taken."
+        end
         if O.pot(event,amount)>1000000000 then return false,"This purse exceeds the game's supported Commerce range." end
         if not debit(amount) then return false,"Your balance changed; try again." end
         event.training[pid]=(event.training[pid] or 0)+amount
@@ -119,7 +179,7 @@ function O.commit(game,economy,turn,pid,payload,balance,debit)
     if payload.type~="olympicsBet" or phase~="Betting open" then return false,"Betting is closed." end
     if event.training[pid] then return false,"You cannot bet on an event you entered." end
     local entrants=O.entries(game,economy,event)
-    if #entrants<O.minimum then return false,"At least four eligible teams are needed to open betting." end
+    if #entrants<O.minTeams(event) then return false,"Not enough eligible teams to open betting." end
     local pick=whole(payload.pick)
     if not pick or not event.training[pick] or not O.eligible(game,economy,pick) then
         return false,"Choose an active entrant to win gold."
@@ -133,11 +193,13 @@ function O.commit(game,economy,turn,pid,payload,balance,debit)
     event.bets[pid]={pick=pick,amount=(existing and existing.amount or 0)+amount}
     return true,"Placed "..amount.." Commerce on gold."
 end
-function O.betTotals(event,pick)
+function O.betTotals(event,pick,eligible)
     local total,backed=0,0
     for _,bet in pairs(event.bets) do
-        total=total+bet.amount
-        if bet.pick==pick then backed=backed+bet.amount end
+        if not eligible or eligible[bet.pick] then
+            total=total+bet.amount
+            if bet.pick==pick then backed=backed+bet.amount end
+        end
     end
     return total,backed
 end
@@ -193,7 +255,7 @@ function O.resolve(game,economy,turn,credit,random)
         local entries=O.entries(game,economy,event)
         event.eligibleAtClose={}
         for _,entry in ipairs(entries) do event.eligibleAtClose[entry.pid]=true end
-        if #entries<O.minimum then
+        if #entries<O.minTeams(event) then
             event.cancelled=true
             for pid,amount in pairs(event.training) do credit(pid,amount) end
             settleBets(event,nil,credit)
@@ -202,7 +264,7 @@ function O.resolve(game,economy,turn,credit,random)
             for pid,amount in pairs(event.training) do
                 if event.eligibleAtClose[pid] then pot=pot+amount else credit(pid,amount) end
             end
-            local prizes=O.prizes(pot)
+            local prizes=O.prizes(pot,#entries)
             event.medals={}
             for rank,amount in ipairs(prizes) do
                 local entry=draw(entries,random or math.random)

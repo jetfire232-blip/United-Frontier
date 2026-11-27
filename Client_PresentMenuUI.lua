@@ -4977,7 +4977,7 @@ end
 
 
 
-function ShowOlympicsMenu(parent,game,selected)
+function ShowOlympicsMenu(parent,game,selected,revealStep,oddsUpdate)
     local area=CreateContentArea(parent);
     if not Olympics then
         UI.CreateLabel(area).SetText("Olympics unavailable: UF_Olympics.lua did not load. Install the full mod update and reopen the game.");
@@ -4988,6 +4988,7 @@ function ShowOlympicsMenu(parent,game,selected)
     local pid=GetLocalPlayerID(game);
     local turn=Olympics.turn(data);
     local games=economy.olympics;
+    oddsUpdate=oddsUpdate and oddsUpdate.turn==turn and oddsUpdate.phase=="Betting open" and oddsUpdate or nil;
     local function label(message,color)
         return UI.CreateLabel(area).SetText(message).SetColor(color or "#DDDDDD");
     end
@@ -5021,24 +5022,42 @@ function ShowOlympicsMenu(parent,game,selected)
         local closes=numberField("Last training turn",4);
         local results=numberField("Medal results turn",6);
         local bets=UI.CreateCheckBox(area).SetText("Allow betting with in-game Commerce").SetIsChecked(true);
+        local betOpens=numberField("First betting turn (blank = after training)","");
+        local betCloses=numberField("Last betting turn (blank = before results)","");
         local choices={};
         for index,sport in ipairs(Olympics.sports) do
             local enabled=UI.CreateCheckBox(area).SetText(sport.name).SetIsChecked(index<=2);
-            local purse=numberField("Base prize: "..sport.name.." (Commerce)",1000);
-            choices[#choices+1]={sport=sport.id,enabled=enabled,purse=purse};
+            local row=UI.CreateHorizontalLayoutGroup(area);
+            local function sportField(title,value)
+                local col=UI.CreateVerticalLayoutGroup(row);
+                UI.CreateLabel(col).SetText(title);
+                return CreateWideTextInput(col,90).SetText(tostring(value));
+            end
+            local purse=sportField("Base prize",1000);
+            local minTeams=sportField("Min teams",4);
+            local maxTeams=sportField("Max (0 = any)",0);
+            choices[#choices+1]={sport=sport.id,enabled=enabled,purse=purse,minTeams=minTeams,maxTeams=maxTeams};
         end
         local preview=label("","#82CFFF");
         local previewed;
         UI.CreateButton(area).SetText("PREVIEW SCHEDULE").SetOnClick(function()
-            local payload={type="olympicsPublish",opens=opens.GetText(),closes=closes.GetText(),results=results.GetText(),betting=bets.GetIsChecked(),events={}};
-            for _,item in ipairs(choices) do if item.enabled.GetIsChecked() then payload.events[item.sport]=item.purse.GetText(); end end
+            local payload={type="olympicsPublish",opens=opens.GetText(),closes=closes.GetText(),results=results.GetText(),betting=bets.GetIsChecked(),betOpens=betOpens.GetText(),betCloses=betCloses.GetText(),events={}};
+            for _,item in ipairs(choices) do
+                if item.enabled.GetIsChecked() then
+                    payload.events[item.sport]={purse=item.purse.GetText(),minTeams=item.minTeams.GetText(),maxTeams=item.maxTeams.GetText()};
+                end
+            end
             local draft={};
             local ok,message=Olympics.publish(game,draft,turn,pid,payload);
             if not ok then previewed=nil; preview.SetText(message); return; end
             previewed=payload;
             local lines={"Training: Turns "..draft.olympics.opens.."–"..draft.olympics.closes.." | Results: Turn "..draft.olympics.results};
-            if draft.olympics.betting then lines[#lines+1]="Betting: Turns "..(draft.olympics.closes+1).."–"..(draft.olympics.results-1); end
-            for _,event in ipairs(draft.olympics.events) do lines[#lines+1]=event.name..": "..event.purse.." Commerce base prize"; end
+            local first,last=Olympics.betWindow(draft.olympics);
+            if first then lines[#lines+1]="Betting: Turns "..first.."–"..last; end
+            for _,event in ipairs(draft.olympics.events) do
+                local maxTeams=Olympics.maxTeams(event);
+                lines[#lines+1]=event.name..": "..event.purse.." Commerce | Teams: "..Olympics.minTeams(event).." min, "..(maxTeams>0 and maxTeams or "unlimited").." max";
+            end
             preview.SetText(table.concat(lines,"\n"));
         end);
         UI.CreateButton(area).SetText("PUBLISH PREVIEWED SCHEDULE").SetOnClick(function()
@@ -5048,10 +5067,11 @@ function ShowOlympicsMenu(parent,game,selected)
         return;
     end
     label("Training: Turns "..games.opens.."–"..games.closes.." | Results: Turn "..games.results);
-    if games.betting then label("Betting: Turns "..(games.closes+1).."–"..(games.results-1).." | In-game Commerce only."); end
+    local firstBet,lastBet=Olympics.betWindow(games);
+    if firstBet then label("Betting: Turns "..firstBet.."–"..lastBet.." | In-game Commerce only."); end
     local commerce,recruit=Olympics.boost(economy,turn,pid);
     if commerce>0 then label("Your active medal boost: +"..commerce.."% Commerce and +"..recruit.."% Recruiter output","#79D279"); end
-    if games.settled then
+    if games.settled and revealStep==nil then
         local totals, standings={}, {};
         for _,sport in ipairs(games.events) do
             for rank,medal in ipairs(sport.medals or {}) do
@@ -5076,47 +5096,113 @@ function ShowOlympicsMenu(parent,game,selected)
     for _,item in ipairs(games.events) do
         if item.id==selected then event=item; end
         local id=item.id;
-        UI.CreateButton(area).SetText(item.name).SetOnClick(function() ShowOlympicsMenu(parent,game,id); end);
+        local inEvent=pid and item.training[pid]~=nil and ((item.eligibleAtClose and item.eligibleAtClose[pid]) or (not item.eligibleAtClose and Olympics.eligible(game,economy,pid)));
+        local status=pid and (inEvent and " | In: YES" or " | In: NO") or "";
+        UI.CreateButton(area).SetText(item.name..status).SetOnClick(function() ShowOlympicsMenu(parent,game,id); end);
     end
     selected=event.id;
     label(event.name,"#FFD166");
-    if event.cancelled then label("Cancelled: fewer than four eligible nations. Training and bets refunded."); return; end
-    if event.medals then
-        for rank,medal in ipairs(event.medals) do
-            label(Olympics.medalNames[rank]..": "..GetPlayerName(game,medal.pid).." | "..medal.prize.." Commerce");
+    local presentation=Olympics.presentation[event.id];
+    if presentation then
+        label(presentation.venue,"#82CFFF");
+        -- The standings and controls still work on clients without the Image API.
+        if UI.CreateImage then
+            UI.CreateImage(area).SetSprite(presentation.image).SetPreferredWidth(270).SetPreferredHeight(162);
         end
+    end
+    if not games.settled and turn>games.closes then
+        label("ENTRIES LOCKED | Medals revealed on Turn "..games.results,"#FFD166");
+    end
+    local minTeams,maxTeams=Olympics.minTeams(event),Olympics.maxTeams(event);
+    local entries,totalWeight=Olympics.entries(game,economy,event);
+    local myTraining=pid and event.training[pid] or 0;
+    local function roster()
+        local current={};
+        for _,entry in ipairs(entries) do current[entry.pid]=entry; end
+        local ids={};
+        for id in pairs((economy.nations or {})) do ids[#ids+1]=id; end
+        table.sort(ids,function(a,b)
+            local function inEvent(id)
+                if event.eligibleAtClose then return event.eligibleAtClose[id]==true end
+                return current[id]~=nil
+            end
+            if inEvent(a)~=inEvent(b) then return inEvent(a) end
+            return GetPlayerName(game,a)<GetPlayerName(game,b);
+        end);
+        label("ROSTER — IN EVENT?","#82CFFF");
+        for _,id in ipairs(ids) do
+            local entry=current[id];
+            local joined;
+            if event.eligibleAtClose then joined=event.eligibleAtClose[id]==true else joined=entry~=nil end
+            local detail=joined and "YES" or "NO";
+            if joined then
+                detail=detail.." | "..tostring(event.training[id]).." Commerce";
+                if not games.settled and entry then detail=detail..string.format(" | %.1f%% gold",100*entry.weight/totalWeight); end
+            elseif event.training[id] then
+                detail=detail.." | Ineligible";
+            end
+            label(GetPlayerName(game,id)..(id==pid and " (you)" or "").." — "..detail,joined and "#79D279" or "#BBBBBB");
+        end
+    end
+    if event.cancelled then label("Cancelled: fewer than "..minTeams.." eligible nations. Training and bets refunded."); roster(); return; end
+    if event.medals then
+        label((presentation and presentation.finish or "FINAL RESULTS").." | TURN "..tostring(games.settledTurn or games.results),"#FFD166");
+        if presentation then label(presentation.reveal); end
+        local shown=revealStep or #event.medals;
+        local medalColors={"#FFD166","#DDE6F0","#E5A672"};
+        for rank=#event.medals,1,-1 do
+            if rank>#event.medals-shown then
+                local medal=event.medals[rank];
+                label(Olympics.medalNames[rank]..": "..GetPlayerName(game,medal.pid).." | "..medal.prize.." Commerce",medalColors[rank]);
+            end
+        end
+        if shown<#event.medals then
+            local rank=#event.medals-shown;
+            UI.CreateButton(area).SetText("REVEAL "..string.upper(Olympics.medalNames[rank])).SetOnClick(function()
+                ShowOlympicsMenu(parent,game,event.id,shown+1);
+            end);
+            return;
+        end
+        UI.CreateButton(area).SetText("REPLAY MEDAL REVEAL").SetOnClick(function()
+            ShowOlympicsMenu(parent,game,event.id,0);
+        end);
         if pid and event.bets[pid] then
             local payout=(event.betPayouts or {})[pid] or 0;
             label("Your bet: "..event.bets[pid].amount.." | "..(event.betRefunded and "Refund: " or "Returned: ")..payout.." Commerce");
         end
         label("Medal boosts apply for two turns after results. Only your strongest medal counts.");
-        return;
+        roster(); return;
     end
-    local entries,totalWeight=Olympics.entries(game,economy,event);
-    local myTraining=pid and event.training[pid] or 0;
     local phase=Olympics.phase(games,turn);
     local validPot=event.purse;
     for _,entry in ipairs(entries) do validPot=validPot+entry.amount; end
-    local prizes=Olympics.prizes(validPot);
-    label("Eligible teams: "..#entries.." / "..Olympics.minimum.." needed | Prize pool: "..validPot.." Commerce");
-    label("Gold "..prizes[1].." | Silver "..prizes[2].." | Bronze "..prizes[3]);
+    local prizes=Olympics.prizes(validPot,math.max(minTeams,#entries));
+    label("Eligible teams: "..#entries.." | Minimum: "..minTeams.." | Prize pool: "..validPot.." Commerce");
+    if maxTeams>0 then label("Spots taken: "..Olympics.occupiedSeats(event).." / "..maxTeams); else label("No maximum team limit."); end
+    label("Gold "..prizes[1].." | Silver "..prizes[2]..(prizes[3] and " | Bronze "..prizes[3] or " | No bronze for two teams."));
+    if (event.baseTeamWeight or 0)>0 then label("Each team gets a starting chance. More training helps, with diminishing returns."); end
     label("Medal boosts for two turns: Gold +10% Commerce / +15% Recruiters; Silver +6% / +10%; Bronze +3% / +5%.");
     local active=pid and Olympics.eligible(game,economy,pid);
-    if active then label("Your training: "..myTraining.." Commerce | Available: "..(GetPlayerGold(game,pid) or 0)); end
-    if active and phase=="Training open" then
+    if active then label("You’re in: "..(myTraining>0 and "YES" or "NO").." | Training: "..myTraining.." | Available: "..(GetPlayerGold(game,pid) or 0)); end
+    local full=maxTeams>0 and Olympics.occupiedSeats(event)>=maxTeams;
+    if active and phase=="Training open" and full and myTraining==0 then
+        label("All team spots are taken.");
+    elseif active and phase=="Training open" then
         local amount=numberField("Additional training spend (Commerce)",100);
         local estimate=label("","#82CFFF");
         local function refresh()
             local extra=tonumber(amount.GetText());
             if not extra or extra<1 or extra>1000000000 or extra~=math.floor(extra) then estimate.SetText("Enter a positive whole amount."); return; end
             local commitment=myTraining+extra;
-            local weight=math.sqrt(commitment);
-            local odds=100*weight/(totalWeight-math.sqrt(myTraining)+weight);
-            local future=Olympics.prizes(validPot+extra);
-            local net=string.format("If held now: gold %+.0f | silver %+.0f | bronze %+.0f | no medal −%.0f Commerce.",future[1]-commitment,future[2]-commitment,future[3]-commitment,commitment);
+            local weight=Olympics.teamWeight(event,commitment);
+            local odds=100*weight/(totalWeight-Olympics.teamWeight(event,myTraining)+weight);
             local count=#entries+(myTraining==0 and 1 or 0);
-            estimate.SetText(count<4 and "Need four teams to run. Your training is refunded if the event is cancelled." or
-                string.format("Estimated chance of gold: %.1f%%. ",odds)..net);
+            local future=Olympics.prizes(validPot+extra,count);
+            local net=string.format("If held now: gold %+.0f | silver %+.0f",future[1]-commitment,future[2]-commitment);
+            if future[3] then net=net..string.format(" | bronze %+.0f",future[3]-commitment); end
+            if count>#future then net=net..string.format(" | no medal −%.0f",commitment); end
+            estimate.SetText(count<minTeams and ("Need "..minTeams.." teams to run. Training is refunded if cancelled.") or
+                string.format("Estimated chance of gold: %.1f%%. ",odds)..net.." Commerce.");
         end
         amount.SetOnValueChanged(refresh);
         refresh();
@@ -5124,10 +5210,50 @@ function ShowOlympicsMenu(parent,game,selected)
             send({type="olympicsTrain",event=event.id,amount=amount.GetText()});
         end);
     elseif phase=="Betting open" then
-        if #entries<4 then label("Fewer than four eligible nations remain. Stakes will be refunded if the event is cancelled.");
+        label("Gold chance comes from training. Payout odds change as players place bets.");
+        if not IsViewerMode(game) then
+            UI.CreateButton(area).SetText("REFRESH BETTING ODDS").SetOnClick(function()
+                if pending then return; end
+                pending=true;
+                SafeSendGameCustomMessage(game,"Checking betting odds...",{type="olympicsOdds",event=event.id},function(reply)
+                    pending=false;
+                    if UI.IsDestroyed(area) then return; end
+                    if not reply or not reply.success then
+                        UI.Alert(reply and reply.message or "Could not refresh betting odds.");
+                    elseif reply.phase~="Betting open" then
+                        UI.Alert("Betting has now closed. Reopen Olympics to see the latest turn.");
+                    else
+                        ShowOlympicsMenu(parent,game,event.id,nil,reply);
+                    end
+                end);
+            end);
+        end
+        local eligible={};
+        for _,entry in ipairs(entries) do eligible[entry.pid]=true; end
+        local function betTotals(pick)
+            if not oddsUpdate then return Olympics.betTotals(event,pick,eligible); end
+            local total,backed=0,0;
+            for team,amount in pairs(oddsUpdate.stakes or {}) do
+                local id=tonumber(team);
+                if id and eligible[id] then
+                    total=total+amount;
+                    if id==pick then backed=amount; end
+                end
+            end
+            return total,backed;
+        end
+        local pool=betTotals(nil);
+        label("Current betting pool: "..pool.." Commerce","#82CFFF");
+        for _,entry in ipairs(entries) do
+            local _,backed=betTotals(entry.pid);
+            local quote=backed>0 and string.format("%.2f× return",pool/backed) or "No bets yet";
+            label(string.format("%s | %.1f%% gold | %s",GetPlayerName(game,entry.pid),100*entry.weight/totalWeight,quote));
+        end
+        if #entries<minTeams then label("Fewer than "..minTeams.." eligible nations remain. Stakes will be refunded if the event is cancelled.");
         elseif active and myTraining>0 then label("You cannot bet on an event you entered.");
         elseif active then
             local existing=event.bets[pid];
+            if oddsUpdate then existing=oddsUpdate.myBet; end
             local pick=existing and existing.pick or nil;
             local amount=numberField("Bet amount (Commerce)",100);
             local preview=label("Choose a team to win gold.","#82CFFF");
@@ -5135,7 +5261,7 @@ function ShowOlympicsMenu(parent,game,selected)
                 if not pick then return; end
                 local n=tonumber(amount.GetText());
                 if not n or n<1 or n>1000000000 or n~=math.floor(n) then preview.SetText("Enter a positive whole amount."); return; end
-                local pool,backed=Olympics.betTotals(event,pick);
+                local pool,backed=betTotals(pick);
                 local stake=n+(existing and existing.amount or 0);
                 local returned=math.floor((pool+n)*(stake/(backed+n)));
                 preview.SetText(GetPlayerName(game,pick)..": if gold, estimated return "..returned.." Commerce including your stake. If this pick loses, you risk "..stake..". The pool can change.");
@@ -5154,11 +5280,7 @@ function ShowOlympicsMenu(parent,game,selected)
             end);
         end
     end
-    label("Teams & training","#82CFFF");
-    for _,entry in ipairs(entries) do
-        label(string.format("%s | %d Commerce trained | %.1f%% chance of gold",GetPlayerName(game,entry.pid),entry.amount,100*entry.weight/totalWeight));
-    end
-    if #entries==0 then label("No entries yet."); end
+    roster();
 end
 
 function BuildMainTabs(
@@ -13346,7 +13468,7 @@ function ShowHowItWorks(parent)
     Section("MARKETS — START HERE", "Buy shares & funds opens Stocks and Global ETF. My portfolio shows your holdings and links to Diplomacy, where a player’s Portfolio tab shows their shares and market value. Rankings & news includes stock leaders, estimated military and Commerce bands, and one combined news feed. Trade & investing tools holds agreements, projects, and AI Manager.", "#67D5FF");
     Section("GROWTH, BALANCED & DIVIDEND STOCKS", "New listings start at 125% of the income-based price for Growth, 100% for Balanced, and 65% for Dividend. For a 60 Commerce base, that is 75, 60, and 39. The base dividend pools are 2%, 4%, and 5% of owner income respectively; Dividend rises to 6% at 5% income growth or 7% at 15% growth. With 500 owner income, 100 total shares, and 10 shares held, that accrues 1, 2, or 2.5 Commerce per payout at standard rates. Host settings scale base payouts. Acquired businesses can add to the pool. Fractions carry forward, and already-listed share prices are set by the market.", "#79D279");
     Section("COMPANY CONFIDENCE", "Taxes, ideology, economic strategy, unrest and reforms affect confidence. Acquisitions can improve base confidence. An active Sanction Card costs 10 confidence points, and active UN sanctions cost another 10. Multiple cards do not stack with each other. Confidence affects price movement, so a penalty does not guarantee a price drop. The penalty clears when the sanction expires.", "#FFB366");
-    Section("OLYMPICS", "On Turn 1, the host chooses sports, dates, base prizes and whether betting is allowed from the Olympics tab. Add any affordable amount to your team. Your odds increase with the square root of training spend. With four or more eligible teams, gold, silver and bronze split the base prize plus training contributions 50% / 30% / 20%. The best medal earns two turns of Commerce and Recruiter boosts after results. Optional gold-medal bets open after training locks and use a separate pool. Winning bettors split that pool by stake; you cannot bet on an event you entered. If an event has fewer than four eligible teams, both pools are refunded. If nobody backs gold, all bets are refunded.", "#FFD166");
+    Section("OLYMPICS", "On Turn 1, the host chooses sports, dates, base prizes and whether betting is allowed from the Olympics tab. Add any affordable amount to your team. The host sets a minimum and optional maximum for each sport. Each team starts with equal draw weight and training improves odds with diminishing returns. Events with three or more eligible teams split prizes 50% / 30% / 20%; two-team events split 60% / 40% with no bronze. The best medal earns two turns of Commerce and Recruiter boosts after results. The host can set the first and last betting turns, after training and before results. Tap Refresh Betting Odds to fetch current estimated returns. Winning bettors split the separate pool by stake; more bets on a team can lower its payout multiplier without changing its chance of winning; you cannot bet on an event you entered. If an event has fewer eligible teams than its minimum, both pools are refunded. If nobody backs gold, all bets are refunded.", "#FFD166");
     Section("TOP 5 ETF HOLDINGS", "Shows up to five companies from the Global Market ETF's actual basket. The game has one ETF, and its holdings refresh every five turns.", "#D4AF37");
     Section("STOCK SALES & OWNERSHIP", "The first sale of newly issued shares pays the founder once: Growth 100%, Balanced 85%, Dividend 70%. Resales do not pay the founder again. Ongoing dividends are based on shares held. Compare last yield with price risk, and use whole shares when budgeting.", "#67D5FF");
     Section("EXAMPLE: SHARE PURCHASE", "Illustrative prices: 5 shares at 20 Commerce cost 100 before any applicable fees. If the price later reaches 24, the holding is worth 120. If it falls to 16, it is worth 80. You realize the gain or loss by selling; dividends depend on the company and game settings.", "#79D279");

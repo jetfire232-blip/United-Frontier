@@ -1,0 +1,3 @@
+Turn 1 Olympics setup now lets the host choose minimum and maximum teams for each sport. Minimum is at least 2. Maximum 0 is unlimited. A maximum counts reserved entry slots; entered teams can still add training. The schedule locks when published.
+New events give every entered team 20 starting draw weight in addition to the square root of its training spend. Published schedules keep their original odds and team rules. Team labels and the Yes/No roster work in both.
+With two eligible teams, prizes split 60/40 and there is no bronze. With three or more, prizes split 50/30/20. Events below the minimum are refunded. Each sport has its own prizes; temporary boosts still use the strongest medal.

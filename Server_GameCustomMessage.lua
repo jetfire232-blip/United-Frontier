@@ -3349,6 +3349,26 @@ function Server_GameCustomMessage(
     end
 
 
+    if payload.type=="olympicsOdds" then
+        if not Olympics then setReturn({success=false,message="The Olympics module did not load."}); return; end
+        local data=Mod.PublicGameData or {};
+        local games=(data.globalEconomy or {}).olympics;
+        local event;
+        for _,candidate in ipairs(games and games.events or {}) do
+            if candidate.id==payload.event then event=candidate; break; end
+        end
+        if not event then setReturn({success=false,message="This event is unavailable."}); return; end
+        local myBet=event.bets[playerID];
+        local stakes={};
+        for _,bet in pairs(event.bets) do
+            local key=tostring(bet.pick);
+            stakes[key]=(stakes[key] or 0)+bet.amount;
+        end
+        setReturn({success=true,turn=Olympics.turn(data),phase=Olympics.phase(games,Olympics.turn(data)),
+            stakes=stakes,myBet=myBet});
+        return;
+    end
+
     if payload.type=="olympicsPublish" or payload.type=="olympicsTrain" or payload.type=="olympicsBet" then
         if not Olympics then setReturn({success=false,message="The Olympics module did not load."}); return; end
         local data=Mod.PublicGameData or {};

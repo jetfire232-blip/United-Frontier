@@ -1,0 +1,19 @@
+United Frontier — Olympics Showcase
+
+Host: On Turn 1, open Olympics and choose the sports and schedule. With
+betting enabled, set the first and last betting turns or leave them blank
+to use every turn between training and results. Both dates are inclusive.
+Training through Turn 4, betting Turns 6–8, and results on Turn 10
+leaves Turns 5 and 9 closed to both training and bets.
+Already published schedules keep the dates they were published with.
+
+Players: Each sport has its own venue image and finish headline. After
+results, select a sport and tap Replay Medal Reveal to see its official
+medals in reverse order. Replaying never rerolls or changes rewards.
+Tap Refresh Betting Odds to fetch the current pool during betting. The
+chance of gold is based on eligible teams and training. The payout
+multiplier depends on how the pool is split and can change before close.
+Displayed returns include the winning stake. Only in-game Commerce is used.
+
+Install: Keep UIImages at the mod root alongside the Lua files and the
+existing image directories. The six venue images are included.

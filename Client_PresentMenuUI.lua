@@ -1,4 +1,5 @@
-local Olympics = require("UF_Olympics");
+require("UF_Olympics");
+local Olympics = UF_Olympics;
 ContentArea = nil;
 local MAX_VISIBLE_HISTORY = 40;
 
@@ -4978,6 +4979,10 @@ end
 
 function ShowOlympicsMenu(parent,game,selected)
     local area=CreateContentArea(parent);
+    if not Olympics then
+        UI.CreateLabel(area).SetText("Olympics unavailable: UF_Olympics.lua did not load. Install the full mod update and reopen the game.");
+        return;
+    end
     local data=Mod.PublicGameData or {};
     local economy=data.globalEconomy or {};
     local pid=GetLocalPlayerID(game);

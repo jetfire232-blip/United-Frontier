@@ -1,0 +1,1 @@
+Olympics tab hotfix: loads the shared module through an explicit global in the menu and both server hooks. Install this ZIP as a full replacement for the Olympics Pilot.

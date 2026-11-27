@@ -1,4 +1,5 @@
-local Olympics = require("UF_Olympics");
+require("UF_Olympics");
+local Olympics = UF_Olympics;
 require('UF_ConventionalMilitary');
 -- Forward declarations: turn hooks and earlier helpers share these local functions.
 local UFAIAtWar;
@@ -14811,7 +14812,8 @@ local function ProcessArmyRecruiterProduction(game, data, addNewOrder)
                 local c=(ex.contributions or {})[owner]; exerciseBonus=tonumber(c and c.bonusPercent) or 0;
             end
             local ideologyRecruiterModifier=GetIdeologyRecruiterModifierPercent(nation);
-            local _,olympicRecruit=Olympics.boost(economy,Olympics.turn(data),owner);
+            local olympicRecruit=0;
+            if Olympics then local _,bonus=Olympics.boost(economy,Olympics.turn(data),owner); olympicRecruit=bonus; end
             local productionMultiplier=math.max(0,100 + ideologyRecruiterModifier - recruiterPenalty + exerciseBonus + olympicRecruit);
             local armies = math.max(0, math.floor(base * level * readiness / 100 * productionMultiplier / 100 + 0.5));
             if armies > 0 then
@@ -17740,6 +17742,7 @@ end
 -- =========================================================
 
 local function UFProcessOlympicsTurn(game,data,resourceChanges)
+    if not Olympics then return; end
     -- The next playable turn is one greater than the completed turn count.
     local olympicTurn=Olympics.turn(data);
     local economyForOlympics=data.globalEconomy;

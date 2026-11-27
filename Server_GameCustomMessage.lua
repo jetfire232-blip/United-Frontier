@@ -1,4 +1,5 @@
-local Olympics = require("UF_Olympics");
+require("UF_Olympics");
+local Olympics = UF_Olympics;
 require('UF_ConventionalMilitary');
 -- =========================================================
 -- GLOBAL ECONOMY & DIPLOMACY
@@ -3349,6 +3350,7 @@ function Server_GameCustomMessage(
 
 
     if payload.type=="olympicsPublish" or payload.type=="olympicsTrain" or payload.type=="olympicsBet" then
+        if not Olympics then setReturn({success=false,message="The Olympics module did not load."}); return; end
         local data=Mod.PublicGameData or {};
         local economy=data.globalEconomy;
         if not economy then setReturn({success=false,message="The game has not started."}); return; end

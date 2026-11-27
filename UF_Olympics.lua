@@ -1,3 +1,4 @@
+-- War.app loads mod Lua files for their global side effects.
 local O = {}
 O.sports = {
     {id="track",name="Track & Field"}, {id="swim",name="Swimming"},
@@ -224,4 +225,4 @@ function O.boost(economy,turn,pid)
     if not boost or turn<boost.first or turn>boost.last then return 0,0 end
     return O.commerceBoost[boost.rank],O.recruitBoost[boost.rank]
 end
-return O
+UF_Olympics = O

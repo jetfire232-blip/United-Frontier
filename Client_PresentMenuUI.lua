@@ -5105,10 +5105,15 @@ function ShowOlympicsMenu(parent,game,selected,revealStep,oddsUpdate)
     local presentation=Olympics.presentation[event.id];
     if presentation then
         label(presentation.venue,"#82CFFF");
-        -- The standings and controls still work on clients without the Image API.
-        if UI.CreateImage then
-            UI.CreateImage(area).SetSprite(presentation.image).SetPreferredWidth(270).SetPreferredHeight(162);
-        end
+        -- A deployed mod can be missing UIImages even when Lua is up to date.
+        -- Keep the Olympics usable if War.app rejects the optional artwork.
+        local art;
+        local ok=pcall(function()
+            if not UI.CreateImage then return; end
+            art=UI.CreateImage(area);
+            art.SetSprite(presentation.image).SetPreferredWidth(270).SetPreferredHeight(162);
+        end);
+        if not ok and art then pcall(UI.Destroy,art); end
     end
     if not games.settled and turn>games.closes then
         label("ENTRIES LOCKED | Medals revealed on Turn "..games.results,"#FFD166");

@@ -1,0 +1,9 @@
+United Frontier — Olympics Artwork Hotfix
+
+If War.app cannot load a venue sprite, Olympics opens without that artwork.
+The event, team roster, phase, betting controls and medal reveal still work.
+
+For the crash fix alone, replace Client_PresentMenuUI.lua at the mod root.
+To include the venue art, upload the UIImages folder from this archive to
+the same mod root. Check that UIImages/olympics-track.png exists there.
+Do not nest the Lua files or UIImages inside an extra folder on GitHub.

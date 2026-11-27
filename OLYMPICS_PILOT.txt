@@ -1,0 +1,12 @@
+United Frontier v16 — Olympics pilot
+Install as a full replacement for the Stock Pricing, ETF and Confidence build. Includes all of that build's changes.
+
+Start a new Commerce game. On Turn 1 the participating game creator opens Olympics, picks sports, base prizes and dates, previews, and publishes. The schedule locks when published. No pregame setup. By default the form proposes Track & Field and Swimming, training on Turns 3–4, optional betting on Turn 5 and results Turn 6. Other choices are Football, Cycling, Rowing and Basketball.
+
+Players may put any affordable whole amount into a team and add more until training closes. Each event uses the square root of training spend as its draw weight. Gold, silver and bronze are drawn without replacement. The host-funded base prize plus all eligible training spend is split 50/30/20, with integer rounding. Events with fewer than four eligible nations refund training and bets instead of awarding medals.
+
+For the two turns following the results turn, gold grants +10% Commerce and +15 percentage points of Recruiter production, silver +6% / +10, bronze +3% / +5. The strongest medal counts; medal benefits do not stack. Recruiter boosts apply to existing Recruiters, if enabled.
+
+If enabled, betting opens after training is locked. Players use in-game Commerce only, choose one team per event, and cannot bet on an event they entered. Winning bettors share a separate pool in proportion to their stakes. Invalidated picks are refunded. If nobody backed gold or the event is cancelled, all bets are refunded. The preview uses the current pool, which can change.
+
+Local verification covered host permissions, schedule lock, escrow, 5,000 Commerce training, medal and betting settlement, refunds, expiry, the UI flow, and a 40-player startup. First live test: one event, four entrants, and two additional bettors on different picks.

@@ -1,0 +1,4 @@
+Replaces the v16 Markets, Industry and Sanctions ZIP.
+New and replacement companies issue Growth shares at 125%, Balanced at 100%, and Dividend at 65% of the same income-based reference price. The current market price of existing listings is not reset. The standard base dividend pools are 2%, 4%, and 5% of owner income, with Dividend rising to 6% or 7% at the existing income growth thresholds.
+Market Overview and ETF both display up to five actual active Global Market ETF holdings.
+Active standard Sanction Cards and active UN sanctions each apply a temporary 10-point company confidence penalty. Duplicate standard cards do not stack. UN sanctions still add unrest when enabled, and other confidence modifiers continue to apply.

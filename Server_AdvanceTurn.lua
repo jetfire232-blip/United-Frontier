@@ -1,3 +1,4 @@
+local Olympics = require("UF_Olympics");
 require('UF_ConventionalMilitary');
 -- Forward declarations: turn hooks and earlier helpers share these local functions.
 local UFAIAtWar;
@@ -2104,10 +2105,7 @@ function CompleteAINationalSetup(
         or 1;
 
     local startingPrice =
-    CalculateStartingStockPrice(
-        game,
-        playerID
-    );
+    CalculateStartingStockPrice(game,playerID,companyStrategy);
 
     economy.market.companies[
         companyID
@@ -2608,90 +2606,41 @@ function ProcessEconomicReforms(
                 );
 
 
-            -- Keep the flagship company's confidence
-            -- synchronized with the nation's reform.
-
-            local companyID =
-                nation.flagshipCompanyID;
-
-
-            if companyID ~= nil
-                and economy.market ~= nil
-                and economy.market.companies ~= nil then
-
-
-                local company =
-                    economy.market.companies[
-                        companyID
-                    ];
-
-
-                if company ~= nil then
-
-
-                    company.reformPenaltyPercent =
-                        penalty;
-
-
-                    local baseCompanyConfidence =
-                        company.confidence
-                        or 50;
-
-                    local taxConfidenceModifier =
-    GetTaxCompanyConfidenceModifier(
-        nation
-    );
-
-local ideologyConfidenceModifier =
-    GetIdeologyCompanyConfidenceModifier(
-        nation
-    );
-
-local totalConfidenceModifier =
-    taxConfidenceModifier
-    + ideologyConfidenceModifier
-    + GetEconomicStrategyConfidenceModifier(nation)
-    - math.floor((tonumber(nation.resourceUnrest) or 0) / 10);
-
-baseCompanyConfidence =
-    math.max(
-        0,
-        math.min(
-            100,
-            baseCompanyConfidence
-            + totalConfidenceModifier
-        )
-    );
-
-                    company.effectiveConfidence =
-                        math.max(
-                            0,
-
-                            math.floor(
-                                (
-                                    baseCompanyConfidence
-                                    *
-                                    (
-                                        1
-                                        -
-                                        (
-                                            penalty
-                                            / 100
-                                        )
-                                    )
-                                )
-                                + 0.5
-                            )
-                        );
-
-                end
-
-            end
-
         end
-
     end
+end
 
+function UFRefreshCompanyConfidence(game,data)
+    local economy=data.globalEconomy or {};
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
+    local cardTargets={};
+    for _,active in ipairs((standing and standing.ActiveCards) or {}) do
+        local card=active.Card;
+        if card and card.proxyType=="GameOrderPlayCardSanctions" and card.SanctionedPlayerID~=nil then
+            cardTargets[card.SanctionedPlayerID]=true;
+        end
+    end
+    local un=economy.unitedNations or {};
+    local resolutions=un.sanctions or {};
+    local turn=data.tradeTurn or economy.currentEconomyTurn or 1;
+    for _,company in pairs((economy.market or {}).companies or {}) do
+        local owner=company.ownerPlayerID;
+        local nation=(economy.nations or {})[owner];
+        if company.active and not company.delisted and nation and not nation.eliminated then
+            local sanction=resolutions[owner];
+            local unActive=GetSetting("UnitedNationsEnabled",un.enabled~=false)==true
+                and sanction and (tonumber(sanction.untilTurn) or 0)>=turn;
+            company.sanctionCardConfidencePenalty=cardTargets[owner] and 10 or 0;
+            company.unSanctionConfidencePenalty=unActive and 10 or 0;
+            local reform=nation.reformActive and (tonumber(nation.reformPenaltyPercent) or REFORM_PENALTY_PERCENT) or 0;
+            company.reformPenaltyPercent=reform;
+            local unrest=math.max(0,math.min(100,tonumber(nation.resourceUnrest) or 0));
+            local base=(tonumber(company.confidence) or 50) + GetTaxCompanyConfidenceModifier(nation)
+                + GetIdeologyCompanyConfidenceModifier(nation) + GetEconomicStrategyConfidenceModifier(nation)
+                - math.floor(unrest/10) - company.sanctionCardConfidencePenalty - company.unSanctionConfidencePenalty;
+            company.effectiveConfidence=math.floor(math.max(0,math.min(100,base))*(1-reform/100)+0.5);
+        end
+    end
 end
 
 
@@ -4410,40 +4359,9 @@ function GetIdeologyCompanyConfidenceModifier(
     return 0;
 end
 
-function CalculateStartingStockPrice(
-    game,
-    playerID
-)
-
-    local income =
-        GetCommerceIncome(
-            game,
-            playerID
-        );
-
-    local price =
-        15
-        + math.sqrt(
-            math.max(
-                income,
-                0
-            )
-        ) * 2;
-
-    if price < 10 then
-        price = 10;
-    end
-
-    if price > 150 then
-        price = 150;
-    end
-
-    return
-        math.floor(
-            price
-            + 0.5
-        );
-
+function CalculateStartingStockPrice(game,playerID,strategy)
+    local income=GetCommerceIncome(game,playerID);
+    return UFStockIssuePrice(15+math.sqrt(math.max(0,income))*2,strategy);
 end
 
 function CalculateStockPriceChangePercent(
@@ -4583,53 +4501,18 @@ local totalChange =
     return totalChange;
 
 end
-function CalculateCompanyDividendPool(
-    company,
-    ownerIncome
-)
-
+function CalculateCompanyDividendPool(company,ownerIncome)
     ownerIncome=math.max(0,tonumber(ownerIncome) or 0);
-
-    local payoutPercent =
-        2;
-
-    if company.strategy
-        == "Growth" then
-
-        payoutPercent =
-            1;
-
-    elseif company.strategy
-        == "Dividend" then
-
-        payoutPercent =
-            4;
-
-        -- Successful Dividend flagships reward holders primarily through
-        -- rising distributions rather than Growth-style price acceleration.
-        local growth = tonumber(company.ownerIncomeGrowthPercent) or 0;
-        if growth >= 15 then
-            payoutPercent = 6;
-        elseif growth >= 5 then
-            payoutPercent = 5;
-        end
-
+    local payoutPercent=4;
+    if company.strategy=="Growth" then
+        payoutPercent=2;
+    elseif company.strategy=="Dividend" then
+        local growth=tonumber(company.ownerIncomeGrowthPercent) or 0;
+        payoutPercent=growth>=15 and 7 or growth>=5 and 6 or 5;
     end
-
-    local hostScale = math.max(25, math.min(300, tonumber(GetSetting("DividendPayoutScalePercent",100)) or 100));
-
+    local hostScale=math.max(25,math.min(300,tonumber(GetSetting("DividendPayoutScalePercent",100)) or 100));
     local acquisitionPool=math.max(0,tonumber(company.acquisitionDividendPool) or 0);
-    return acquisitionPool +
-        math.floor(
-            ownerIncome
-            * (
-                payoutPercent
-                / 100
-            )
-            * (hostScale / 100)
-            + 0.5
-        );
-
+    return acquisitionPool + ownerIncome * payoutPercent / 100 * hostScale / 100;
 end
 
 function CalculateTradeBonus(
@@ -4863,7 +4746,7 @@ function CalculateAIStockScore(
     end
 
     local confidence =
-        company.confidence
+        company.effectiveConfidence or company.confidence
         or 50;
 
     score =
@@ -5522,7 +5405,7 @@ function ProcessAIAcquisitionPreference(game,data,playerID)
     local economy=data.globalEconomy or {}; local market=economy.market or {}; local nation=(economy.nations or {})[playerID];
     local player=game.Game.Players and game.Game.Players[playerID] or nil; if player==nil or player.IsAI~=true or nation==nil then return; end
     local companyID=nation.flagshipCompanyID; local company=companyID and (market.companies or {})[companyID] or nil; if company==nil or company.active==false or company.delisted==true then return; end
-    local confidence=tonumber(company.confidence) or tonumber(nation.companyConfidence) or 50; local reserves=GetStoredGold(game,playerID) or 0;
+    local confidence=tonumber(company.effectiveConfidence or company.confidence) or tonumber(nation.companyConfidence) or 50; local reserves=GetStoredGold(game,playerID) or 0;
     local current=tonumber(company.currentPrice) or tonumber(company.startingPrice) or 1; local previous=tonumber(company.previousPrice) or current; local trend=previous>0 and ((current-previous)/previous*100) or 0;
     local atWar=UFAIAtWar(data,playerID); local strategy=tostring(company.strategy or nation.companyStrategy or "Balanced");
     local score=0; if confidence<40 then score=score+35 elseif confidence>65 then score=score-30 end; if trend<=-10 then score=score+25 elseif trend>=8 then score=score-15 end; if reserves<300 then score=score+20 end; if atWar and reserves<600 then score=score+10 end; if strategy=="Growth" then score=score-10 elseif strategy=="Dividend" then score=score+5 end;
@@ -5676,7 +5559,7 @@ function ProcessAIMarketSelling(
                 end
 
                 local confidence =
-                    company.confidence
+                    company.effectiveConfidence or company.confidence
                     or 50;
 
                 score =
@@ -14928,7 +14811,8 @@ local function ProcessArmyRecruiterProduction(game, data, addNewOrder)
                 local c=(ex.contributions or {})[owner]; exerciseBonus=tonumber(c and c.bonusPercent) or 0;
             end
             local ideologyRecruiterModifier=GetIdeologyRecruiterModifierPercent(nation);
-            local productionMultiplier=math.max(0,100 + ideologyRecruiterModifier - recruiterPenalty + exerciseBonus);
+            local _,olympicRecruit=Olympics.boost(economy,Olympics.turn(data),owner);
+            local productionMultiplier=math.max(0,100 + ideologyRecruiterModifier - recruiterPenalty + exerciseBonus + olympicRecruit);
             local armies = math.max(0, math.floor(base * level * readiness / 100 * productionMultiplier / 100 + 0.5));
             if armies > 0 then
                 -- A separate deploy order for every Recruiter made large games wait
@@ -16560,6 +16444,11 @@ local function ProcessUnitedNations(
 
             end
 
+            if GetSetting("ResourceUnrestEnabled",true)==true then
+                local nation=data.globalEconomy.nations[playerID];
+                nation.resourceUnrest=math.min(100,math.max(0,tonumber(nation.resourceUnrest) or 0)+5);
+            end
+
         elseif sanction.untilTurn ~= nil
             and currentTurn > sanction.untilTurn
         then
@@ -17850,6 +17739,26 @@ end
 -- MAIN TURN HOOK
 -- =========================================================
 
+local function UFProcessOlympicsTurn(game,data,resourceChanges)
+    -- The next playable turn is one greater than the completed turn count.
+    local olympicTurn=Olympics.turn(data);
+    local economyForOlympics=data.globalEconomy;
+    if economyForOlympics and economyForOlympics.olympics then
+        Olympics.resolve(game,economyForOlympics,olympicTurn,function(pid,amount)
+            AddResourceChange(resourceChanges,pid,amount);
+        end);
+        for pid in pairs(economyForOlympics.olympics.boosts) do
+            if Olympics.eligible(game,economyForOlympics,pid) then
+                local bonus=Olympics.boost(economyForOlympics,olympicTurn,pid);
+                if bonus>0 then
+                    local added=math.floor(math.max(0,GetCommerceIncome(game,pid))*bonus/100+0.5);
+                    AddResourceChange(resourceChanges,pid,added);
+                end
+            end
+        end
+    end
+end
+
 function Server_AdvanceTurn_Start(
     game,
     addNewOrder
@@ -17911,6 +17820,8 @@ function Server_AdvanceTurn_Start(
     local resourceChanges =
         {};
 
+    UFProcessOlympicsTurn(game,data,resourceChanges);
+
     -- Release prepaid manager funds into this turn's accounting. Purchases
     -- deduct from that balance normally; unspent funds are returned, not lost.
     UFReleaseAIManagerFunding(data,resourceChanges);
@@ -17950,6 +17861,8 @@ function Server_AdvanceTurn_Start(
         data,
         resourceChanges
     );
+
+    UFRefreshCompanyConfidence(game,data);
 
     ProcessWarBonds(
         game,

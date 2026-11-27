@@ -1,3 +1,4 @@
+local Olympics = require("UF_Olympics");
 require('UF_ConventionalMilitary');
 -- =========================================================
 -- GLOBAL ECONOMY & DIPLOMACY
@@ -2008,63 +2009,13 @@ local function EnsureNation(
 
     return nation;
 end
-local function CalculateStartingStockPrice(
-    game,
-    playerID
-)
-
-    local player =
-        game.Game.Players[
-            playerID
-        ];
-
-    if player == nil
-        or game.ServerGame == nil
-        or game.ServerGame.LatestTurnStanding == nil then
-
-        return 25;
-    end
-
-    local incomeInfo =
-        player.Income(
-            0,
-            game.ServerGame.LatestTurnStanding,
-            true,
-            false
-        );
-
-    local income =
-        0;
-
-    if incomeInfo ~= nil then
-        income =
-            incomeInfo.Total
-            or 0;
-    end
-
-    local price =
-        15
-        + math.sqrt(
-            math.max(
-                income,
-                0
-            )
-        ) * 2;
-
-    if price < 10 then
-        price = 10;
-    end
-
-    if price > 150 then
-        price = 150;
-    end
-
-    return
-        math.floor(
-            price
-            + 0.5
-        );
-
+local function CalculateStartingStockPrice(game,playerID,strategy)
+    local player=game.Game.Players[playerID];
+    local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
+    if not player or not standing then return UFStockIssuePrice(25,strategy); end
+    local info=player.Income(0,standing,true,false);
+    local income=info and tonumber(info.Total) or 0;
+    return UFStockIssuePrice(15+math.sqrt(math.max(0,income))*2,strategy);
 end
 
 local function CompanyNameExists(
@@ -3397,6 +3348,26 @@ function Server_GameCustomMessage(
     end
 
 
+    if payload.type=="olympicsPublish" or payload.type=="olympicsTrain" or payload.type=="olympicsBet" then
+        local data=Mod.PublicGameData or {};
+        local economy=data.globalEconomy;
+        if not economy then setReturn({success=false,message="The game has not started."}); return; end
+        local turn=Olympics.turn(data);
+        local ok,message;
+        if payload.type=="olympicsPublish" then
+            ok,message=Olympics.publish(game,economy,turn,playerID,payload);
+        elseif game.Settings and game.Settings.CommerceGame==false then
+            ok,message=false,"The Olympics require a Commerce game.";
+        else
+            ok,message=Olympics.commit(game,economy,turn,playerID,payload,GetStoredGold(game,playerID),function(amount)
+                return RemoveGold(game,playerID,amount);
+            end);
+        end
+        if ok then Mod.PublicGameData=data; end
+        setReturn({success=ok,message=message});
+        return;
+    end
+
     UFConventionalMigration(game);
     if UFRetiredAction(payload) then setReturn({success=false,message="This military system has been removed from United Frontier."}); return; end
 
@@ -3770,10 +3741,7 @@ function Server_GameCustomMessage(
             );
 
         local startingPrice =
-    CalculateStartingStockPrice(
-        game,
-        playerID
-    );
+    CalculateStartingStockPrice(game,playerID,companyStrategy);
 
         local company =
         {
@@ -9647,7 +9615,7 @@ if payload.type == "rebuildFlagship" then
     local strategy=tostring(payload.companyStrategy or "Balanced"); if strategy~="Growth" and strategy~="Balanced" and strategy~="Dividend" then strategy="Balanced"; end
     local companyID=economy.market.nextCompanyID or 1; economy.market.nextCompanyID=companyID+1;
     local totalShares=100; local founderPercent=math.max(0,math.min(100,tonumber(GetSetting("FounderSharePercent",20)) or 20)); local founderShares=math.floor(totalShares*founderPercent/100+0.5); local publicShares=totalShares-founderShares;
-    local startingPrice=CalculateStartingStockPrice(game,playerID);
+    local startingPrice=CalculateStartingStockPrice(game,playerID,strategy);
     local company={id=companyID,name=companyName,ownerPlayerID=playerID,founderPlayerID=playerID,strategy=strategy,ideology=nation.ideology,nationStrategy=nation.economicStrategy,createdTurn=currentTurn,status="trading",publicShares=publicShares,sharesAvailable=publicShares,primarySharesRemaining=publicShares,startingPrice=startingPrice,currentPrice=startingPrice,previousPrice=startingPrice,marketCap=totalShares*startingPrice,totalShares=totalShares,founderShares=founderShares,dividendPerShare=0,totalDividendsPaid=0,priceHistory={{turn=currentTurn,price=startingPrice}},etfMember=false,etfMemberTurns=0,confidence=50,volatility=GetSetting("StockVolatilityPercent",10),active=true,delisted=false,allowAcquisitionOffers=false};
     economy.market.companies[companyID]=company;
     nation.companies=nation.companies or {}; table.insert(nation.companies,companyID);

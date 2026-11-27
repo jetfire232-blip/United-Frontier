@@ -1,0 +1,4 @@
+Replaces the v16 Industry Guide ZIP.
+Stock detail shows last dividend yield and an illustrative five-turn payout at the last rate. Strategy and founder-sale explanations live in How It Works. Growth/Balanced/Dividend base pools are 2%/4%/5% of owner income per turn, before the host scale. Dividend rises to 6% or 7% at 5% or 15% owner-income growth. Fractional dividends accrue; existing acquired-business payouts and price response rules remain in place.
+An owned Power Grid powers chip factories across the nation. Losing the last grid pauses production until a grid is owned again.
+Active UN sanctions still levy 10% Commerce income per turn and add 5 unrest points when the unrest setting is on. Standard recovery and other effects can offset or compound the increase.

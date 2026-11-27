@@ -1,3 +1,4 @@
+local Olympics = require("UF_Olympics");
 ContentArea = nil;
 local MAX_VISIBLE_HISTORY = 40;
 
@@ -3207,8 +3208,8 @@ function GetPolicyPreviewData(game, taxPolicy, ideology, economicStrategy, compa
     local currentCommerce=0; if game and game.Us then currentCommerce=GetPlayerIncome(game,GetLocalPlayerID(game)) or 0; end
     local projected=math.max(0,math.floor(currentCommerce*(1+commerce/100)+0.5));
 
-    local currentPrice=math.floor(15+math.sqrt(math.max(0,currentCommerce))*2+0.5);
-    currentPrice=math.max(10,math.min(150,currentPrice));
+    local issueMultiple=companyStrategy=="Growth" and 1.25 or companyStrategy=="Dividend" and 0.65 or 1;
+    local currentPrice=math.floor(math.max(10,math.min(150,15+math.sqrt(math.max(0,currentCommerce))*2))*issueMultiple+0.5);
     local nation=GetOurNationState(game) or {};
     local economy=((Mod.PublicGameData or {}).globalEconomy or {}); local companies=((economy.market or {}).companies or {});
     for _,company in pairs(companies) do
@@ -3239,9 +3240,9 @@ function GetPolicyPreviewText(game, taxPolicy, ideology, economicStrategy, compa
     local p=GetPolicyPreviewData(game,taxPolicy,ideology,economicStrategy,companyStrategy);
     local function sg(v,suf) return (v>0 and "+" or "")..tostring(v)..(suf or ""); end
     local companyText="Select a company strategy";
-    if companyStrategy=="Growth" then companyText="Growth Company: price fundamentals x1.35 | dividend pool 1% of owner income | random volatility scale 30%";
-    elseif companyStrategy=="Balanced" then companyText="Balanced Company: price fundamentals x1.00 | dividend pool 2% of owner income | random volatility scale 25%";
-    elseif companyStrategy=="Dividend" then companyText="Dividend Company: price fundamentals x0.45 | dividend pool 4%-6% of owner income | random volatility scale 15%"; end
+    if companyStrategy=="Growth" then companyText="Growth Company: price fundamentals x1.35 | dividend pool 2% of owner income | random volatility scale 30%";
+    elseif companyStrategy=="Balanced" then companyText="Balanced Company: price fundamentals x1.00 | dividend pool 4% of owner income | random volatility scale 25%";
+    elseif companyStrategy=="Dividend" then companyText="Dividend Company: price fundamentals x0.45 | dividend pool 5%–7% of owner income | random volatility scale 15%"; end
     return "LIVE NUMERICAL PREVIEW\n"..
         "COMMERCE: "..tostring(p.currentCommerce).." -> "..tostring(p.projectedCommerce).." /turn ("..sg(p.commerce,"%")..")\n"..
         "MARKET LIVE PRICE: "..string.format("%.2f",p.currentPrice).." | example +5.00% move: "..string.format("%.2f",p.baseMarketPrice).." -> "..string.format("%.2f",p.modifiedMarketPrice).." ("..sg(p.market,"%").." modifier)\n"..
@@ -3801,7 +3802,8 @@ function ShowUnitedNationsMenu(parent, game)
 
     local function UNResolutionEffectText(resolutionType)
         if resolutionType == "sanctions" then
-            return "RESULT IF PASSED: Target loses 10% Commerce each turn for " .. tostring(selectedEffectDuration) .. " turn(s).";
+            local unrest=GetClientSetting("ResourceUnrestEnabled",true)==true and " and gains 5 unrest points" or "";
+            return "RESULT IF PASSED: Target loses 10% of Commerce income" .. unrest .. " each turn for " .. tostring(selectedEffectDuration) .. " turn(s).";
         elseif resolutionType == "embargo" then
             return "RESULT IF PASSED: Trade Agreement income and Resource Trade deliveries involving the target are paused for 3 turns.";
         elseif resolutionType == "aid" then
@@ -4349,6 +4351,28 @@ local function ResourceAmountText(values)
     return table.concat(parts, " | ");
 end
 
+local function UFIndustryUnavailableReason()
+    if GetClientSetting("IndustrialSupplyEnabled",false)~=true then
+        return "Off in this game. The host must enable Power Grids and Chip Manufacturing in Military settings.";
+    end
+    if GetClientSetting("ResourcesEnabled",true)~=true then return "Unavailable: Strategic Resources is off."; end
+    if GetClientSetting("MilitaryExpansionEnabled",true)~=true then return "Unavailable: Military Systems is off."; end
+    return nil;
+end
+
+local function UFIndustryShortcut(area,parent,game,back)
+    local reason=UFIndustryUnavailableReason();
+    if reason then
+        UI.CreateLabel(area).SetText("Industry: "..reason).SetColor("#FFD166");
+    elseif not IsViewerMode(game) then
+        local nation=GetOurNationState(game) or {};
+        UI.CreateLabel(area).SetText("Chips in stock: "..tostring(nation.industryChips or 0).." / 10").SetColor("#82CFFF");
+    end
+    UI.CreateButton(area).SetText("POWER GRIDS & CHIPS").SetPreferredHeight(42).SetOnClick(function()
+        ShowIndustryMenu(parent,game,back);
+    end);
+end
+
 function ShowResourcesMenu(parent, game)
     local area = CreateContentArea(parent);
     local data = Mod.PublicGameData or {};
@@ -4358,6 +4382,7 @@ function ShowResourcesMenu(parent, game)
     local nation = ourID ~= nil and (economy.nations or {})[ourID] or {};
 
     UI.CreateLabel(area).SetText("STRATEGIC RESOURCES").SetColor("#67D5FF");
+    UFIndustryShortcut(area,parent,game,ShowResourcesMenu);
     UI.CreateLabel(area).SetText("RESOURCE DIRECTORY").SetColor("#FFD166");
     UI.CreateLabel(area).SetText("Resource locations and owners are public. Filter the list, then tap SHOW to find a location.").SetColor("#BBBBBB");
     local ownership=resources.owners or {};
@@ -4431,7 +4456,7 @@ function ShowResourcesMenu(parent, game)
     end
     UI.CreateLabel(area).SetText("RESOURCE USES").SetColor("#FFD166");
     UI.CreateLabel(area).SetText("Oil + Iron: Airports and Tanks. Oil: Drones. Each Recruiter level: +1 Oil, +1 Food, +1 Iron maintenance per turn.").SetColor("#BBBBBB");
-    UI.CreateLabel(area).SetText("Gas and Coal support the economy. Copper, Rare Earths and Lithium support industry/electronics. Losing baseline supply causes the shortage effects shown below; surplus fills your stockpile or can be traded.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Gas and Coal support the economy. When industry is on: Copper builds Power Grids, Iron builds chip factories, and Rare Earths make chips. Surplus resources fill your stockpile or can be traded.").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("Production − Need = Net. Stockpiles cover a negative Net before a shortage penalty applies.").SetColor("#82CFFF");
     UI.CreateLabel(area).SetText("Trading limits: 20 pending offers per nation; 64 active contracts per nation. One active supply contract per resource and seller/buyer pair. Resolve or cancel an existing entry before replacing it.").SetColor("#BBBBBB");
     UI.CreateLabel(area).SetText("Per uncovered unit: Oil −15 readiness; Food −10 readiness and +3 unrest; Iron −12 readiness. Gas −5 readiness and −"..tostring(GetClientSetting("ResourceShortagePenaltyPercent",3)).."% Commerce; Coal/Copper −2% Commerce; Rare Earths −3 readiness / −1% Commerce; Lithium −2 readiness / −1% Commerce. National caps still apply.").SetColor("#FFB366");
@@ -4820,8 +4845,7 @@ end
 
 
 local function UFClientIndustryEnabled()
-    return GetClientSetting("IndustrialSupplyEnabled",false)==true and GetClientSetting("ResourcesEnabled",true)==true
-        and GetClientSetting("MilitaryExpansionEnabled",true)==true;
+    return UFIndustryUnavailableReason()==nil;
 end
 
 local function UFClientChipPrice(game,base)
@@ -4849,7 +4873,7 @@ local function UFShowTerritorySelector(parent,game,waitText,payloadBase)
                 text=text.." | "..tostring(GetClientSetting("AirbaseOilPerLevel",1)).." Oil + "..tostring(GetClientSetting("AirbaseIronPerLevel",1)).." Iron";
             elseif action=="buildIndustrialSite" then
                 if kind=="Grid" then cost=150; text="Power Grid • 1 Copper";
-                else cost=250; text="Chip Manufacturing • 1 Iron • requires a Power Grid here"; end
+                else cost=250; text="Chip Manufacturing • 1 Iron • requires a Power Grid anywhere in your nation"; end
             elseif action=="buildArmyRecruiter" then
                 local r=(((Mod.PublicGameData or {}).globalEconomy or {}).armyRecruiters or {}).territories or {};
                 local level=tonumber(r[tid] or r[tostring(tid)]) or 0;
@@ -4952,6 +4976,186 @@ end
 
 
 
+function ShowOlympicsMenu(parent,game,selected)
+    local area=CreateContentArea(parent);
+    local data=Mod.PublicGameData or {};
+    local economy=data.globalEconomy or {};
+    local pid=GetLocalPlayerID(game);
+    local turn=Olympics.turn(data);
+    local games=economy.olympics;
+    local function label(message,color)
+        return UI.CreateLabel(area).SetText(message).SetColor(color or "#DDDDDD");
+    end
+    local pending=false;
+    local function send(payload)
+        if pending then return; end
+        pending=true;
+        SafeSendGameCustomMessage(game,"Updating Olympics...",payload,function(reply)
+            pending=false;
+            UI.Alert(reply and reply.message or "No response. Reopen Olympics to check the result.");
+            if reply and reply.success and not UI.IsDestroyed(area) then ShowOlympicsMenu(parent,game,selected); end
+        end);
+    end
+    local function numberField(caption,value)
+        label(caption);
+        local field=CreateWideTextInput(area,160);
+        field.SetText(tostring(value));
+        return field;
+    end
+    label("OLYMPICS","#FFD166");
+    if game.Settings and game.Settings.CommerceGame==false then label("The Olympics are available in Commerce games."); return; end
+    label("Turn "..turn.." | "..Olympics.phase(games,turn),"#82CFFF");
+    if not games then
+        if turn~=1 then label("The host did not schedule Olympics on Turn 1."); return; end
+        if not Olympics.isHost(game,pid) then
+            label("The host can schedule the Games here on Turn 1.");
+            return;
+        end
+        label("Choose the sports and base prizes. Publishing locks the schedule.");
+        local opens=numberField("Training opens on turn",3);
+        local closes=numberField("Last training turn",4);
+        local results=numberField("Medal results turn",6);
+        local bets=UI.CreateCheckBox(area).SetText("Allow betting with in-game Commerce").SetIsChecked(true);
+        local choices={};
+        for index,sport in ipairs(Olympics.sports) do
+            local enabled=UI.CreateCheckBox(area).SetText(sport.name).SetIsChecked(index<=2);
+            local purse=numberField("Base prize: "..sport.name.." (Commerce)",1000);
+            choices[#choices+1]={sport=sport.id,enabled=enabled,purse=purse};
+        end
+        local preview=label("","#82CFFF");
+        local previewed;
+        UI.CreateButton(area).SetText("PREVIEW SCHEDULE").SetOnClick(function()
+            local payload={type="olympicsPublish",opens=opens.GetText(),closes=closes.GetText(),results=results.GetText(),betting=bets.GetIsChecked(),events={}};
+            for _,item in ipairs(choices) do if item.enabled.GetIsChecked() then payload.events[item.sport]=item.purse.GetText(); end end
+            local draft={};
+            local ok,message=Olympics.publish(game,draft,turn,pid,payload);
+            if not ok then previewed=nil; preview.SetText(message); return; end
+            previewed=payload;
+            local lines={"Training: Turns "..draft.olympics.opens.."–"..draft.olympics.closes.." | Results: Turn "..draft.olympics.results};
+            if draft.olympics.betting then lines[#lines+1]="Betting: Turns "..(draft.olympics.closes+1).."–"..(draft.olympics.results-1); end
+            for _,event in ipairs(draft.olympics.events) do lines[#lines+1]=event.name..": "..event.purse.." Commerce base prize"; end
+            preview.SetText(table.concat(lines,"\n"));
+        end);
+        UI.CreateButton(area).SetText("PUBLISH PREVIEWED SCHEDULE").SetOnClick(function()
+            if not previewed then UI.Alert("Preview the schedule first."); return; end
+            send(previewed);
+        end);
+        return;
+    end
+    label("Training: Turns "..games.opens.."–"..games.closes.." | Results: Turn "..games.results);
+    if games.betting then label("Betting: Turns "..(games.closes+1).."–"..(games.results-1).." | In-game Commerce only."); end
+    local commerce,recruit=Olympics.boost(economy,turn,pid);
+    if commerce>0 then label("Your active medal boost: +"..commerce.."% Commerce and +"..recruit.."% Recruiter output","#79D279"); end
+    if games.settled then
+        local totals, standings={}, {};
+        for _,sport in ipairs(games.events) do
+            for rank,medal in ipairs(sport.medals or {}) do
+                local record=totals[medal.pid];
+                if not record then
+                    record={pid=medal.pid,0,0,0}; totals[medal.pid]=record; standings[#standings+1]=record;
+                end
+                record[rank]=record[rank]+1;
+            end
+        end
+        table.sort(standings,function(a,b)
+            for rank=1,3 do if a[rank]~=b[rank] then return a[rank]>b[rank]; end end
+            return a.pid<b.pid;
+        end);
+        label("MEDAL TABLE","#FFD166");
+        if #standings==0 then label("No medals awarded."); end
+        for _,record in ipairs(standings) do
+            label(GetPlayerName(game,record.pid).." | Gold "..record[1].." | Silver "..record[2].." | Bronze "..record[3]);
+        end
+    end
+    local event=games.events[1];
+    for _,item in ipairs(games.events) do
+        if item.id==selected then event=item; end
+        local id=item.id;
+        UI.CreateButton(area).SetText(item.name).SetOnClick(function() ShowOlympicsMenu(parent,game,id); end);
+    end
+    selected=event.id;
+    label(event.name,"#FFD166");
+    if event.cancelled then label("Cancelled: fewer than four eligible nations. Training and bets refunded."); return; end
+    if event.medals then
+        for rank,medal in ipairs(event.medals) do
+            label(Olympics.medalNames[rank]..": "..GetPlayerName(game,medal.pid).." | "..medal.prize.." Commerce");
+        end
+        if pid and event.bets[pid] then
+            local payout=(event.betPayouts or {})[pid] or 0;
+            label("Your bet: "..event.bets[pid].amount.." | "..(event.betRefunded and "Refund: " or "Returned: ")..payout.." Commerce");
+        end
+        label("Medal boosts apply for two turns after results. Only your strongest medal counts.");
+        return;
+    end
+    local entries,totalWeight=Olympics.entries(game,economy,event);
+    local myTraining=pid and event.training[pid] or 0;
+    local phase=Olympics.phase(games,turn);
+    local validPot=event.purse;
+    for _,entry in ipairs(entries) do validPot=validPot+entry.amount; end
+    local prizes=Olympics.prizes(validPot);
+    label("Eligible teams: "..#entries.." / "..Olympics.minimum.." needed | Prize pool: "..validPot.." Commerce");
+    label("Gold "..prizes[1].." | Silver "..prizes[2].." | Bronze "..prizes[3]);
+    label("Medal boosts for two turns: Gold +10% Commerce / +15% Recruiters; Silver +6% / +10%; Bronze +3% / +5%.");
+    local active=pid and Olympics.eligible(game,economy,pid);
+    if active then label("Your training: "..myTraining.." Commerce | Available: "..(GetPlayerGold(game,pid) or 0)); end
+    if active and phase=="Training open" then
+        local amount=numberField("Additional training spend (Commerce)",100);
+        local estimate=label("","#82CFFF");
+        local function refresh()
+            local extra=tonumber(amount.GetText());
+            if not extra or extra<1 or extra>1000000000 or extra~=math.floor(extra) then estimate.SetText("Enter a positive whole amount."); return; end
+            local commitment=myTraining+extra;
+            local weight=math.sqrt(commitment);
+            local odds=100*weight/(totalWeight-math.sqrt(myTraining)+weight);
+            local future=Olympics.prizes(validPot+extra);
+            local net=string.format("If held now: gold %+.0f | silver %+.0f | bronze %+.0f | no medal −%.0f Commerce.",future[1]-commitment,future[2]-commitment,future[3]-commitment,commitment);
+            local count=#entries+(myTraining==0 and 1 or 0);
+            estimate.SetText(count<4 and "Need four teams to run. Your training is refunded if the event is cancelled." or
+                string.format("Estimated chance of gold: %.1f%%. ",odds)..net);
+        end
+        amount.SetOnValueChanged(refresh);
+        refresh();
+        UI.CreateButton(area).SetText("COMMIT TRAINING").SetOnClick(function()
+            send({type="olympicsTrain",event=event.id,amount=amount.GetText()});
+        end);
+    elseif phase=="Betting open" then
+        if #entries<4 then label("Fewer than four eligible nations remain. Stakes will be refunded if the event is cancelled.");
+        elseif active and myTraining>0 then label("You cannot bet on an event you entered.");
+        elseif active then
+            local existing=event.bets[pid];
+            local pick=existing and existing.pick or nil;
+            local amount=numberField("Bet amount (Commerce)",100);
+            local preview=label("Choose a team to win gold.","#82CFFF");
+            local function refresh()
+                if not pick then return; end
+                local n=tonumber(amount.GetText());
+                if not n or n<1 or n>1000000000 or n~=math.floor(n) then preview.SetText("Enter a positive whole amount."); return; end
+                local pool,backed=Olympics.betTotals(event,pick);
+                local stake=n+(existing and existing.amount or 0);
+                local returned=math.floor((pool+n)*(stake/(backed+n)));
+                preview.SetText(GetPlayerName(game,pick)..": if gold, estimated return "..returned.." Commerce including your stake. If this pick loses, you risk "..stake..". The pool can change.");
+            end
+            amount.SetOnValueChanged(refresh);
+            for _,entry in ipairs(entries) do
+                local team=entry.pid;
+                if not existing or team==existing.pick then
+                    UI.CreateButton(area).SetText("Back "..GetPlayerName(game,team)).SetOnClick(function() pick=team; refresh(); end);
+                end
+            end
+            refresh();
+            UI.CreateButton(area).SetText("PLACE GOLD-MEDAL BET").SetOnClick(function()
+                if not pick then UI.Alert("Choose a team first."); return; end
+                send({type="olympicsBet",event=event.id,pick=pick,amount=amount.GetText()});
+            end);
+        end
+    end
+    label("Teams & training","#82CFFF");
+    for _,entry in ipairs(entries) do
+        label(string.format("%s | %d Commerce trained | %.1f%% chance of gold",GetPlayerName(game,entry.pid),entry.amount,100*entry.weight/totalWeight));
+    end
+    if #entries==0 then label("No entries yet."); end
+end
+
 function BuildMainTabs(
     tabsHost,
     contentHost,
@@ -4996,6 +5200,10 @@ function BuildMainTabs(
             ShowMilitaryMenu(contentHost, game);
         end);
     end
+
+    QueueTab("olympics", "Olympics", "#9B6A17", "#FFFFFF", function()
+        ShowOlympicsMenu(contentHost, game);
+    end);
 
     QueueTab("diplomacy", "Diplomacy", "#FF7D00", "#FFFFFF", function()
         ShowDiplomacyMenu(contentHost, game);
@@ -7169,45 +7377,31 @@ UI.CreateButton(area)
         )
         .SetFlexibleWidth(1);
 
-    local statsRow4 =
-        UI.CreateHorizontalLayoutGroup(
-            area
-        );
+    local displayedPrice=math.max(1,tonumber(currentPrice) or 1);
+    local displayedDividend=math.max(0,tonumber(company.dividendPerShare) or 0);
+    local localPlayerID=GetLocalPlayerID(game);
+    local nation=(economy.nations or {})[localPlayerID] or {};
+    local held=math.max(0,tonumber((nation.stockHoldings or {})[companyID]) or 0);
+    local sample=held>0 and held or 10;
+    UI.CreateLabel(area).SetText(string.format("Last dividend: %.2f Commerce/share (%.2f%% yield)",displayedDividend,100*displayedDividend/displayedPrice)).SetColor("#79D279");
+    if displayedDividend>0 then
+        UI.CreateLabel(area).SetText(string.format("If repeated: %d shares earn about %.2f Commerce over 5 turns.",sample,sample*displayedDividend*5)).SetColor("#BBBBBB");
+    else
+        UI.CreateLabel(area).SetText("No dividend recorded yet. Check after the next market update.").SetColor("#BBBBBB");
+    end
+    local confidence=tonumber(company.effectiveConfidence or company.confidence) or 50;
+    local cardPenalty=tonumber(company.sanctionCardConfidencePenalty) or 0;
+    local unPenalty=tonumber(company.unSanctionConfidencePenalty) or 0;
+    UI.CreateLabel(area).SetText(string.format("Company confidence: %.0f/100",confidence)).SetColor("#BBBBBB");
+    if cardPenalty>0 or unPenalty>0 then
+        local reasons={};
+        if cardPenalty>0 then reasons[#reasons+1]="Sanction Card −"..cardPenalty; end
+        if unPenalty>0 then reasons[#reasons+1]="UN sanctions −"..unPenalty; end
+        UI.CreateLabel(area).SetText(table.concat(reasons," | ").." confidence points").SetColor("#FF9696");
+    end
+    UI.CreateButton(area).SetText("HOW STOCKS WORK").SetOnClick(function() ShowHowItWorks(parent); end);
 
-    UI.CreateLabel(statsRow4)
-        .SetText(
-            "Dividend/Share: " ..
-            string.format(
-                "%.2f",
-                company.dividendPerShare
-                or 0
-            )
-        )
-        .SetFlexibleWidth(1);
-
-    UI.CreateLabel(statsRow4)
-        .SetText(
-            "Dividends Paid: " ..
-            tostring(
-                company.totalDividendsPaid
-                or 0
-            )
-        )
-        .SetFlexibleWidth(1);
-
--- ============================================
 -- FLAGSHIP ACQUISITIONS
--- ============================================
-
-local displayedPrice=math.max(1,tonumber(company.currentPrice) or 1);
-local displayedDividend=math.max(0,tonumber(company.dividendPerShare) or 0);
-UI.CreateLabel(area).SetText("DIVIDEND YIELD / TURN: "..string.format("%.2f",100*displayedDividend/displayedPrice).."%").SetColor("#79D279");
-UI.CreateLabel(area).SetText("100 gold buys ~"..string.format("%.2f",100/displayedPrice).." shares: ~"..string.format("%.2f",100*displayedDividend/displayedPrice).." dividends/turn before whole-share limits. Last payout, not guaranteed.").SetColor("#BBBBBB");
-UI.CreateLabel(area).SetText("Growth: more price-growth potential, lower dividends. Balanced: middle ground. Dividend: higher cash payouts, slower price growth. Compare yield and price risk, not price alone.").SetColor("#9CCBFF");
-UI.CreateLabel(area).SetText("Primary share sales pay the founder once: Growth 100%, Balanced 85%, Dividend 70%. Resold shares do not pay the founder again. Owners earn ongoing dividends only on shares held.").SetColor("#BBBBBB");
-UI.CreateLabel(area).SetText("Acquired-business dividend pool: "..string.format("%.2f",tonumber(company.acquisitionDividendPool) or 0).." gold/turn, shared across total shares.").SetColor("#79D279");
-
-local localPlayerID = GetLocalPlayerID(game);
 local ownerNation = (economy.nations or {})[company.ownerPlayerID] or {};
 local currentTurn = economy.currentEconomyTurn or data.tradeTurn or 1;
 local acquisitionPremium = tonumber(GetClientSetting("AcquisitionPremiumPercent",150)) or 150;
@@ -7230,9 +7424,10 @@ local acquisitionEarningsRate=math.max(0,math.min(10,tonumber(GetClientSetting("
 local localTargetShares=math.max(0,tonumber((((economy.nations or {})[localPlayerID] or {}).stockHoldings or {})[companyID]) or 0);
 
 UI.CreateLabel(area).SetText("VALUE COMPARISON").SetColor("#FFD166");
-UI.CreateLabel(area).SetText("Target market cap: "..tostring(targetMarketCap).." Commerce").SetColor("#DDDDDD");
 UI.CreateLabel(area).SetText("Market position: #"..tostring(targetMarketRank).." of "..tostring(activeCompanyCount).." | Active-company average: "..tostring(averageActiveMarketCap)).SetColor("#9CCBFF");
-UI.CreateLabel(area).SetText("Offer formula: "..tostring(acquisitionPremium).."% of market cap = "..tostring(estimatedAcquisitionPrice).." Commerce").SetColor("#FFB366");
+UI.CreateLabel(area).SetText("Estimated acquisition offer: "..tostring(estimatedAcquisitionPrice).." Commerce").SetColor("#FFB366");
+local companyAcquisitionPool=tonumber(company.acquisitionDividendPool) or 0;
+if companyAcquisitionPool>0 then UI.CreateLabel(area).SetText(string.format("Acquired businesses add %.2f Commerce/turn to the dividend pool.",companyAcquisitionPool)).SetColor("#79D279"); end
 
 local function ShowAcquisitionImpact(buyerID,offerPrice,offerAssetValue)
     local finalPrice=math.max(1,math.floor(tonumber(offerPrice) or estimatedAcquisitionPrice));
@@ -8645,6 +8840,21 @@ totalCostBasis =
 end
 
 
+local function ShowTopETFHoldingList(area,market)
+    UI.CreateLabel(area).SetText("TOP 5 ETF HOLDINGS").SetColor("#D4AF37");
+    local etf=market.etf or {};
+    local shown=0;
+    for _,id in ipairs(etf.memberCompanyIDs or {}) do
+        local company=(market.companies or {})[id];
+        if company and company.active~=false and not company.delisted and company.status=="trading" then
+            shown=shown+1;
+            UI.CreateLabel(area).SetText(string.format("%d. %s | %.2f Commerce/share",shown,tostring(company.name or ("Company "..id)),tonumber(company.currentPrice or company.startingPrice) or 0));
+            if shown>=5 then break; end
+        end
+    end
+    if shown==0 then UI.CreateLabel(area).SetText("The Global Market ETF has no active holdings yet.").SetColor("#888888"); end
+end
+
 function ShowMarketOverview(
     parent,
     game
@@ -8929,7 +9139,7 @@ for i=1,math.min(5,#rankedMoves) do
         tostring(i) .. ". " .. tostring(company.name or "Company") ..
         " | " .. string.format("%+.1f%%", entry.pct) ..
         " | Price " .. string.format("%.2f",tonumber(company.currentPrice or company.startingPrice) or 0) ..
-        " | Confidence " .. tostring(math.floor((company.confidence or 50)+0.5)) .. "%" ..
+        " | Confidence " .. tostring(math.floor((company.effectiveConfidence or company.confidence or 50)+0.5)) .. "%" ..
         " | Unrest " .. tostring(math.floor((ownerNation.resourceUnrest or 0)+0.5))
     );
 end
@@ -8966,7 +9176,7 @@ for offset=0,math.min(4,#rankedMoves-1) do
     UI.CreateLabel(area).SetText(
         tostring(offset+1) .. ". " .. tostring(company.name or "Company") ..
         " | " .. string.format("%+.1f%%", entry.pct) ..
-        " | Confidence " .. tostring(math.floor((company.confidence or 50)+0.5)) .. "%" ..
+        " | Confidence " .. tostring(math.floor((company.effectiveConfidence or company.confidence or 50)+0.5)) .. "%" ..
         " | Unrest " .. tostring(math.floor((ownerNation.resourceUnrest or 0)+0.5))
     );
 end
@@ -9066,6 +9276,8 @@ UI.CreateLabel(area)
             )
         )
     );
+
+ShowTopETFHoldingList(area,market);
 
 end
 
@@ -9469,74 +9681,7 @@ UI.CreateLabel(area)
             ""
         );
 
-    UI.CreateLabel(area)
-        .SetText(
-            "TOP 5 ETF COMPANIES"
-        )
-        .SetColor(
-            "#D4AF37"
-        );
-
-    local memberIDs =
-        etf.memberCompanyIDs
-        or {};
-
-    if #memberIDs == 0 then
-
-        UI.CreateLabel(area)
-            .SetText(
-                "ETF members will be selected after market processing."
-            );
-
-    else
-
-        for index,companyID in ipairs(
-            memberIDs
-        ) do
-
-            local company =
-                market.companies
-                and market.companies[
-                    companyID
-                ];
-
-            if company ~= nil then
-
-                local companyName =
-                    company.name
-                    or (
-                        "Company " ..
-                        tostring(
-                            companyID
-                        )
-                    );
-
-                local companyPrice =
-                    company.currentPrice
-                    or company.startingPrice
-                    or 1;
-
-                UI.CreateLabel(area)
-                    .SetText(
-                        tostring(index) ..
-                        ". " ..
-                        tostring(companyName) ..
-                        " | " ..
-                        string.format(
-                            "%.2f",
-                            companyPrice
-                        ) ..
-                        " Commerce"
-                    )
-                    .SetColor(
-                        "#D4AF37"
-                    );
-
-            end
-
-        end
-
-    end
+    ShowTopETFHoldingList(area,market);
 
 
     -- War Bonds removed from United Frontier. Markets now focus on flagship stocks, ETF and investments.
@@ -12644,7 +12789,7 @@ function ShowNationalSetup(
         [1]={{"Free Market","Stronger markets; fewer recruits"},{"Capitalist","Stronger investing; fewer recruits"},{"Social Democratic","Small boosts; recruiting stays the same"},{"State Capitalist","Higher income, investment and recruiting"},{"Socialist","More income and recruits; weaker markets"},{"Communist","Most recruits; weakest markets"},{"Fascist","More recruits; weaker markets"},{"Nationalist","More recruits; slightly weaker markets"}},
         [2]={{"Growth","Higher income, market and investment modifiers"},{"Balanced","No change to economic modifiers"},{"Conservative","More confidence; lower income and investment"}},
         [3]={{"Low","Less income; higher market and investment modifiers"},{"Standard","No tax modifiers"},{"High","More income; lower market and investment modifiers"}},
-        [5]={{"Growth","Higher price factor; 1% dividend pool"},{"Balanced","Standard price factor; 2% dividend pool"},{"Dividend","Lower price factor; 4–6% dividend pool"}}
+        [5]={{"Growth","Higher starting price; 2% dividend pool"},{"Balanced","Standard starting price; 4% dividend pool"},{"Dividend","Lower starting price; 5–7% dividend pool"}}
     };
     local function value(step)
         if step==1 then return selectedIdeology; elseif step==2 then return selectedEconomicStrategy;
@@ -13133,6 +13278,58 @@ function ShowAIManagerMenu(parent,game)
 end
 
 
+local function UFIndustryRequirements(area)
+    UI.CreateLabel(area).SetText("POWER GRIDS & CHIP MANUFACTURING").SetColor("#62B6FF");
+    UI.CreateLabel(area).SetText("Host settings: Power Grids and Chip Manufacturing, Strategic Resources, and Military Systems must all be on.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("1. Power Grid: 150 Commerce + 1 Copper from your stockpile. Build on a territory you own.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("2. Chip Manufacturing: 250 Commerce + 1 Iron from your stockpile. Build on any territory you own. You need a Power Grid anywhere in your nation. If you lose your last grid, chip production pauses.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("3. Each powered factory turns 1 Rare Earths from your stockpile into 1 chip per turn. Your nation can store up to 10 chips.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("4. An Air Wing uses 1 chip if available for a 25% Commerce discount. Without chips, it costs the regular price.").SetColor("#BBBBBB");
+    UI.CreateLabel(area).SetText("Find your chip balance and build buttons under Resources or Military → Power Grids & Chips. Neither building has upgrade levels.").SetColor("#BBBBBB");
+end
+
+function ShowIndustryMenu(parent,game,back)
+    local area=CreateContentArea(parent);
+    UI.CreateButton(area).SetText("BACK").SetOnClick(function() back(parent,game); end);
+    local reason=UFIndustryUnavailableReason();
+    if reason then
+        UI.CreateLabel(area).SetText(reason).SetColor("#FFD166");
+    elseif IsViewerMode(game) then
+        ShowViewerModeNotice(area,"Spectators can read requirements but cannot build.");
+    else
+        local nation=GetOurNationState(game) or {};
+        local stock=nation.resourceStockpile or {};
+        UI.CreateLabel(area).SetText("Chips in stock: "..tostring(nation.industryChips or 0).." / 10").SetColor("#82CFFF");
+        UI.CreateLabel(area).SetText("Materials in stock: Copper "..tostring(stock.Copper or 0).." | Iron "..tostring(stock.Iron or 0).." | Rare Earths "..tostring(stock["Rare Earths"] or 0)).SetColor("#BBBBBB");
+        local industry=((Mod.PublicGameData or {}).globalEconomy or {}).industry or {};
+        local standing=(game.LatestStanding or {}).Territories or {};
+        local owned, sites, hasGrid={}, {}, false;
+        for key in pairs(industry.grids or {}) do sites[key]=true; end
+        for key in pairs(industry.fabs or {}) do sites[key]=true; end
+        for key in pairs(sites) do
+            local tid=tonumber(key); local terr=standing[tid];
+            if terr and terr.OwnerPlayerID==GetLocalPlayerID(game) then
+                local td=((game.Map or {}).Territories or {})[tid];
+                local grid=(industry.grids or {})[key]; local fab=(industry.fabs or {})[key];
+                hasGrid=hasGrid or grid==true;
+                local name=grid and (fab and "Power Grid + Chip Manufacturing" or "Power Grid") or "Chip Manufacturing";
+                owned[#owned+1]=(td and td.Name or key).." — "..name;
+            end
+        end
+        if not hasGrid then UI.CreateLabel(area).SetText("No Power Grid. Factories cannot produce chips until you own one.").SetColor("#BBBBBB"); end
+        table.sort(owned);
+        for _,line in ipairs(owned) do UI.CreateLabel(area).SetText(line); end
+        UI.CreateButton(area).SetText("BUILD POWER GRID").SetPreferredHeight(44).SetOnClick(function()
+            UFShowTerritorySelector(parent,game,"Building Power Grid...",{type="buildIndustrialSite",kind="Grid"});
+        end);
+        local factory=UI.CreateButton(area).SetText("BUILD CHIP MANUFACTURING").SetPreferredHeight(44).SetInteractable(hasGrid);
+        factory.SetOnClick(function()
+            UFShowTerritorySelector(parent,game,"Building Chip Manufacturing...",{type="buildIndustrialSite",kind="Fab"});
+        end);
+    end
+    UFIndustryRequirements(area);
+end
+
 function ShowHowItWorks(parent)
     local area=CreateContentArea(parent);
     local function Section(title,text,color)
@@ -13142,6 +13339,11 @@ function ShowHowItWorks(parent)
     UI.CreateLabel(area).SetText("HOW UNITED FRONTIER WORKS").SetColor("#67D5FF");
     UI.CreateLabel(area).SetText("Deep strategy, simple controls: every action shows its cost, effect, and result.").SetColor("#FFFFFF");
     Section("MARKETS — START HERE", "Buy shares & funds opens Stocks and Global ETF. My portfolio shows your holdings and links to Diplomacy, where a player’s Portfolio tab shows their shares and market value. Rankings & news includes stock leaders, estimated military and Commerce bands, and one combined news feed. Trade & investing tools holds agreements, projects, and AI Manager.", "#67D5FF");
+    Section("GROWTH, BALANCED & DIVIDEND STOCKS", "New listings start at 125% of the income-based price for Growth, 100% for Balanced, and 65% for Dividend. For a 60 Commerce base, that is 75, 60, and 39. The base dividend pools are 2%, 4%, and 5% of owner income respectively; Dividend rises to 6% at 5% income growth or 7% at 15% growth. With 500 owner income, 100 total shares, and 10 shares held, that accrues 1, 2, or 2.5 Commerce per payout at standard rates. Host settings scale base payouts. Acquired businesses can add to the pool. Fractions carry forward, and already-listed share prices are set by the market.", "#79D279");
+    Section("COMPANY CONFIDENCE", "Taxes, ideology, economic strategy, unrest and reforms affect confidence. Acquisitions can improve base confidence. An active Sanction Card costs 10 confidence points, and active UN sanctions cost another 10. Multiple cards do not stack with each other. Confidence affects price movement, so a penalty does not guarantee a price drop. The penalty clears when the sanction expires.", "#FFB366");
+    Section("OLYMPICS", "On Turn 1, the host chooses sports, dates, base prizes and whether betting is allowed from the Olympics tab. Add any affordable amount to your team. Your odds increase with the square root of training spend. With four or more eligible teams, gold, silver and bronze split the base prize plus training contributions 50% / 30% / 20%. The best medal earns two turns of Commerce and Recruiter boosts after results. Optional gold-medal bets open after training locks and use a separate pool. Winning bettors split that pool by stake; you cannot bet on an event you entered. If an event has fewer than four eligible teams, both pools are refunded. If nobody backs gold, all bets are refunded.", "#FFD166");
+    Section("TOP 5 ETF HOLDINGS", "Shows up to five companies from the Global Market ETF's actual basket. The game has one ETF, and its holdings refresh every five turns.", "#D4AF37");
+    Section("STOCK SALES & OWNERSHIP", "The first sale of newly issued shares pays the founder once: Growth 100%, Balanced 85%, Dividend 70%. Resales do not pay the founder again. Ongoing dividends are based on shares held. Compare last yield with price risk, and use whole shares when budgeting.", "#67D5FF");
     Section("EXAMPLE: SHARE PURCHASE", "Illustrative prices: 5 shares at 20 Commerce cost 100 before any applicable fees. If the price later reaches 24, the holding is worth 120. If it falls to 16, it is worth 80. You realize the gain or loss by selling; dividends depend on the company and game settings.", "#79D279");
     Section("MARKET RANKINGS — WHAT THE NUMBERS MEAN", "Top 5 Growth ranks the largest percentage price increases from the previous turn. Example: 20 → 24 is +20%. Top 5 Dividend ranks dividend Commerce paid per share and shows yield. Example: a 2 Commerce dividend at a 40 Commerce stock price is a 5% displayed yield. A high yield can still carry price risk.", "#79D279");
     Section("EXAMPLE: FLAGSHIP ACQUISITION", "Illustrative host settings: target market cap 3,000 × 150% premium = 4,500 Commerce purchase price. With 100 total shares, the cash-out value is 45 per share. An investor holding 20 shares receives 900 Commerce automatically. All other shareholders are paid first; the seller receives the remaining sale value plus the cash-out on shares the seller held. With a 100-share buyer priced at 44 and a target worth 3,800, buyer stock becomes 82 after rounding. At the default acquired-business earnings rate of 5%, its dividend pool rises by 190/turn: +1.90/share. Owning 20 shares adds 38/turn, not 190 national income. A 5,700 purchase takes 150 payments to recover from those 20 shares alone. Unheld shares receive no payout; fractional dividends carry forward. Earnings are generated by the game, not taken from the seller. Prices/base dividends may change. The host sets the rate for new acquisitions.", "#FFB347");
@@ -13151,13 +13353,13 @@ function ShowHowItWorks(parent)
     Section("2. ECONOMY, CONFIDENCE & UNREST","Commerce funds national actions. Company Confidence adds or subtracts 0.06 percentage points from flagship movement per point away from 50, capped at ±3 points. Example: 60 confidence adds 0.6 points. Unrest reduces Commerce and Recruiter production in visible tiers: 20–39 = -3% Commerce / -5% Recruiters; 40–59 = -7% / -10%; 60–79 = -12% / -20%; 80–100 = -20% / -35%.","#79D279");
     Section("3. RESOURCES","Resource locations are public in Resources. Filter My Resources, Neighbors, Ally / Faction, or All Nations, then select a resource type. Each location shows its owner and level and has a SHOW button. Oil and Iron build Airports; each Recruiter level needs 1 Oil, 1 Food and 1 Iron per turn. Tanks consume 1 Oil + 1 Iron; Drones consume 1 Oil per purchase. Uranium is removed.","#67D5FF");
     Section("4. MILITARY INFRASTRUCTURE","Recruiters appear in MY ASSETS and RECRUITMENT with direct upgrades. Recruiter upgrade cost is base cost × next level (default L2: 500, L3: 750 gold); production level changes are scheduled for turn advancement. Recruiters use production levels, not strategic-building HP. Recruiter upgrades replace their existing map icon; they do not stack another Recruiter icon. Lv.1 = 10 max HP, Lv.2 = 20, Lv.3 = 30, Lv.4 = 40. Existing damage carries into an upgrade, so upgrading is not a free repair. Airports are the only airfield infrastructure. ","#8FBF6F");
-    Section("INDUSTRIAL SUPPLY (OPTIONAL)","Build a Power Grid, then build Chip Manufacturing on the same territory. Neither building has levels. Each powered factory uses 1 Rare Earths to make 1 chip per turn, up to 10 stored per nation. An Air Wing uses one chip automatically when available for a 25% Commerce discount. You can still buy Air Wings at regular cost without chips.","#62B6FF");
+    UFIndustryRequirements(area);
     Section("5. AIR OPERATIONS & AIRLIFT","When Airports are enabled, War.app Airlift Cards require an Airport at BOTH origin and destination. See Military for the current airport cost and deployment rules. They need no Power Grid. If Airports are disabled, normal War.app Airlift rules apply. AI follows the same routing rule.","#62B6FF");
     Section("6. COMBAT UNITS","Air Wings: 200 Commerce by default; 5 attack, 3 defense, 5 health; deploy at an Airbase, capacity 2 per level. Special Forces: 180 Commerce, strength 5 by default. Tanks: 300 Commerce + 1 Oil + 1 Iron, strength 8. Drones: 150 Commerce + 1 Oil, strength 2; deploy at an Airport. Host settings change costs, strength and national limits. Tank/Drone strength sets attack, defense, health and absorption. Units appear on turn advance, move and fight through normal game orders, follow normal fog, and cannot be gifted or transferred to teammates. No separate Drone recon or strike missions are included.","#FFD166");
     Section("8. DIPLOMACY & FACTIONS","Diplomacy handles nation-to-nation wars, peace, NAPs, alliances, and trade. Factions have a public directory, leader/member management, join requests, chat, Military Exercises, and Faction wars. A Faction leader may declare war on another Faction; all members are notified and member wars propagate automatically.","#D4AF37");
     Section("AI VOLUNTARY WAR REQUIREMENTS","AI needs 70%+ military readiness and no Oil/Food/Iron shortage. With recruitment enabled: 1 Recruiter for nations of up to 3 territories, otherwise 2 (limited by the host station cap). Air Wings require an Airport for AI logistics readiness. Targets must share a land border and cannot have an active alliance, NAP, peace cooldown, or pending war. Same-faction targets are excluded. Host AI war chance 0 disables voluntary AI war rolls. Passing requirements makes war possible, not certain. Defensive wars and faction/coalition joins use separate rules.","#FFB366");
     Section("9. FACTION MILITARY EXERCISES","The Faction leader starts the exercise. Each member chooses a host-configured Commerce tier. The button shows hard troop numbers such as 10 → 14 troops/turn. The bonus applies only during the exercise; then a cooldown begins.","#D4AF37");
-    Section("10. UNITED NATIONS","Security Council resolutions include sanctions, embargoes, aid, condemnation, and ceasefires. Aid uses an adjustable Commerce amount within host limits instead of a hidden fixed value. Resolution effects and durations are shown before submission.","#90CAF9");
+    Section("10. UNITED NATIONS","Security Council resolutions include sanctions, embargoes, aid, condemnation, and ceasefires. Active sanctions levy 10% of the target’s Commerce income each turn and add 5 unrest points when unrest is enabled. Other effects, including recovery, can change net unrest. Aid uses an adjustable Commerce amount within host limits. Resolution effects and durations are shown before submission.","#90CAF9");
     Section("12. AI MANAGER","Human players may authorize a recurring spending limit plus a one-time payment. The one-time payment is deducted immediately and reserved for next turn. Only one payment may be pending. During turn processing the manager spends from the funded balance; unspent funding is returned to available gold. Pausing the manager or disabling it returns pending funding during the next turn. Example: 1,000 gold, pay 500 now = 500 available plus 500 reserved. If the manager spends 300 in total next turn, 700 gold remains before other income or spending. Recurring budgets are spending limits, not immediate payments. The manager prioritizes urgent shortages, economy, resources/military, then market opportunities. AI nations use the same infrastructure/resource/airlift rules . At war, AI strategic spending comes first: Recruiters, resources, airports, Air Wings, Tanks and Drones. AI pauses new stock purchases, investment projects and city construction, while retaining stock selling and existing income. War spending keeps a limited reserve; disabled host systems are respected.","#62B6FF");
 end
 
@@ -13165,6 +13367,7 @@ end
 function ShowMilitaryMenu(parent,game)
     local area=CreateContentArea(parent); local state=UFPrivateMilitaryState();
     UI.CreateLabel(area).SetText("MILITARY").SetColor("#8FD694");
+    UFIndustryShortcut(area,parent,game,ShowMilitaryMenu);
     UI.CreateLabel(area).SetText("Airports, Air Wings, Special Forces, Tank Battalions and Drones.").SetColor("#BBBBBB");
     UI.CreateButton(area).SetText("RECRUITMENT").SetPreferredHeight(40).SetOnClick(function() ShowArmyRecruitersMenu(parent,game); end);
     UI.CreateLabel(area).SetText("YOUR AIRPORTS").SetColor("#62B6FF");
@@ -13196,27 +13399,6 @@ function ShowMilitaryMenu(parent,game)
             UI.CreateButton(area).SetText("SELECT TERRITORY — "..string.upper(UFV4StructureName(kind))).SetPreferredHeight(44).SetOnClick(function() UFShowTerritorySelector(parent,game,"Building airport...",{type="buildStrategicMilitary",kind=kind}); end);
         end
     end
-    if UFClientIndustryEnabled() then
-        local nation=GetOurNationState(game) or {};
-        UI.CreateLabel(area).SetText("Industrial supply").SetColor("#62B6FF");
-        UI.CreateLabel(area).SetText("Chips: "..tostring(nation.industryChips or 0).."/10");
-        UI.CreateLabel(area).SetText("Each powered factory turns 1 Rare Earths into 1 chip per turn. An Air Wing uses a chip if available and costs 25% less Commerce.");
-        local industry=((((Mod.PublicGameData or {}).globalEconomy or {}).industry) or {});
-        local standing=game.LatestStanding and game.LatestStanding.Territories or {};
-        for key in pairs(industry.grids or {}) do
-            local tid=tonumber(key); local terr=standing[tid];
-            if terr and terr.OwnerPlayerID==GetLocalPlayerID(game) then
-                local td=(game.Map.Territories or {})[tid];
-                UI.CreateLabel(area).SetText((td and td.Name or key).." — "..((industry.fabs or {})[key] and "Power Grid + Chip Manufacturing" or "Power Grid"));
-            end
-        end
-        UI.CreateButton(area).SetText("Power Grid — 150 Commerce + 1 Copper").SetPreferredHeight(44).SetOnClick(function()
-            UFShowTerritorySelector(parent,game,"Building Power Grid...",{type="buildIndustrialSite",kind="Grid"});
-        end);
-        UI.CreateButton(area).SetText("Chip Manufacturing — 250 Commerce + 1 Iron").SetPreferredHeight(44).SetOnClick(function()
-            UFShowTerritorySelector(parent,game,"Building Chip Manufacturing...",{type="buildIndustrialSite",kind="Fab"});
-        end);
-    end
     UI.CreateLabel(area).SetText("PURCHASE UNITS").SetColor("#FFD166");
     local choices={
         {"Air Wing","AirWingsEnabled","AirWingBaseCost",200,"purchaseAirWing","Combat strength "..tostring(GetClientSetting("AirWingCombatStrength",25)).." | deploy at Airbase","airWings"},
@@ -13233,6 +13415,9 @@ function ShowMilitaryMenu(parent,game)
             if action=="purchaseAirWing" then price,useChip=UFClientChipPrice(game,math.max(25,price)); end
             UI.CreateLabel(area).SetText(name.." — "..tostring(price).." Commerce"..(useChip and " + 1 chip" or "")).SetColor("#FFD166");
             UI.CreateLabel(area).SetText(item[6]).SetColor("#BBBBBB");
+            if action=="purchaseAirWing" and UFClientIndustryEnabled() then
+                UI.CreateLabel(area).SetText("Chips are optional. One chip saves 25% Commerce.").SetColor("#82CFFF");
+            end
             UI.CreateLabel(area).SetText("Deployed: "..tostring(count).." | Pending: "..tostring(pending)).SetColor("#82CFFF");
             UI.CreateButton(area).SetText("PURCHASE "..string.upper(name)).SetPreferredHeight(44).SetOnClick(function() UFShowTerritorySelector(parent,game,"Purchasing "..name.."...",{type=action}); end);
         end

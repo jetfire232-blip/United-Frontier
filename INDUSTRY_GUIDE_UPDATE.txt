@@ -1,0 +1,3 @@
+Replaces the v16 Startup, Recruiters and Industrial Supply ZIP.
+Resources and Military both link to Power Grids & Chips. If the feature is off, the page explains the host settings needed and shows the requirements. If enabled, active players see their chip balance, required materials in stock, buildings, and build buttons. How It Works includes the full rules.
+The host setting remains off by default. The building costs, stockpile rules, and Air Wing discount are unchanged.

@@ -29,6 +29,16 @@ function UFIndustryEnabled()
         and setting("MilitaryExpansionEnabled",true)==true;
 end
 
+local function UFIndustryGridOwners(industry, territories)
+    local owners={};
+    for key in pairs(industry.grids or {}) do
+        local territory=territories[tonumber(key) or key];
+        local owner=territory and territory.OwnerPlayerID;
+        if owner~=nil then owners[owner]=true; end
+    end
+    return owners;
+end
+
 function UFIndustryBuild(game,data,pid,tid,kind,gold)
     if not UFIndustryEnabled() then return false,"Industrial supply is disabled."; end
     local building=UFIndustryBuildings[kind];
@@ -40,7 +50,7 @@ function UFIndustryBuild(game,data,pid,tid,kind,gold)
     local industry=economy.industry or {grids={},fabs={}};
     local key=tostring(tid);
     if industry[building.field][key] then return false,"This territory already has "..building.name.."."; end
-    if kind=="Fab" and not industry.grids[key] then return false,"Build a Power Grid here first."; end
+    if kind=="Fab" and not UFIndustryGridOwners(industry,standing.Territories)[pid] then return false,"Build or capture a Power Grid on any territory you own first."; end
     if gold<building.cost then return false,"You need "..building.cost.." Commerce."; end
     local nation=economy.nations[pid]; local stock=nation.resourceStockpile or {};
     for resource,count in pairs(building.materials) do
@@ -58,12 +68,13 @@ function UFIndustryProduce(game,data)
     local economy=data.globalEconomy; local industry=economy.industry;
     local standing=game.ServerGame and game.ServerGame.LatestTurnStanding;
     if not industry or not standing or not standing.Territories then return; end
+    local powered=UFIndustryGridOwners(industry,standing.Territories);
     for tid in pairs(industry.fabs) do
         local terr=standing.Territories[tonumber(tid)];
         local nation=terr and economy.nations[terr.OwnerPlayerID];
         local stock=nation and nation.resourceStockpile;
         local chips=nation and (tonumber(nation.industryChips) or 0) or 0;
-        if industry.grids[tid] and nation and not nation.eliminated and stock and chips<10
+        if terr and powered[terr.OwnerPlayerID] and nation and not nation.eliminated and stock and chips<10
             and (tonumber(stock["Rare Earths"]) or 0)>=1 then
             stock["Rare Earths"]=stock["Rare Earths"]-1;
             if nation.resourceStockpileChange then
@@ -282,4 +293,12 @@ function UFRefreshConventionalUnits(game,addNewOrder)
     if #mods>0 then addNewOrder(WL.GameOrderEvent.Create(WL.PlayerID.Neutral,"United Frontier Tanks and Drones deployed",{},mods,nil,nil)); end
     if UF_ADVANCE_TURN_PRIVATE_DATA_CACHE==nil then Mod.PrivateGameData=pd; end
     if UF_ADVANCE_TURN_PLAYER_DATA_CACHE==nil then Mod.PlayerGameData=pgd; end
+end
+
+
+-- Applies at listing or re-listing. Existing quotes are not repriced.
+function UFStockIssuePrice(basePrice,strategy)
+    local multiple=strategy=="Growth" and 1.25 or strategy=="Dividend" and 0.65 or 1;
+    local base=math.max(10,math.min(150,tonumber(basePrice) or 25));
+    return math.max(1,math.floor(base*multiple+0.5));
 end
